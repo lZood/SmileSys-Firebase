@@ -1,10 +1,11 @@
+
 export type Patient = {
   id: string;
   name: string;
   email: string;
   phone: string;
   lastVisit: string;
-  status: 'Active' | 'Inactive';
+  status: 'Active' | 'Inactive' | 'Pending' | 'Archived';
 };
 
 export const patients: Patient[] = [
@@ -13,6 +14,9 @@ export const patients: Patient[] = [
   { id: 'PAT003', name: 'Robert Johnson', email: 'robert.j@example.com', phone: '555-0103', lastVisit: '2023-11-01', status: 'Active' },
   { id: 'PAT004', name: 'Emily Williams', email: 'emily.w@example.com', phone: '555-0104', lastVisit: '2022-05-30', status: 'Inactive' },
   { id: 'PAT005', name: 'Michael Brown', email: 'michael.b@example.com', phone: '555-0105', lastVisit: '2023-10-22', status: 'Active' },
+  { id: 'PAT006', name: 'Graciela Lugo', email: 'graciela@example.com', phone: '555-0106', lastVisit: '2023-11-10', status: 'Pending' },
+  { id: 'PAT007', name: 'Christian Reyes', email: 'christian@example.com', phone: '555-0107', lastVisit: '2023-11-12', status: 'Archived' },
+  { id: 'PAT008', name: 'Monica Lopez Parra', email: 'monica@example.com', phone: '555-0108', lastVisit: '2023-11-15', status: 'Active' },
 ];
 
 export type Appointment = {
@@ -49,3 +53,4 @@ export const inventoryItems = [
     { id: 'INV004', name: 'Dental Mirror', category: 'Instruments', stock: 50, status: 'In Stock' },
     { id: 'INV005', name: 'X-Ray Film', category: 'Imaging', stock: 12, status: 'In Stock' },
 ];
+

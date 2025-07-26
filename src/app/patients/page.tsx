@@ -1,22 +1,29 @@
+
+'use client';
+
+import * as React from 'react';
 import Link from "next/link";
-import { PlusCircle, File, MoreHorizontal } from "lucide-react";
+import { 
+    PlusCircle, 
+    Search, 
+    SlidersHorizontal, 
+    Eye, 
+    Calendar, 
+    FileText, 
+    FilePlus, 
+    UserCog, 
+    Trash2 
+} from "lucide-react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -26,104 +33,129 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { patients } from "@/lib/data";
+import { patients as initialPatients, Patient } from "@/lib/data";
+import { cn } from '@/lib/utils';
+
+type PatientStatus = 'Active' | 'Inactive' | 'Pending' | 'Archived';
+
+const statusStyles: Record<PatientStatus, string> = {
+    Active: "bg-green-100 text-green-800 border-green-200",
+    Inactive: "bg-gray-100 text-gray-800 border-gray-200",
+    Pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
+    Archived: "bg-red-100 text-red-800 border-red-200",
+};
+
 
 export default function PatientsPage() {
+    const [patients, setPatients] = React.useState<(Patient & { status: PatientStatus })[]>(() => 
+        initialPatients.map((p, i) => ({
+            ...p,
+            status: i % 4 === 0 ? 'Pending' : i % 4 === 1 ? 'Active' : i % 4 === 2 ? 'Inactive' : 'Archived'
+        }))
+    );
+    const [searchTerm, setSearchTerm] = React.useState('');
+
+    const filteredPatients = patients.filter(patient => 
+        patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        patient.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
   return (
     <DashboardLayout>
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Patients</CardTitle>
-              <CardDescription>
-                Manage your patients and view their details.
-              </CardDescription>
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <CardTitle>Pacientes</CardTitle>
+                </div>
+                <div className="flex-1 flex justify-end">
+                     <Button size="sm" className="h-9 gap-2">
+                        <PlusCircle className="h-4 w-4" />
+                        <span className="hidden sm:inline-block">Agregar Paciente</span>
+                    </Button>
+                </div>
             </div>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="h-8 gap-1">
-                <File className="h-3.5 w-3.5" />
-                <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                  Export
-                </span>
-              </Button>
-              <Button size="sm" className="h-8 gap-1">
-                <PlusCircle className="h-3.5 w-3.5" />
-                <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                  Add Patient
-                </span>
-              </Button>
+             <div className="flex items-center justify-between gap-4 mt-4">
+                <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        type="search" 
+                        placeholder="Buscar pacientes..." 
+                        className="pl-8" 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <Button variant="outline" size="sm" className="h-9 gap-2">
+                    <SlidersHorizontal className="h-4 w-4" />
+                    <span className="hidden sm:inline-block">Filtros</span>
+                </Button>
             </div>
-          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden md:table-cell">Phone</TableHead>
-                <TableHead className="hidden md:table-cell">
-                  Last Visit
-                </TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                </TableHead>
+                <TableHead>Nombre</TableHead>
+                <TableHead className="hidden lg:table-cell">Email</TableHead>
+                <TableHead className="hidden md:table-cell">Teléfono</TableHead>
+                <TableHead className="hidden lg:table-cell">Última Visita</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {patients.map((patient) => (
+              {filteredPatients.map((patient) => (
                 <TableRow key={patient.id}>
                   <TableCell className="font-medium">
-                    <Link href={`/patients/${patient.id}`} className="hover:underline">
-                      {patient.name}
-                    </Link>
-                    <div className="text-sm text-muted-foreground">{patient.email}</div>
+                    <div>{patient.name}</div>
+                    <div className="text-xs text-muted-foreground">ID: {patient.id}</div>
                   </TableCell>
-                  <TableCell>
-                    <Badge variant={patient.status === 'Active' ? 'secondary' : 'outline'}>
-                      {patient.status}
-                    </Badge>
-                  </TableCell>
+                   <TableCell className="hidden lg:table-cell">{patient.email}</TableCell>
                   <TableCell className="hidden md:table-cell">
                     {patient.phone}
                   </TableCell>
-                  <TableCell className="hidden md:table-cell">
+                  <TableCell className="hidden lg:table-cell">
                     {patient.lastVisit}
                   </TableCell>
+                   <TableCell>
+                    <Badge variant="outline" className={cn("capitalize", statusStyles[patient.status])}>
+                      {patient.status.toLowerCase()}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          aria-haspopup="true"
-                          size="icon"
-                          variant="ghost"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Toggle menu</span>
+                    <div className="flex items-center gap-2">
+                         <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500 hover:text-blue-600">
+                            <Eye className="h-4 w-4" />
+                            <span className="sr-only">View Details</span>
                         </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>
-                           <Link href={`/patients/${patient.id}`} className="w-full">View Details</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>Edit</DropdownMenuItem>
-                        <DropdownMenuItem>Delete</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-green-500 hover:text-green-600">
+                            <Calendar className="h-4 w-4" />
+                             <span className="sr-only">Appointments</span>
+                        </Button>
+                         <Button variant="ghost" size="icon" className="h-8 w-8 text-purple-500 hover:text-purple-600">
+                            <FileText className="h-4 w-4" />
+                             <span className="sr-only">Payments</span>
+                        </Button>
+                         <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-500 hover:text-indigo-600">
+                            <FilePlus className="h-4 w-4" />
+                             <span className="sr-only">Consent</span>
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-orange-500 hover:text-orange-600">
+                            <UserCog className="h-4 w-4" />
+                             <span className="sr-only">Change Status</span>
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600">
+                            <Trash2 className="h-4 w-4" />
+                            <span className="sr-only">Delete</span>
+                        </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </CardContent>
-        <CardFooter>
-          <div className="text-xs text-muted-foreground">
-            Showing <strong>1-5</strong> of <strong>{patients.length}</strong>{" "}
-            patients
-          </div>
-        </CardFooter>
       </Card>
     </DashboardLayout>
   );
