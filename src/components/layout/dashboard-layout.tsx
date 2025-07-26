@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -8,13 +9,13 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  DollarSign,
   Home,
   Package,
   PanelLeft,
   Search,
   Settings,
   Users,
+  LogOut,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -30,7 +31,7 @@ import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { ToothIcon } from '../icons/tooth-icon';
+import { SmileSysLogo } from '../icons/smilesys-logo';
 
 type DashboardLayoutProps = {
   children: React.ReactNode;
@@ -40,7 +41,6 @@ const navItems = [
   { href: '/dashboard', icon: Home, label: 'Dashboard' },
   { href: '/patients', icon: Users, label: 'Patients' },
   { href: '/appointments', icon: Calendar, label: 'Appointments' },
-  { href: '/billing', icon: DollarSign, label: 'Billing' },
   { href: '/inventory', icon: Package, label: 'Inventory' },
 ];
 
@@ -98,50 +98,71 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     );
   };
   
-  const BottomSidebarNav = ({ mobile = false }: { mobile?: boolean }) => {
-     const navClass = mobile ? 'flex flex-col gap-2 text-lg font-medium' : 'mt-auto flex flex-col items-start gap-2 px-2 py-4';
-
+  const BottomNav = ({ mobile = false }: { mobile?: boolean }) => {
+    const navClass = mobile ? 'flex flex-col gap-2 text-lg font-medium' : 'mt-auto flex flex-col items-start gap-2 px-2 py-4';
+    
     return (
-       <TooltipProvider>
-        <nav className={cn(navClass, !mobile && !isExpanded && "items-center")}>
-        {bottomNavItems.map((item) => (
+      <TooltipProvider>
+        <div className={cn(navClass, !mobile && !isExpanded && "items-center")}>
+          {bottomNavItems.map((item) => (
             <React.Fragment key={item.href}>
               {mobile ? (
                 <Link
-                  href={item.href}
-                  className={cn(
-                    'flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground',
-                    isNavItemActive(item.href) && 'text-foreground'
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  {item.label}
+                    href={item.href}
+                    className={cn(
+                      'flex items-center gap-4 px-2.5 text-muted-foreground hover:text-foreground',
+                      isNavItemActive(item.href) && 'text-foreground'
+                    )}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    {item.label}
                 </Link>
               ) : (
-                <Tooltip>
+                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Link
                       href={item.href}
                       className={cn(
-                        'flex h-9 items-center justify-start gap-3 rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8',
+                        'flex h-9 w-full items-center justify-start gap-3 rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8',
                         isNavItemActive(item.href) && 'bg-accent text-accent-foreground',
-                        isExpanded ? 'w-full px-3' : 'w-9 justify-center'
+                         isExpanded ? 'px-3' : 'w-9 justify-center'
                       )}
                     >
                       <item.icon className="h-5 w-5" />
                       <span className={cn("sr-only", isExpanded && "not-sr-only")}>{item.label}</span>
                     </Link>
                   </TooltipTrigger>
-                  <TooltipContent side="right" hidden={isExpanded}>{item.label}</TooltipContent>
+                   <TooltipContent side="right" hidden={isExpanded}>{item.label}</TooltipContent>
                 </Tooltip>
               )}
             </React.Fragment>
           ))}
-        </nav>
+            {mobile ? (
+               <Link href="/" className="flex items-center gap-4 px-2.5 text-red-500 hover:text-red-600">
+                  <LogOut className="h-5 w-5" />
+                  Logout
+               </Link>
+            ) : (
+               <Tooltip>
+                  <TooltipTrigger asChild>
+                     <Link
+                      href="/"
+                      className={cn(
+                        'flex h-9 w-full items-center justify-start gap-3 rounded-lg text-red-500 hover:text-red-600 transition-colors md:h-8',
+                         isExpanded ? 'px-3' : 'w-9 justify-center'
+                      )}
+                    >
+                      <LogOut className="h-5 w-5" />
+                      <span className={cn("sr-only", isExpanded && "not-sr-only")}>Logout</span>
+                    </Link>
+                  </TooltipTrigger>
+                   <TooltipContent side="right" hidden={isExpanded}>Logout</TooltipContent>
+                </Tooltip>
+            )}
+        </div>
       </TooltipProvider>
-    );
-  };
-
+    )
+  }
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
@@ -150,22 +171,22 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         isExpanded ? 'w-56' : 'w-20'
         )}>
         <div className={cn(
-            "flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6",
-            isExpanded ? "justify-between" : "justify-center"
+            "flex h-14 items-center border-b px-4 lg:h-[60px]",
+             isExpanded ? "justify-between" : "justify-center"
           )}>
-            <Link href="/dashboard" className={cn(
-                "flex items-center gap-2 font-semibold",
-                 !isExpanded && "sr-only"
-                )}>
-                <ToothIcon className="h-6 w-6 text-primary" />
-                <span>SmileSys</span>
-            </Link>
-            <Button variant="ghost" size="icon" onClick={() => setIsExpanded(!isExpanded)}>
-              {isExpanded ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            </Button>
+          <Link href="/dashboard" className={cn(
+              "flex items-center gap-2 font-semibold",
+              !isExpanded && "justify-center"
+            )}>
+              <SmileSysLogo className={cn("h-8", isExpanded ? "w-8" : "w-8" )} />
+              <span className={cn(isExpanded ? "block" : "hidden")}>SmileSys</span>
+          </Link>
+          <Button variant="ghost" size="icon" onClick={() => setIsExpanded(!isExpanded)} className={cn(!isExpanded && "absolute right-0 top-14 translate-x-1/2 bg-background border rounded-full ")}>
+            {isExpanded ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </Button>
         </div>
         <SidebarNav />
-        <BottomSidebarNav />
+        <BottomNav />
       </aside>
       <div className={cn(
         "flex flex-col sm:gap-4 sm:py-4 transition-all duration-300",
@@ -185,11 +206,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   href="/dashboard"
                   className="group flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-full bg-primary text-lg font-semibold text-primary-foreground md:text-base"
                 >
-                  <ToothIcon className="h-5 w-5 transition-all group-hover:scale-110" />
+                  <SmileSysLogo className="h-5 w-5 transition-all group-hover:scale-110" />
                   <span className="sr-only">SmileSys</span>
                 </Link>
                 <SidebarNav mobile={true} />
-                <BottomSidebarNav mobile={true} />
+                <BottomNav mobile={true} />
               </nav>
             </SheetContent>
           </Sheet>
