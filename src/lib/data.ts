@@ -26,15 +26,34 @@ export type Appointment = {
   service: string;
   time: string;
   date: string;
-  status: 'Scheduled' | 'Completed' | 'Canceled';
+  status: 'Scheduled' | 'Completed' | 'Canceled' | 'In-progress';
 };
 
+const today = new Date();
+const tomorrow = new Date(today);
+tomorrow.setDate(tomorrow.getDate() + 1);
+const yesterday = new Date(today);
+yesterday.setDate(yesterday.getDate() - 1);
+const nextWeek = new Date(today);
+nextWeek.setDate(nextWeek.getDate() + 7);
+
+
+const formatDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+
 export const appointments: Appointment[] = [
-    { id: 'APP001', patientName: 'Robert Johnson', doctor: 'Dr. Adams', service: 'Check-up', time: '09:00 AM', date: '2024-05-28', status: 'Completed' },
-    { id: 'APP002', patientName: 'John Doe', doctor: 'Dr. Adams', service: 'Cleaning', time: '10:00 AM', date: '2024-05-28', status: 'Scheduled' },
-    { id: 'APP003', patientName: 'Michael Brown', doctor: 'Dr. Wilson', service: 'Extraction', time: '11:00 AM', date: '2024-05-28', status: 'Scheduled' },
-    { id: 'APP004', patientName: 'Sarah Miller', doctor: 'Dr. Adams', service: 'Filling', time: '02:00 PM', date: '2024-05-28', status: 'Scheduled' },
-    { id: 'APP005', patientName: 'David Garcia', doctor: 'Dr. Wilson', service: 'Check-up', time: '03:00 PM', date: '2024-05-28', status: 'Canceled' },
+    { id: 'APP001', patientName: 'Robert Johnson', doctor: 'Dr. Adams', service: 'Check-up', time: '09:00 AM', date: formatDate(yesterday), status: 'Completed' },
+    { id: 'APP002', patientName: 'John Doe', doctor: 'Dr. Adams', service: 'Cleaning', time: '10:00 AM', date: formatDate(today), status: 'Scheduled' },
+    { id: 'APP003', patientName: 'Michael Brown', doctor: 'Dr. Wilson', service: 'Extraction', time: '11:00 AM', date: formatDate(today), status: 'Scheduled' },
+    { id: 'APP004', patientName: 'Sarah Miller', doctor: 'Dr. Adams', service: 'Filling', time: '02:00 PM', date: formatDate(tomorrow), status: 'Scheduled' },
+    { id: 'APP005', patientName: 'David Garcia', doctor: 'Dr. Wilson', service: 'Check-up', time: '03:00 PM', date: formatDate(nextWeek), status: 'Scheduled' },
+    { id: 'APP006', patientName: 'Emily Williams', doctor: 'Dr. Carter', service: 'Root Canal', time: '01:00 PM', date: formatDate(yesterday), status: 'Canceled' },
+    { id: 'APP007', patientName: 'Jane Smith', doctor: 'Dr. Adams', service: 'Crown', time: '04:00 PM', date: formatDate(today), status: 'In-progress' },
 ];
 
 export const treatmentStatsData = [
@@ -53,4 +72,3 @@ export const inventoryItems = [
     { id: 'INV004', name: 'Dental Mirror', category: 'Instruments', stock: 50, status: 'In Stock' },
     { id: 'INV005', name: 'X-Ray Film', category: 'Imaging', stock: 12, status: 'In Stock' },
 ];
-
