@@ -1,3 +1,5 @@
+'use client';
+
 import * as React from 'react';
 import { Activity, DollarSign, Users, Package } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -8,10 +10,15 @@ import { appointments, patients, treatmentStatsData } from '@/lib/data';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 
 export default function DashboardPage() {
-  const today = new Date();
+  const [today, setToday] = React.useState(new Date());
+  
   const appointmentsToday = appointments.filter(
     (app) => new Date(app.date).toDateString() === today.toDateString()
   ).length;
+
+  React.useEffect(() => {
+    setToday(new Date());
+  }, []);
 
   return (
     <DashboardLayout>
