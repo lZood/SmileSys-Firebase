@@ -7,14 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ToothIcon } from '@/components/icons/tooth-icon';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-export default function LoginPage() {
+export default function SignupPage() {
   const router = useRouter();
 
-  const handleLogin = (event: React.FormEvent) => {
+  const handleSignup = (event: React.FormEvent) => {
     event.preventDefault();
-    // In a real app, you'd have authentication logic here.
-    // For this demo, we'll just navigate to the dashboard.
     router.push('/dashboard');
   };
 
@@ -25,32 +24,44 @@ export default function LoginPage() {
           <div className="flex justify-center items-center mb-4">
             <ToothIcon className="h-10 w-10 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-bold font-headline">Welcome to SmileSys</CardTitle>
-          <CardDescription>Enter your credentials to access your clinic's dashboard.</CardDescription>
+          <CardTitle className="text-2xl font-bold font-headline">Create your SmileSys Account</CardTitle>
+          <CardDescription>Join us to streamline your clinic's operations.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="grid gap-4">
+          <form onSubmit={handleSignup} className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="full-name">Full Name</Label>
+              <Input id="full-name" placeholder="John Doe" required />
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" placeholder="m@example.com" required />
             </div>
             <div className="grid gap-2">
-              <div className="flex items-center">
-                <Label htmlFor="password">Password</Label>
-                <Link href="#" className="ml-auto inline-block text-sm underline">
-                  Forgot your password?
-                </Link>
-              </div>
+              <Label htmlFor="role">Role</Label>
+              <Select required>
+                <SelectTrigger id="role">
+                  <SelectValue placeholder="Select your role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="doctor">Doctor</SelectItem>
+                  <SelectItem value="staff">Staff</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="password">Password</Label>
               <Input id="password" type="password" required />
             </div>
             <Button type="submit" className="w-full">
-              Sign In
+              Create Account
             </Button>
           </form>
           <div className="mt-4 text-center text-sm">
-            Don&apos;t have an account?{' '}
-            <Link href="/signup" className="underline">
-              Sign up
+            Already have an account?{' '}
+            <Link href="/" className="underline">
+              Sign in
             </Link>
           </div>
         </CardContent>

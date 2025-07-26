@@ -1,0 +1,51 @@
+export type Patient = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  lastVisit: string;
+  status: 'Active' | 'Inactive';
+};
+
+export const patients: Patient[] = [
+  { id: 'PAT001', name: 'John Doe', email: 'john.d@example.com', phone: '555-0101', lastVisit: '2023-10-15', status: 'Active' },
+  { id: 'PAT002', name: 'Jane Smith', email: 'jane.s@example.com', phone: '555-0102', lastVisit: '2023-09-20', status: 'Active' },
+  { id: 'PAT003', name: 'Robert Johnson', email: 'robert.j@example.com', phone: '555-0103', lastVisit: '2023-11-01', status: 'Active' },
+  { id: 'PAT004', name: 'Emily Williams', email: 'emily.w@example.com', phone: '555-0104', lastVisit: '2022-05-30', status: 'Inactive' },
+  { id: 'PAT005', name: 'Michael Brown', email: 'michael.b@example.com', phone: '555-0105', lastVisit: '2023-10-22', status: 'Active' },
+];
+
+export type Appointment = {
+  id: string;
+  patientName: string;
+  doctor: string;
+  service: string;
+  time: string;
+  date: string;
+  status: 'Scheduled' | 'Completed' | 'Canceled';
+};
+
+export const appointments: Appointment[] = [
+    { id: 'APP001', patientName: 'Robert Johnson', doctor: 'Dr. Adams', service: 'Check-up', time: '09:00 AM', date: '2024-05-28', status: 'Completed' },
+    { id: 'APP002', patientName: 'John Doe', doctor: 'Dr. Adams', service: 'Cleaning', time: '10:00 AM', date: '2024-05-28', status: 'Scheduled' },
+    { id: 'APP003', patientName: 'Michael Brown', doctor: 'Dr. Wilson', service: 'Extraction', time: '11:00 AM', date: '2024-05-28', status: 'Scheduled' },
+    { id: 'APP004', patientName: 'Sarah Miller', doctor: 'Dr. Adams', service: 'Filling', time: '02:00 PM', date: '2024-05-28', status: 'Scheduled' },
+    { id: 'APP005', patientName: 'David Garcia', doctor: 'Dr. Wilson', service: 'Check-up', time: '03:00 PM', date: '2024-05-28', status: 'Canceled' },
+];
+
+export const treatmentStatsData = [
+    { name: 'Cleaning', value: 400 },
+    { name: 'Extraction', value: 300 },
+    { name: 'Filling', value: 300 },
+    { name: 'Root Canal', value: 200 },
+    { name: 'Crown', value: 278 },
+    { name: 'Implants', value: 189 },
+];
+
+export const inventoryItems = [
+    { id: 'INV001', name: 'Dental Gloves', category: 'Consumables', stock: 5, status: 'Low Stock' },
+    { id: 'INV002', name: 'Surgical Masks', category: 'Consumables', stock: 20, status: 'In Stock' },
+    { id: 'INV003', name: 'Anesthetic', category: 'Medication', stock: 0, status: 'Out of Stock' },
+    { id: 'INV004', name: 'Dental Mirror', category: 'Instruments', stock: 50, status: 'In Stock' },
+    { id: 'INV005', name: 'X-Ray Film', category: 'Imaging', stock: 12, status: 'In Stock' },
+];
