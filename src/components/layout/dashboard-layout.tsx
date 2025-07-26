@@ -6,9 +6,10 @@ import { usePathname } from 'next/navigation';
 import {
   Bell,
   Calendar,
+  ChevronLeft,
+  ChevronRight,
   DollarSign,
   Home,
-  LineChart,
   Package,
   PanelLeft,
   Search,
@@ -47,18 +48,18 @@ const bottomNavItems = [{ href: '/settings', icon: Settings, label: 'Settings' }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
+  const [isExpanded, setIsExpanded] = React.useState(true);
 
   const isNavItemActive = (href: string) => {
     return pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
   };
   
   const SidebarNav = ({ mobile = false }: { mobile?: boolean }) => {
-    const Comp = mobile ? 'div' : TooltipProvider;
-    const navClass = mobile ? 'flex flex-col gap-2 text-lg font-medium' : 'flex flex-col items-center gap-4 px-2 py-4';
+     const navClass = mobile ? 'flex flex-col gap-2 text-lg font-medium' : 'flex flex-col items-start gap-2 px-2 py-4';
 
     return (
-      <Comp>
-        <nav className={navClass}>
+      <TooltipProvider>
+        <nav className={cn(navClass, !mobile && !isExpanded && "items-center")}>
         {navItems.map((item) => (
             <React.Fragment key={item.href}>
               {mobile ? (
@@ -78,31 +79,31 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     <Link
                       href={item.href}
                       className={cn(
-                        'flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8 md:w-8',
-                        isNavItemActive(item.href) && 'bg-accent text-accent-foreground'
+                        'flex h-9 items-center justify-start gap-3 rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8',
+                        isNavItemActive(item.href) && 'bg-accent text-accent-foreground',
+                        isExpanded ? 'w-full px-3' : 'w-9 justify-center'
                       )}
                     >
                       <item.icon className="h-5 w-5" />
-                      <span className="sr-only">{item.label}</span>
+                      <span className={cn("sr-only", isExpanded && "not-sr-only")}>{item.label}</span>
                     </Link>
                   </TooltipTrigger>
-                  <TooltipContent side="right">{item.label}</TooltipContent>
+                  <TooltipContent side="right" hidden={isExpanded}>{item.label}</TooltipContent>
                 </Tooltip>
               )}
             </React.Fragment>
           ))}
         </nav>
-      </Comp>
+      </TooltipProvider>
     );
   };
   
   const BottomSidebarNav = ({ mobile = false }: { mobile?: boolean }) => {
-    const Comp = mobile ? 'div' : TooltipProvider;
-     const navClass = mobile ? 'flex flex-col gap-2 text-lg font-medium' : 'mt-auto flex flex-col items-center gap-4 px-2 py-4';
+     const navClass = mobile ? 'flex flex-col gap-2 text-lg font-medium' : 'mt-auto flex flex-col items-start gap-2 px-2 py-4';
 
     return (
-       <Comp>
-        <nav className={navClass}>
+       <TooltipProvider>
+        <nav className={cn(navClass, !mobile && !isExpanded && "items-center")}>
         {bottomNavItems.map((item) => (
             <React.Fragment key={item.href}>
               {mobile ? (
@@ -122,38 +123,54 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     <Link
                       href={item.href}
                       className={cn(
-                        'flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8 md:w-8',
-                        isNavItemActive(item.href) && 'bg-accent text-accent-foreground'
+                        'flex h-9 items-center justify-start gap-3 rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8',
+                        isNavItemActive(item.href) && 'bg-accent text-accent-foreground',
+                        isExpanded ? 'w-full px-3' : 'w-9 justify-center'
                       )}
                     >
                       <item.icon className="h-5 w-5" />
-                      <span className="sr-only">{item.label}</span>
+                      <span className={cn("sr-only", isExpanded && "not-sr-only")}>{item.label}</span>
                     </Link>
                   </TooltipTrigger>
-                  <TooltipContent side="right">{item.label}</TooltipContent>
+                  <TooltipContent side="right" hidden={isExpanded}>{item.label}</TooltipContent>
                 </Tooltip>
               )}
             </React.Fragment>
           ))}
         </nav>
-      </Comp>
+      </TooltipProvider>
     );
   };
 
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
-      <aside className="fixed inset-y-0 left-0 z-10 hidden w-14 flex-col border-r bg-background sm:flex">
-        <div className="flex h-14 items-center justify-center border-b px-2">
-            <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+      <aside className={cn(
+        "fixed inset-y-0 left-0 z-10 hidden flex-col border-r bg-background sm:flex transition-all duration-300",
+        isExpanded ? 'w-56' : 'w-20'
+        )}>
+        <div className={cn(
+            "flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6",
+            isExpanded ? "justify-between" : "justify-center"
+          )}>
+            <Link href="/dashboard" className={cn(
+                "flex items-center gap-2 font-semibold",
+                 !isExpanded && "sr-only"
+                )}>
                 <ToothIcon className="h-6 w-6 text-primary" />
-                <span className="sr-only">SmileSys</span>
+                <span>SmileSys</span>
             </Link>
+            <Button variant="ghost" size="icon" onClick={() => setIsExpanded(!isExpanded)}>
+              {isExpanded ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </Button>
         </div>
         <SidebarNav />
         <BottomSidebarNav />
       </aside>
-      <div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-14">
+      <div className={cn(
+        "flex flex-col sm:gap-4 sm:py-4 transition-all duration-300",
+        isExpanded ? 'sm:pl-56' : 'sm:pl-20'
+        )}>
         <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
           <Sheet>
             <SheetTrigger asChild>
