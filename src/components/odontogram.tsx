@@ -7,22 +7,48 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Button } from './ui/button';
 
-type Condition = 'healthy' | 'caries' | 'restoration' | 'missing' | 'endo';
+type Condition = 
+  | 'healthy'
+  | 'missing'
+  | 'restoration'
+  | 'caries'
+  | 'trauma'
+  | 'extraction'
+  | 'fixed-prosthesis'
+  | 'pain'
+  | 'defective-restoration'
+  | 'removable-prosthesis'
+  | 'malocclusion'
+  | 'mobility'
+  | 'food-impaction';
+  
 type ToothState = { [key: string]: Condition };
 
 const conditions: { id: Condition; label: string; color: string }[] = [
-  { id: 'healthy', label: 'Healthy', color: 'fill-white' },
-  { id: 'caries', label: 'Caries', color: 'fill-red-500' },
-  { id: 'restoration', label: 'Restoration', color: 'fill-blue-500' },
-  { id: 'endo', label: 'Endodontics', color: 'fill-yellow-400' },
-  { id: 'missing', label: 'Missing', color: 'fill-gray-500' },
+    { id: 'healthy', label: 'Healthy', color: 'fill-white' },
+    { id: 'missing', label: 'Ausente', color: 'fill-gray-500' },
+    { id: 'restoration', label: 'Restauración', color: 'fill-blue-500' },
+    { id: 'caries', label: 'Caries', color: 'fill-red-500' },
+    { id: 'trauma', label: 'Traumatismo', color: 'fill-purple-500' },
+    { id: 'extraction', label: 'Extracción', color: 'fill-black' },
+    { id: 'fixed-prosthesis', label: 'Prótesis fija', color: 'fill-teal-500' },
+    { id: 'pain', label: 'Dolor', color: 'fill-orange-500' },
+    { id: 'defective-restoration', label: 'Restauracion defectuosa', color: 'fill-blue-200' },
+    { id: 'removable-prosthesis', label: 'Protesis removible', color: 'fill-cyan-500' },
+    { id: 'malocclusion', label: 'Mal oclusión', color: 'fill-pink-500' },
+    { id: 'mobility', label: 'Movilidad', color: 'fill-indigo-500' },
+    { id: 'food-impaction', label: 'Impacto de alimentos', color: 'fill-lime-500' },
 ];
 
 const toothNumbers = {
-  upperRight: ['18', '17', '16', '15', '14', '13', '12', '11'],
-  upperLeft: ['21', '22', '23', '24', '25', '26', '27', '28'],
-  lowerLeft: ['31', '32', '33', '34', '35', '36', '37', '38'],
-  lowerRight: ['48', '47', '46', '45', '44', '43', '42', '41'],
+  upperRightAdult: ['18', '17', '16', '15', '14', '13', '12', '11'],
+  upperLeftAdult: ['21', '22', '23', '24', '25', '26', '27', '28'],
+  lowerLeftAdult: ['31', '32', '33', '34', '35', '36', '37', '38'],
+  lowerRightAdult: ['48', '47', '46', '45', '44', '43', '42', '41'],
+  upperRightDeciduous: ['55', '54', '53', '52', '51'],
+  upperLeftDeciduous: ['61', '62', '63', '64', '65'],
+  lowerLeftDeciduous: ['71', '72', '73', '74', '75'],
+  lowerRightDeciduous: ['85', '84', '83', '82', '81'],
 };
 
 const Tooth = ({ id, condition, onConditionChange }: { id: string; condition: Condition; onConditionChange: (id: string, condition: Condition) => void; }) => {
@@ -34,29 +60,38 @@ const Tooth = ({ id, condition, onConditionChange }: { id: string; condition: Co
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <button className="flex flex-col items-center group">
-          <svg width="40" height="50" viewBox="0 0 40 50" className="cursor-pointer">
-            <path d="M10 10 C 10 0, 30 0, 30 10 L 30 30 C 30 45, 25 45, 25 45 L 23 30 L 17 30 L 15 45 C 15 45, 10 45, 10 30 Z" 
-              className={cn('stroke-gray-600 stroke-2 group-hover:stroke-primary transition-all', currentCondition.color)}
-            />
-          </svg>
+           <svg width="28" height="28" viewBox="0 0 28 28" className="cursor-pointer">
+                <rect width="28" height="28" className={cn('stroke-gray-400 stroke-1 group-hover:stroke-primary transition-all', currentCondition.color)} rx="3" />
+                {condition !== 'missing' && (
+                    <>
+                        <line x1="14" y1="0" x2="14" y2="28" className="stroke-gray-300 stroke-1" />
+                        <line x1="0" y1="14" x2="28" y2="14" className="stroke-gray-300 stroke-1" />
+                    </>
+                )}
+            </svg>
           <span className="text-xs font-semibold text-muted-foreground">{id}</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-56">
+      <PopoverContent className="w-64">
         <div className="grid gap-4">
           <div className="space-y-2">
-            <h4 className="font-medium leading-none">Tooth {id}</h4>
-            <p className="text-sm text-muted-foreground">Select the condition.</p>
+            <h4 className="font-medium leading-none">Diente {id}</h4>
+            <p className="text-sm text-muted-foreground">Selecciona la condición.</p>
           </div>
-          <RadioGroup defaultValue={condition} onValueChange={(value) => onConditionChange(id, value as Condition)}>
-            {conditions.map(c => (
-              <div key={c.id} className="flex items-center space-x-2">
-                <RadioGroupItem value={c.id} id={`cond-${id}-${c.id}`} />
-                <Label htmlFor={`cond-${id}-${c.id}`}>{c.label}</Label>
-              </div>
-            ))}
-          </RadioGroup>
-          <Button onClick={() => setIsOpen(false)} size="sm">Apply</Button>
+          <ScrollArea className="h-48">
+            <RadioGroup defaultValue={condition} onValueChange={(value) => onConditionChange(id, value as Condition)} className="p-1">
+              {conditions.map(c => (
+                <div key={c.id} className="flex items-center space-x-2">
+                  <RadioGroupItem value={c.id} id={`cond-${id}-${c.id}`} />
+                  <Label htmlFor={`cond-${id}-${c.id}`} className="flex items-center gap-2 cursor-pointer">
+                    <div className={cn("w-3 h-3 rounded-full", c.color, c.id === 'healthy' && 'border border-gray-300')}></div>
+                    {c.label}
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </ScrollArea>
+          <Button onClick={() => setIsOpen(false)} size="sm">Aplicar</Button>
         </div>
       </PopoverContent>
     </Popover>
@@ -66,12 +101,17 @@ const Tooth = ({ id, condition, onConditionChange }: { id: string; condition: Co
 export function Odontogram() {
   const [toothState, setToothState] = React.useState<ToothState>(() => {
     const initialState: ToothState = {};
-    Object.values(toothNumbers).flat().forEach(num => {
+    const allTeeth = Object.values(toothNumbers).flat();
+    allTeeth.forEach(num => {
       initialState[num] = 'healthy';
     });
+    // Example initial states
     initialState['16'] = 'caries';
     initialState['26'] = 'restoration';
     initialState['46'] = 'missing';
+    initialState['55'] = 'pain';
+
+
     return initialState;
   });
 
@@ -79,25 +119,50 @@ export function Odontogram() {
     setToothState(prev => ({ ...prev, [id]: condition }));
   };
 
-  const renderQuadrant = (quadrant: string[]) => (
-    <div className="flex justify-center space-x-1">
-      {quadrant.map(num => (
-        <Tooth key={num} id={num} condition={toothState[num]} onConditionChange={handleConditionChange} />
-      ))}
-    </div>
+  const renderQuadrant = (quadrant: string[], reverse: boolean = false) => {
+    const teeth = reverse ? [...quadrant].reverse() : quadrant;
+    return (
+        <div className="flex justify-center space-x-1">
+        {teeth.map(num => (
+            <Tooth key={num} id={num} condition={toothState[num]} onConditionChange={handleConditionChange} />
+        ))}
+        </div>
+    );
+  };
+  
+  const ScrollArea = ({ children, className }: { children: React.ReactNode, className?: string }) => (
+    <div className={cn("overflow-y-auto", className)}>{children}</div>
   );
 
   return (
-    <div className="p-4 bg-card rounded-lg border">
-        <div className="flex flex-col gap-2">
-            {renderQuadrant(toothNumbers.upperRight.slice().reverse())}
-            {renderQuadrant(toothNumbers.upperLeft)}
+    <div className="p-4 bg-card rounded-lg border w-full overflow-x-auto">
+      <div className="flex flex-col gap-4 min-w-max">
+        {/* Adult Teeth */}
+        <div className="flex justify-between">
+            {renderQuadrant(toothNumbers.upperRightAdult, true)}
+            <div className="w-4"></div> {/* Separator */}
+            {renderQuadrant(toothNumbers.upperLeftAdult)}
         </div>
+         <div className="flex justify-between">
+            {renderQuadrant(toothNumbers.lowerRightAdult, true)}
+            <div className="w-4"></div> {/* Separator */}
+            {renderQuadrant(toothNumbers.lowerLeftAdult)}
+        </div>
+
         <hr className="my-4 border-dashed" />
-        <div className="flex flex-col gap-2">
-            {renderQuadrant(toothNumbers.lowerLeft)}
-            {renderQuadrant(toothNumbers.lowerRight.slice().reverse())}
+
+        {/* Deciduous Teeth */}
+         <div className="flex justify-between">
+            {renderQuadrant(toothNumbers.upperRightDeciduous, true)}
+            <div className="w-4"></div> {/* Separator */}
+            {renderQuadrant(toothNumbers.upperLeftDeciduous)}
         </div>
+         <div className="flex justify-between">
+            {renderQuadrant(toothNumbers.lowerRightDeciduous, true)}
+             <div className="w-4"></div> {/* Separator */}
+            {renderQuadrant(toothNumbers.lowerLeftDeciduous)}
+        </div>
+      </div>
     </div>
   );
 }
