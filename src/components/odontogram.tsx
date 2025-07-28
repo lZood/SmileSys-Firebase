@@ -64,12 +64,6 @@ const Tooth = ({ id, condition, onConditionChange }: { id: string; condition: Co
         <button className="flex flex-col items-center group">
            <svg width="28" height="28" viewBox="0 0 28 28" className="cursor-pointer">
                 <rect width="28" height="28" className={cn('stroke-gray-400 stroke-1 group-hover:stroke-primary transition-all', currentCondition.color)} rx="3" />
-                {condition !== 'missing' && (
-                    <>
-                        <line x1="14" y1="0" x2="14" y2="28" className="stroke-gray-300 stroke-1" />
-                        <line x1="0" y1="14" x2="28" y2="14" className="stroke-gray-300 stroke-1" />
-                    </>
-                )}
             </svg>
           <span className="text-xs font-semibold text-muted-foreground">{id}</span>
         </button>
@@ -121,11 +115,10 @@ export function Odontogram() {
     setToothState(prev => ({ ...prev, [id]: condition }));
   };
 
-  const renderQuadrant = (quadrant: string[], reverse: boolean = false) => {
-    const teeth = reverse ? [...quadrant].reverse() : quadrant;
+  const renderQuadrant = (quadrant: string[]) => {
     return (
         <div className="flex justify-center space-x-1">
-        {teeth.map(num => (
+        {quadrant.map(num => (
             <Tooth key={num} id={num} condition={toothState[num]} onConditionChange={handleConditionChange} />
         ))}
         </div>
@@ -136,28 +129,24 @@ export function Odontogram() {
     <div className="p-4 bg-card rounded-lg border w-full overflow-x-auto">
       <div className="flex flex-col gap-4 min-w-max">
         {/* Adult Teeth */}
-        <div className="flex justify-between">
-            {renderQuadrant(toothNumbers.upperRightAdult, true)}
-            <div className="w-4"></div> {/* Separator */}
+        <div className="flex justify-center space-x-4">
+            {renderQuadrant(toothNumbers.upperRightAdult)}
             {renderQuadrant(toothNumbers.upperLeftAdult)}
         </div>
-         <div className="flex justify-between">
-            {renderQuadrant(toothNumbers.lowerRightAdult, true)}
-            <div className="w-4"></div> {/* Separator */}
+         <div className="flex justify-center space-x-4">
+            {renderQuadrant(toothNumbers.lowerRightAdult)}
             {renderQuadrant(toothNumbers.lowerLeftAdult)}
         </div>
 
         <hr className="my-4 border-dashed" />
 
         {/* Deciduous Teeth */}
-         <div className="flex justify-between">
-            {renderQuadrant(toothNumbers.upperRightDeciduous, true)}
-            <div className="w-4"></div> {/* Separator */}
+         <div className="flex justify-center space-x-4">
+            {renderQuadrant(toothNumbers.upperRightDeciduous)}
             {renderQuadrant(toothNumbers.upperLeftDeciduous)}
         </div>
-         <div className="flex justify-between">
-            {renderQuadrant(toothNumbers.lowerRightDeciduous, true)}
-             <div className="w-4"></div> {/* Separator */}
+         <div className="flex justify-center space-x-4">
+            {renderQuadrant(toothNumbers.lowerRightDeciduous)}
             {renderQuadrant(toothNumbers.lowerLeftDeciduous)}
         </div>
       </div>
