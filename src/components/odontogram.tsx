@@ -62,8 +62,8 @@ const Tooth = ({ id, condition, onConditionChange }: { id: string; condition: Co
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <button className="flex flex-col items-center group">
-           <svg width="28" height="28" viewBox="0 0 28 28" className="cursor-pointer">
-                <rect width="28" height="28" className={cn('stroke-gray-400 stroke-1 group-hover:stroke-primary transition-all', currentCondition.color)} rx="3" />
+            <svg width="40" height="50" viewBox="0 0 40 50" className="cursor-pointer">
+              <path d="M10 10 C 10 0, 30 0, 30 10 L 30 30 C 30 45, 25 45, 25 45 L 23 30 L 17 30 L 15 45 C 15 45, 10 45, 10 30 Z" className={cn('stroke-gray-400 stroke-1 group-hover:stroke-primary transition-all', currentCondition.color)} />
             </svg>
           <span className="text-xs font-semibold text-muted-foreground">{id}</span>
         </button>
@@ -129,24 +129,24 @@ export function Odontogram() {
     <div className="p-4 bg-card rounded-lg border w-full overflow-x-auto">
       <div className="flex flex-col gap-4 min-w-max">
         {/* Adult Teeth */}
-        <div className="flex justify-center space-x-4">
-            {renderQuadrant(toothNumbers.upperRightAdult)}
+        <div className="flex justify-between">
+            {renderQuadrant(toothNumbers.upperRightAdult.slice().reverse())}
             {renderQuadrant(toothNumbers.upperLeftAdult)}
         </div>
-         <div className="flex justify-center space-x-4">
-            {renderQuadrant(toothNumbers.lowerRightAdult)}
+         <div className="flex justify-between">
+            {renderQuadrant(toothNumbers.lowerRightAdult.slice().reverse())}
             {renderQuadrant(toothNumbers.lowerLeftAdult)}
         </div>
 
         <hr className="my-4 border-dashed" />
 
         {/* Deciduous Teeth */}
-         <div className="flex justify-center space-x-4">
-            {renderQuadrant(toothNumbers.upperRightDeciduous)}
+         <div className="flex justify-between">
+            {renderQuadrant(toothNumbers.upperRightDeciduous.slice().reverse())}
             {renderQuadrant(toothNumbers.upperLeftDeciduous)}
         </div>
-         <div className="flex justify-center space-x-4">
-            {renderQuadrant(toothNumbers.lowerRightDeciduous)}
+         <div className="flex justify-between">
+            {renderQuadrant(toothNumbers.lowerRightDeciduous.slice().reverse())}
             {renderQuadrant(toothNumbers.lowerLeftDeciduous)}
         </div>
       </div>
