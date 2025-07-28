@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -6,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Button } from './ui/button';
+import { ScrollArea } from './ui/scroll-area';
 
 type Condition = 
   | 'healthy'
@@ -130,10 +132,6 @@ export function Odontogram() {
     );
   };
   
-  const ScrollArea = ({ children, className }: { children: React.ReactNode, className?: string }) => (
-    <div className={cn("overflow-y-auto", className)}>{children}</div>
-  );
-
   return (
     <div className="p-4 bg-card rounded-lg border w-full overflow-x-auto">
       <div className="flex flex-col gap-4 min-w-max">
