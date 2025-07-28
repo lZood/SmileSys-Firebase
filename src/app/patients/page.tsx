@@ -2,7 +2,6 @@
 'use client';
 
 import * as React from 'react';
-import Link from "next/link";
 import { 
     PlusCircle, 
     Search, 
@@ -35,6 +34,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { patients as initialPatients, Patient } from "@/lib/data";
 import { cn } from '@/lib/utils';
+import { NewPatientForm } from '@/components/new-patient-form';
 
 type PatientStatus = 'Active' | 'Inactive' | 'Pending' | 'Archived';
 
@@ -54,6 +54,7 @@ export default function PatientsPage() {
         }))
     );
     const [searchTerm, setSearchTerm] = React.useState('');
+    const [isNewPatientModalOpen, setIsNewPatientModalOpen] = React.useState(false);
 
     const filteredPatients = patients.filter(patient => 
         patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -62,6 +63,9 @@ export default function PatientsPage() {
 
   return (
     <DashboardLayout>
+
+        {isNewPatientModalOpen && <NewPatientForm onClose={() => setIsNewPatientModalOpen(false)} />}
+
       <Card>
         <CardHeader>
             <div className="flex items-center justify-between gap-4">
@@ -69,7 +73,7 @@ export default function PatientsPage() {
                     <CardTitle>Pacientes</CardTitle>
                 </div>
                 <div className="flex-1 flex justify-end">
-                     <Button size="sm" className="h-9 gap-2">
+                     <Button size="sm" className="h-9 gap-2" onClick={() => setIsNewPatientModalOpen(true)}>
                         <PlusCircle className="h-4 w-4" />
                         <span className="hidden sm:inline-block">Agregar Paciente</span>
                     </Button>
