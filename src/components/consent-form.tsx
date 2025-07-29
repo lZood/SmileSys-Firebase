@@ -8,7 +8,15 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import { useToast } from '@/hooks/use-toast';
+
+// Extend jsPDF with autoTable
+declare module 'jspdf' {
+  interface jsPDF {
+    autoTable: (options: any) => jsPDF;
+  }
+}
 
 type ConsentFormProps = {
     patientName: string;
@@ -61,13 +69,14 @@ export const ConsentForm = ({ patientName, onClose }: ConsentFormProps) => {
         });
         
         // Terms and Conditions
+        const autoTableFinalY = (doc as any).lastAutoTable.finalY || 85;
         doc.setFontSize(12);
-        doc.text("Términos y Condiciones", 20, doc.autoTable.previous.finalY + 15);
+        doc.text("Términos y Condiciones", 20, autoTableFinalY + 15);
         const splitTerms = doc.splitTextToSize(termsAndConditions, 170);
-        doc.text(splitTerms, 20, doc.autoTable.previous.finalY + 22);
+        doc.text(splitTerms, 20, autoTableFinalY + 22);
 
         // Signature Area
-        const finalY = doc.autoTable.previous.finalY + 22 + (splitTerms.length * 7) + 20;
+        const finalY = autoTableFinalY + 22 + (splitTerms.length * 7) + 20;
         doc.line(40, finalY, 100, finalY);
         doc.text('Firma del Paciente', 55, finalY + 5);
 
@@ -135,49 +144,3 @@ export const ConsentForm = ({ patientName, onClose }: ConsentFormProps) => {
         </Dialog>
     );
 };
-
-// We need to add the autoTable plugin to jsPDF
-// This is a simplified version for demonstration.
-// In a real app, you would import this properly.
-(function (jsPDFAPI) {
-    jsPDFAPI.autoTable = function (options) {
-        // This is a placeholder for the real autoTable implementation.
-        // For a real app, you should add the jspdf-autotable package.
-        console.log("jsPDF.autoTable called with:", options);
-
-        const doc = this;
-        const startY = options.startY || 20;
-        let currentY = startY;
-        const cellPadding = 2;
-        const columnWidth = (doc.internal.pageSize.width - 40) / options.head[0].length;
-
-        // Draw header
-        doc.setFont(undefined, 'bold');
-        options.head[0].forEach((text: string, i: number) => {
-            doc.text(text, 20 + (i * columnWidth), currentY);
-        });
-        currentY += 8;
-        
-        doc.setLineWidth(0.5);
-        doc.line(20, currentY - 5, doc.internal.pageSize.width - 20, currentY - 5);
-
-
-        // Draw body
-        doc.setFont(undefined, 'normal');
-        options.body.forEach((row: any[]) => {
-            row.forEach((text, i) => {
-                doc.text(String(text), 20 + (i * columnWidth), currentY);
-            });
-            currentY += 8;
-        });
-
-        doc.line(20, currentY - 5, doc.internal.pageSize.width - 20, currentY - 5);
-
-
-        // Store final Y position
-        this.autoTable.previous = { finalY: currentY };
-        
-        return this;
-    };
-})(jsPDF.API);
-
