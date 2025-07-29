@@ -43,6 +43,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 import { useRouter } from 'next/navigation';
 
@@ -66,11 +67,18 @@ export default function PatientsPage() {
     );
     const [searchTerm, setSearchTerm] = React.useState('');
     const [isNewPatientModalOpen, setIsNewPatientModalOpen] = React.useState(false);
+    const [statusFilter, setStatusFilter] = React.useState<PatientStatus | 'all'>('all');
 
-    const filteredPatients = patients.filter(patient => 
-        patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        patient.email.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const handleStatusFilterChange = (status: PatientStatus | 'all') => {
+        setStatusFilter(status === statusFilter ? 'all' : status);
+    };
+
+    const filteredPatients = patients.filter(patient => {
+        const matchesSearch = patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              patient.email.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus = statusFilter === 'all' || patient.status === statusFilter;
+        return matchesSearch && matchesStatus;
+    });
 
   return (
     <DashboardLayout>
@@ -95,16 +103,29 @@ export default function PatientsPage() {
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input 
                         type="search" 
-                        placeholder="Buscar pacientes..." 
+                        placeholder="Buscar pacientes por nombre o email..." 
                         className="pl-8" 
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <Button variant="outline" size="sm" className="h-9 gap-2">
-                    <SlidersHorizontal className="h-4 w-4" />
-                    <span className="hidden sm:inline-block">Filtros</span>
-                </Button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-9 gap-2">
+                            <SlidersHorizontal className="h-4 w-4" />
+                            <span className="hidden sm:inline-block">Filtros</span>
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Filtrar por Estado</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuCheckboxItem checked={statusFilter === 'all'} onSelect={() => setStatusFilter('all')}>Todos</DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={statusFilter === 'Active'} onSelect={() => setStatusFilter('Active')}>Activo</DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={statusFilter === 'Inactive'} onSelect={() => setStatusFilter('Inactive')}>Inactivo</DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={statusFilter === 'Pending'} onSelect={() => setStatusFilter('Pending')}>Pendiente</DropdownMenuCheckboxItem>
+                        <DropdownMenuCheckboxItem checked={statusFilter === 'Archived'} onSelect={() => setStatusFilter('Archived')}>Archivado</DropdownMenuCheckboxItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -120,10 +141,10 @@ export default function PatientsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredPatients.map((patient) => (
+              {filteredPatients.length > 0 ? filteredPatients.map((patient) => (
                 <TableRow key={patient.id}>
-                  <TableCell className="font-medium" onClick={() => router.push(`/patients/${patient.id}`)} style={{ cursor: 'pointer' }}>
-                    <div>{patient.name}</div>
+                  <TableCell className="font-medium">
+                    <div className="hover:underline cursor-pointer" onClick={() => router.push(`/patients/${patient.id}`)}>{patient.name}</div>
                     <div className="text-xs text-muted-foreground">ID: {patient.id}</div>
                   </TableCell>
                    <TableCell className="hidden lg:table-cell">{patient.email}</TableCell>
@@ -176,7 +197,13 @@ export default function PatientsPage() {
                     </DropdownMenu>
                   </TableCell>
                 </TableRow>
-              ))}
+              )) : (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-24 text-center">
+                    No se encontraron pacientes.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>

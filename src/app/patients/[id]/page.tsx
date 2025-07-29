@@ -1,3 +1,6 @@
+
+'use client';
+
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { patients } from "@/lib/data";
@@ -5,9 +8,10 @@ import { notFound } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { FileText, Pencil, Trash2 } from "lucide-react";
+import { FileText, Pencil, Trash2, ChevronLeft } from "lucide-react";
 import { Odontogram } from "@/components/odontogram";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import Link from "next/link";
 
 export default function PatientDetailPage({ params }: { params: { id: string } }) {
   const patient = patients.find(p => p.id === params.id.toUpperCase());
@@ -18,6 +22,14 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
 
   return (
     <DashboardLayout>
+      <div className="mb-4">
+        <Button asChild variant="outline" size="sm">
+            <Link href="/patients">
+                <ChevronLeft className="h-4 w-4 mr-2" />
+                Volver a Pacientes
+            </Link>
+        </Button>
+      </div>
       <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-7">
         <div className="lg:col-span-2 md:col-span-4">
           <Card>
