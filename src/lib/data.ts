@@ -85,3 +85,25 @@ export const inventoryItems: InventoryItem[] = [
     { id: 'INV005', name: 'Película de Rayos X (Paquete)', category: 'Imagenología', stock: 12, minStock: 10, price: 55.00, status: 'Low Stock', provider: 'RadiaTech', lastOrdered: '2023-10-05' },
     { id: 'INV006', name: 'Resina Compuesta (Jeringa)', category: 'Materiales Restauradores', stock: 30, minStock: 25, price: 45.00, status: 'In Stock', provider: 'BioFill', lastOrdered: '2023-11-01' },
 ];
+
+export type Payment = {
+    id: string;
+    invoiceNumber: string;
+    patientId: string;
+    patientName: string;
+    amount: number;
+    date: string; // YYYY-MM-DD
+    status: 'Paid' | 'Pending' | 'Canceled';
+    method: 'Card' | 'Cash' | 'Transfer';
+    concept: string;
+};
+
+export const payments: Payment[] = [
+    { id: 'PAY001', invoiceNumber: 'INV-20231015-001', patientId: 'PAT001', patientName: 'John Doe', amount: 150, date: '2023-10-15', status: 'Paid', method: 'Card', concept: 'Limpieza y Revisión' },
+    { id: 'PAY002', invoiceNumber: 'INV-20231020-002', patientId: 'PAT002', patientName: 'Jane Smith', amount: 250, date: '2023-10-20', status: 'Paid', method: 'Cash', concept: 'Blanqueamiento Dental' },
+    { id: 'PAY003', invoiceNumber: 'INV-20231101-003', patientId: 'PAT003', patientName: 'Robert Johnson', amount: 800, date: '2023-11-01', status: 'Pending', method: 'Transfer', concept: 'Implante Dental' },
+    { id: 'PAY004', invoiceNumber: 'INV-20231105-004', patientId: 'PAT005', patientName: 'Michael Brown', amount: 75, date: '2023-11-05', status: 'Paid', method: 'Card', concept: 'Radiografía Panorámica' },
+    { id: 'PAY005', invoiceNumber: 'INV-20231110-005', patientId: 'PAT006', patientName: 'Graciela Lugo', amount: 320, date: '2023-11-10', status: 'Paid', method: 'Cash', concept: 'Tratamiento de Caries' },
+    { id: 'PAY006', invoiceNumber: 'INV-20231112-006', patientId: 'PAT004', patientName: 'Emily Williams', amount: 500, date: '2023-11-12', status: 'Canceled', method: 'Card', concept: 'Ortodoncia - Pago Inicial' },
+];
+

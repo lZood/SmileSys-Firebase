@@ -16,6 +16,7 @@ import {
   Settings,
   Users,
   LogOut,
+  CreditCard,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,7 @@ const navItems = [
   { href: '/patients', icon: Users, label: 'Patients' },
   { href: '/appointments', icon: Calendar, label: 'Appointments' },
   { href: '/inventory', icon: Package, label: 'Inventory' },
+  { href: '/billing', icon: CreditCard, label: 'Billing' },
 ];
 
 const bottomNavItems = [{ href: '/settings', icon: Settings, label: 'Settings' }];
