@@ -11,7 +11,8 @@ import {
     FileText, 
     FilePlus, 
     UserCog, 
-    Trash2 
+    Trash2,
+    MoreHorizontal
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,15 @@ import { Badge } from "@/components/ui/badge";
 import { patients as initialPatients, Patient } from "@/lib/data";
 import { cn } from '@/lib/utils';
 import { NewPatientForm } from '@/components/new-patient-form';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useRouter } from 'next/navigation';
 
 type PatientStatus = 'Active' | 'Inactive' | 'Pending' | 'Archived';
 
@@ -47,6 +57,7 @@ const statusStyles: Record<PatientStatus, string> = {
 
 
 export default function PatientsPage() {
+    const router = useRouter();
     const [patients, setPatients] = React.useState<(Patient & { status: PatientStatus })[]>(() => 
         initialPatients.map((p, i) => ({
             ...p,
@@ -105,13 +116,13 @@ export default function PatientsPage() {
                 <TableHead className="hidden md:table-cell">Teléfono</TableHead>
                 <TableHead className="hidden lg:table-cell">Última Visita</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Acciones</TableHead>
+                <TableHead><span className="sr-only">Acciones</span></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredPatients.map((patient) => (
                 <TableRow key={patient.id}>
-                  <TableCell className="font-medium">
+                  <TableCell className="font-medium" onClick={() => router.push(`/patients/${patient.id}`)} style={{ cursor: 'pointer' }}>
                     <div>{patient.name}</div>
                     <div className="text-xs text-muted-foreground">ID: {patient.id}</div>
                   </TableCell>
@@ -128,32 +139,41 @@ export default function PatientsPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2">
-                         <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500 hover:text-blue-600">
-                            <Eye className="h-4 w-4" />
-                            <span className="sr-only">View Details</span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          aria-haspopup="true"
+                          size="icon"
+                          variant="ghost"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">Toggle menu</span>
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-green-500 hover:text-green-600">
-                            <Calendar className="h-4 w-4" />
-                             <span className="sr-only">Appointments</span>
-                        </Button>
-                         <Button variant="ghost" size="icon" className="h-8 w-8 text-purple-500 hover:text-purple-600">
-                            <FileText className="h-4 w-4" />
-                             <span className="sr-only">Payments</span>
-                        </Button>
-                         <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-500 hover:text-indigo-600">
-                            <FilePlus className="h-4 w-4" />
-                             <span className="sr-only">Consent</span>
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-orange-500 hover:text-orange-600">
-                            <UserCog className="h-4 w-4" />
-                             <span className="sr-only">Change Status</span>
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600">
-                            <Trash2 className="h-4 w-4" />
-                            <span className="sr-only">Delete</span>
-                        </Button>
-                    </div>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => router.push(`/patients/${patient.id}`)}>
+                            <Eye className="mr-2 h-4 w-4" /> Ver Detalles
+                        </DropdownMenuItem>
+                         <DropdownMenuItem>
+                            <Calendar className="mr-2 h-4 w-4" /> Citas
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                            <FileText className="mr-2 h-4 w-4" /> Pagos
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                             <FilePlus className="mr-2 h-4 w-4" /> Consentimiento
+                        </DropdownMenuItem>
+                        <DropdownMenuItem>
+                             <UserCog className="mr-2 h-4 w-4" /> Cambiar Estado
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-red-600">
+                             <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
