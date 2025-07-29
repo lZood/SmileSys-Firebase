@@ -29,6 +29,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 
 const AppointmentForm = ({ 
   isOpen, 
@@ -43,6 +44,7 @@ const AppointmentForm = ({
   onSubmit: (newAppointment: Omit<Appointment, 'id' | 'status'>) => void,
   existingAppointment?: Appointment | null
 }) => {
+    const { toast } = useToast();
     const [patientName, setPatientName] = React.useState('');
     const [time, setTime] = React.useState('10:00');
     const [service, setService] = React.useState('');
@@ -64,7 +66,11 @@ const AppointmentForm = ({
 
     const handleSubmit = () => {
         if (!patientName || !time || !service || !doctor) {
-            console.error("Please fill all fields");
+            toast({
+                variant: "destructive",
+                title: "Campos Incompletos",
+                description: "Por favor, complete todos los campos para guardar la cita.",
+            });
             return;
         }
         onSubmit({
