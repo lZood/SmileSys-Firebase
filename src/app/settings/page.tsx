@@ -1,3 +1,4 @@
+
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MoreHorizontal, PlusCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Textarea } from "@/components/ui/textarea";
 
 const teamMembers = [
     { name: 'Dr. Emily Carter', role: 'Admin, Doctor', email: 'emily.c@smilesys.com' },
@@ -57,7 +59,7 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle>Clinic Information</CardTitle>
                 <CardDescription>
-                  Manage your clinic's details (Admin only).
+                  Manage your clinic's details for PDF generation (Admin only).
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -68,6 +70,14 @@ export default function SettingsPage() {
                  <div className="grid gap-2">
                   <Label htmlFor="clinic-address">Address</Label>
                   <Input id="clinic-address" defaultValue="123 Dental Ave, Smiletown" />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="clinic-logo">Clinic Logo URL</Label>
+                  <Input id="clinic-logo" placeholder="https://your-clinic.com/logo.png" />
+                </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="terms">Terms & Conditions for Consents</Label>
+                    <Textarea id="terms" placeholder="Enter the terms and conditions that will appear on every consent PDF..." className="min-h-[150px]" />
                 </div>
                 <Button>Save Changes</Button>
               </CardContent>

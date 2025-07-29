@@ -1,6 +1,7 @@
 
 'use client';
 
+import * as React from 'react';
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { patients } from "@/lib/data";
@@ -12,9 +13,11 @@ import { FileText, Pencil, Trash2, ChevronLeft } from "lucide-react";
 import { Odontogram } from "@/components/odontogram";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
+import { ConsentForm } from '@/components/consent-form';
 
 export default function PatientDetailPage({ params }: { params: { id: string } }) {
   const patient = patients.find(p => p.id === params.id.toUpperCase());
+  const [isConsentModalOpen, setIsConsentModalOpen] = React.useState(false);
 
   if (!patient) {
     notFound();
@@ -22,6 +25,12 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
 
   return (
     <DashboardLayout>
+       {isConsentModalOpen && (
+          <ConsentForm 
+            patientName={patient.name} 
+            onClose={() => setIsConsentModalOpen(false)}
+          />
+        )}
       <div className="mb-4">
         <Button asChild variant="outline" size="sm">
             <Link href="/patients">
@@ -74,7 +83,9 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
                  <CardDescription>Manage informed consent forms.</CardDescription>
               </CardHeader>
               <CardContent>
-                 <Button className="w-full"><FileText className="w-4 h-4 mr-2" /> Generate New Consent</Button>
+                 <Button className="w-full" onClick={() => setIsConsentModalOpen(true)}>
+                    <FileText className="w-4 h-4 mr-2" /> Generate New Consent
+                 </Button>
                  <div className="text-xs text-muted-foreground mt-2 text-center">No consents found.</div>
               </CardContent>
             </Card>
