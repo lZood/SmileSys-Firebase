@@ -99,12 +99,12 @@ export type Payment = {
 };
 
 export const payments: Payment[] = [
-    { id: 'PAY001', invoiceNumber: 'INV-20231015-001', patientId: 'PAT001', patientName: 'John Doe', amount: 150, date: '2023-10-15', status: 'Paid', method: 'Card', concept: 'Limpieza y Revisión' },
-    { id: 'PAY002', invoiceNumber: 'INV-20231020-002', patientId: 'PAT002', patientName: 'Jane Smith', amount: 250, date: '2023-10-20', status: 'Paid', method: 'Cash', concept: 'Blanqueamiento Dental' },
-    { id: 'PAY003', invoiceNumber: 'INV-20231101-003', patientId: 'PAT003', patientName: 'Robert Johnson', amount: 800, date: '2023-11-01', status: 'Pending', method: 'Transfer', concept: 'Implante Dental' },
-    { id: 'PAY004', invoiceNumber: 'INV-20231105-004', patientId: 'PAT005', patientName: 'Michael Brown', amount: 75, date: '2023-11-05', status: 'Paid', method: 'Card', concept: 'Radiografía Panorámica' },
-    { id: 'PAY005', invoiceNumber: 'INV-20231110-005', patientId: 'PAT006', patientName: 'Graciela Lugo', amount: 320, date: '2023-11-10', status: 'Paid', method: 'Cash', concept: 'Tratamiento de Caries' },
-    { id: 'PAY006', invoiceNumber: 'INV-20231112-006', patientId: 'PAT004', patientName: 'Emily Williams', amount: 500, date: '2023-11-12', status: 'Canceled', method: 'Card', concept: 'Ortodoncia - Pago Inicial' },
+    { id: 'PAY001', invoiceNumber: 'INV-20231015-001', patientId: 'PAT001', patientName: 'John Doe', amount: 150, date: '2023-10-15', status: 'Paid', method: 'Card', concept: 'Cleaning' },
+    { id: 'PAY002', invoiceNumber: 'INV-20231020-002', patientId: 'PAT002', patientName: 'Jane Smith', amount: 250, date: '2023-10-20', status: 'Paid', method: 'Cash', concept: 'Whitening' },
+    { id: 'PAY003', invoiceNumber: 'INV-20231101-003', patientId: 'PAT003', patientName: 'Robert Johnson', amount: 800, date: '2023-11-01', status: 'Pending', method: 'Transfer', concept: 'Implants' },
+    { id: 'PAY004', invoiceNumber: 'INV-20231105-004', patientId: 'PAT005', patientName: 'Michael Brown', amount: 75, date: '2023-11-05', status: 'Paid', method: 'Card', concept: 'X-Ray' },
+    { id: 'PAY005', invoiceNumber: 'INV-20231110-005', patientId: 'PAT006', patientName: 'Graciela Lugo', amount: 320, date: '2023-11-10', status: 'Paid', method: 'Cash', concept: 'Filling' },
+    { id: 'PAY006', invoiceNumber: 'INV-20231112-006', patientId: 'PAT004', patientName: 'Emily Williams', amount: 500, date: '2023-11-12', status: 'Canceled', method: 'Card', concept: 'Orthodontics' },
 ];
 
 export type QuoteItem = { description: string; cost: number; };
@@ -159,4 +159,42 @@ export const quotes: Quote[] = [
         createdAt: '2023-11-10',
         expiresAt: '2023-12-10',
     },
+     {
+        id: 'QUO004',
+        patientId: 'PAT005',
+        patientName: 'Michael Brown',
+        items: [
+            { description: 'Ortodoncia', cost: 4000 },
+        ],
+        total: 4000,
+        status: 'Presented',
+        createdAt: '2023-11-15',
+        expiresAt: '2023-12-15',
+    },
+];
+
+// Data for Reports
+export const monthlyRevenueData = [
+    { month: 'Jul', revenue: 2400 },
+    { month: 'Aug', revenue: 1398 },
+    { month: 'Sep', revenue: 9800 },
+    { month: 'Oct', revenue: 3908 },
+    { month: 'Nov', revenue: 4800 },
+    { month: 'Dec', revenue: 3800 },
+];
+
+export const appointmentsByDoctorData = [
+    { doctor: 'Dr. Adams', appointments: 40 },
+    { doctor: 'Dr. Carter', appointments: 30 },
+    { doctor: 'Dr. Wilson', appointments: 20 },
+    { doctor: 'Dr. Lee', appointments: 27 },
+];
+
+export const newPatientsData = [
+    { month: 'Jul', count: 5 },
+    { month: 'Aug', count: 8 },
+    { month: 'Sep', count: 12 },
+    { month: 'Oct', count: 7 },
+    { month: 'Nov', count: 10 },
+    { month: 'Dec', count: 15 },
 ];
