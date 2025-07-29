@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { PlusCircle, MoreHorizontal, X, Calendar as CalendarIcon, Search } from "lucide-react";
+import { PlusCircle, Calendar as CalendarIcon, Search } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +38,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
+import { Separator } from '@/components/ui/separator';
 
 
 export default function AppointmentsPage() {
@@ -323,3 +324,5 @@ export default function AppointmentsPage() {
     </DashboardLayout>
   );
 }
+
+    

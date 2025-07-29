@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -6,6 +7,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { appointments, Appointment } from "@/lib/data";
+import { cn } from "@/lib/utils";
 
 export default function CalendarPage() {
   const [date, setDate] = React.useState<Date | undefined>(new Date());
@@ -19,7 +21,7 @@ export default function CalendarPage() {
 
   const appointmentDates = React.useMemo(() => 
     appointments.map(app => new Date(app.date)), 
-  [appointments]);
+  []);
 
   return (
     <DashboardLayout>
@@ -51,7 +53,7 @@ export default function CalendarPage() {
                         day_today: "bg-accent/50 text-accent-foreground",
                     }}
                     components={{
-                        DayContent: ({ date, ...props }) => {
+                        DayContent: ({ date }) => {
                             const isAppointment = appointmentDates.some(d => d.toDateString() === date.toDateString());
                             return (
                                 <div className="relative h-full w-full flex items-center justify-center">
@@ -82,8 +84,20 @@ export default function CalendarPage() {
                       <p className="font-semibold">{appointment.patientName}</p>
                       <p className="text-sm text-muted-foreground">{appointment.service}</p>
                     </div>
-                    <Badge variant={appointment.status === "Scheduled" ? "secondary" : "default"}>
-                      {appointment.status}
+                     <Badge 
+                        variant={
+                            appointment.status === 'Completed' ? 'default' 
+                            : appointment.status === 'Canceled' ? 'destructive'
+                            : 'secondary'
+                        }
+                        className={cn({
+                            'bg-green-100 text-green-800 border-green-200': appointment.status === 'Completed',
+                            'bg-blue-100 text-blue-800 border-blue-200': appointment.status === 'Scheduled',
+                            'bg-red-100 text-red-800 border-red-200': appointment.status === 'Canceled',
+                            'bg-yellow-100 text-yellow-800 border-yellow-200': appointment.status === 'In-progress'
+                        })}
+                    >
+                        {appointment.status}
                     </Badge>
                   </div>
                   <div className="text-sm text-muted-foreground mt-2">
@@ -98,3 +112,5 @@ export default function CalendarPage() {
     </DashboardLayout>
   );
 }
+
+    
