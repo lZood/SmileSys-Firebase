@@ -2,27 +2,22 @@
 'use client';
 
 import * as React from 'react';
-import { PlusCircle, Calendar as CalendarIcon, Search } from "lucide-react";
-import { DashboardLayout } from "@/components/layout/dashboard-layout";
-import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { appointments as initialAppointments, Appointment, patients } from "@/lib/data";
+  eachDayOfInterval,
+  endOfMonth,
+  format,
+  startOfMonth,
+  isSameMonth,
+  isToday,
+  startOfWeek,
+  endOfWeek,
+  add,
+  isSameDay,
+} from 'date-fns';
+import { es } from 'date-fns/locale';
+import { appointments as initialAppointments, Appointment, patients } from '@/lib/data';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -33,73 +28,56 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
 
+const AppointmentForm = ({ 
+  isOpen, 
+  onClose, 
+  selectedDate, 
+  onSubmit 
+}: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  selectedDate: Date, 
+  onSubmit: (newAppointment: Omit<Appointment, 'id' | 'status'>) => void 
+}) => {
+    const [patientName, setPatientName] = React.useState('');
+    const [time, setTime] = React.useState('10:00');
+    const [service, setService] = React.useState('');
+    const [doctor, setDoctor] = React.useState('');
 
-export default function AppointmentsPage() {
-  const [appointments, setAppointments] = React.useState<Appointment[]>(initialAppointments);
-  const [selectedAppointment, setSelectedAppointment] = React.useState<Appointment | null>(null);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = React.useState(false);
-  const [isNewAppointmentModalOpen, setIsNewAppointmentModalOpen] = React.useState(false);
-
-  const now = new Date();
-  
-  const todaysAppointments = appointments.filter(
-    (a) => new Date(a.date).toDateString() === now.toDateString()
-  );
-
-  const upcomingAppointments = appointments.filter(
-    (a) => new Date(a.date) > now && new Date(a.date).toDateString() !== now.toDateString()
-  );
-  
-  const pastAppointments = appointments.filter(
-    (a) => new Date(a.date) < now && new Date(a.date).toDateString() !== now.toDateString()
-  );
-
-  const handleRowClick = (appointment: Appointment) => {
-    setSelectedAppointment(appointment);
-    setIsDetailsModalOpen(true);
-  };
-  
-  const handleStatusChange = (newStatus: Appointment['status']) => {
-    if (selectedAppointment) {
-        // Here you would call your backend to update the status
-        // For now, we update the local state
-        setAppointments(prev => prev.map(app => 
-            app.id === selectedAppointment.id ? {...app, status: newStatus} : app
-        ));
-        setSelectedAppointment(prev => prev ? {...prev, status: newStatus} : null);
-    }
-  };
-  
-  const AppointmentForm = ({ appointment, onClose }: { appointment?: Appointment | null, onClose: () => void }) => {
-    const [patientName, setPatientName] = React.useState(appointment?.patientName || '');
-    const [date, setDate] = React.useState<Date | undefined>(appointment ? new Date(appointment.date) : undefined);
-    
-    const appointmentDates = React.useMemo(() => 
-        appointments.map(app => new Date(app.date)), 
-    [appointments]);
+    const handleSubmit = () => {
+        if (!patientName || !time || !service || !doctor) {
+            // Add toast notification for incomplete fields
+            console.error("Please fill all fields");
+            return;
+        }
+        onSubmit({
+            patientName,
+            doctor,
+            service,
+            time,
+            date: format(selectedDate, 'yyyy-MM-dd'),
+        });
+        onClose();
+    };
 
     return (
-        <Dialog open onOpenChange={onClose}>
+        <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>{appointment ? "Edit Appointment" : "New Appointment"}</DialogTitle>
+                    <DialogTitle>Nueva Cita</DialogTitle>
                     <DialogDescription>
-                        {appointment ? "Update the details for this appointment." : "Schedule a new appointment."}
+                        Agendando cita para el {format(selectedDate, 'd \'de\' MMMM \'de\' yyyy', { locale: es })}.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                      <div className="grid gap-2">
-                        <Label htmlFor="patient-name">Patient Name</Label>
+                        <Label htmlFor="patient-name">Nombre del Paciente</Label>
                         <Input 
                             id="patient-name"
-                            placeholder="Select or type for a guest"
+                            placeholder="Seleccionar paciente o escribir invitado"
                             value={patientName}
                             onChange={(e) => setPatientName(e.target.value)}
                             list="patients-list"
@@ -108,213 +86,143 @@ export default function AppointmentsPage() {
                             {patients.map(p => <option key={p.id} value={p.name} />)}
                         </datalist>
                     </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="time">Hora</Label>
+                            <Input id="time" type="time" value={time} onChange={e => setTime(e.target.value)} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="service">Servicio</Label>
+                            <Input id="service" value={service} onChange={e => setService(e.target.value)} placeholder="e.g. Check-up" />
+                        </div>
+                    </div>
                      <div className="grid gap-2">
-                        <Label>Date</Label>
-                        <Calendar
-                            mode="single"
-                            selected={date}
-                            onSelect={setDate}
-                            className="rounded-md border"
-                            components={{
-                                DayContent: ({ date }) => {
-                                    const isAppointmentDay = appointmentDates.some(d => d.toDateString() === date.toDateString());
-                                    return (
-                                        <div className="relative h-full w-full flex items-center justify-center">
-                                            <span>{date.getDate()}</span>
-                                            {isAppointmentDay && <div className="absolute bottom-1 h-1.5 w-1.5 rounded-full bg-primary" />}
-                                        </div>
-                                    );
-                                }
-                            }}
-                        />
-                    </div>
-                     <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="time">Time</Label>
-                            <Input id="time" type="time" defaultValue={appointment?.time} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="service">Service</Label>
-                            <Input id="service" defaultValue={appointment?.service} placeholder="e.g. Check-up" />
-                        </div>
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="notes">Notes</Label>
-                        <Textarea id="notes" placeholder="Optional notes about the appointment." />
+                        <Label htmlFor="doctor">Doctor</Label>
+                        <Input id="doctor" value={doctor} onChange={e => setDoctor(e.target.value)} placeholder="Dr. Adams" />
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>Cancel</Button>
-                    <Button type="submit">Save Appointment</Button>
+                    <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                    <Button onClick={handleSubmit}>Guardar Cita</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     );
+};
+
+
+export default function AppointmentsCalendarPage() {
+  const [currentDate, setCurrentDate] = React.useState(new Date());
+  const [appointments, setAppointments] = React.useState<Appointment[]>(initialAppointments);
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [selectedDate, setSelectedDate] = React.useState(new Date());
+
+  const firstDayOfMonth = startOfMonth(currentDate);
+  const lastDayOfMonth = endOfMonth(currentDate);
+
+  const daysInMonth = eachDayOfInterval({
+    start: startOfWeek(firstDayOfMonth, { weekStartsOn: 1 }),
+    end: endOfWeek(lastDayOfMonth, { weekStartsOn: 1 }),
+  });
+
+  const goToPreviousMonth = () => {
+    setCurrentDate(add(currentDate, { months: -1 }));
+  };
+
+  const goToNextMonth = () => {
+    setCurrentDate(add(currentDate, { months: 1 }));
+  };
+
+  const handleDayClick = (day: Date) => {
+    setSelectedDate(day);
+    setIsModalOpen(true);
+  };
+  
+  const handleAddAppointment = (newAppointmentData: Omit<Appointment, 'id' | 'status'>) => {
+        const newAppointment: Appointment = {
+            id: `APP${String(appointments.length + 1).padStart(3, '0')}`,
+            ...newAppointmentData,
+            status: 'Scheduled'
+        };
+        setAppointments(prev => [...prev, newAppointment]);
   };
 
 
-  const renderTable = (data: typeof appointments) => (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Patient</TableHead>
-          <TableHead>Doctor</TableHead>
-          <TableHead>Service</TableHead>
-          <TableHead>Date & Time</TableHead>
-          <TableHead>Status</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {data.length > 0 ? data.map((appointment) => (
-          <TableRow key={appointment.id} onClick={() => handleRowClick(appointment)} className="cursor-pointer">
-            <TableCell className="font-medium">{appointment.patientName}</TableCell>
-            <TableCell>{appointment.doctor}</TableCell>
-            <TableCell>{appointment.service}</TableCell>
-            <TableCell>
-              {appointment.date} at {appointment.time}
-            </TableCell>
-            <TableCell>
-                <Badge 
-                    variant={
-                        appointment.status === 'Completed' ? 'default' 
-                        : appointment.status === 'Canceled' ? 'destructive'
-                        : 'secondary'
-                    }
-                    className={cn({
-                        'bg-green-100 text-green-800 border-green-200': appointment.status === 'Completed',
-                        'bg-blue-100 text-blue-800 border-blue-200': appointment.status === 'Scheduled',
-                        'bg-red-100 text-red-800 border-red-200': appointment.status === 'Canceled',
-                        'bg-yellow-100 text-yellow-800 border-yellow-200': appointment.status === 'In-progress'
-                    })}
-                >
-                    {appointment.status}
-                </Badge>
-            </TableCell>
-          </TableRow>
-        )) : (
-            <TableRow>
-                <TableCell colSpan={5} className="text-center h-24">No appointments found.</TableCell>
-            </TableRow>
-        )}
-      </TableBody>
-    </Table>
-  );
+  const getAppointmentsForDay = (day: Date) => {
+    return appointments.filter((appointment) =>
+      isSameDay(new Date(appointment.date), day)
+    ).sort((a, b) => new Date(`1970-01-01T${a.time}`).getTime() - new Date(`1970-01-01T${b.time}`).getTime());
+  };
 
   return (
-    <DashboardLayout>
-        {isDetailsModalOpen && selectedAppointment && (
-             <Dialog open={isDetailsModalOpen} onOpenChange={setIsDetailsModalOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Appointment Details</DialogTitle>
-                        <DialogDescription>
-                            Viewing appointment for {selectedAppointment.patientName} on {selectedAppointment.date}.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                        <p><strong>Patient:</strong> {selectedAppointment.patientName}</p>
-                        <p><strong>Doctor:</strong> {selectedAppointment.doctor}</p>
-                        <p><strong>Service:</strong> {selectedAppointment.service}</p>
-                        <p><strong>Date:</strong> {selectedAppointment.date}</p>
-                        <p><strong>Time:</strong> {selectedAppointment.time}</p>
-                        <div className="flex items-center gap-2">
-                            <strong>Status:</strong>
-                            <Badge 
-                                variant={
-                                    selectedAppointment.status === 'Completed' ? 'default' 
-                                    : selectedAppointment.status === 'Canceled' ? 'destructive'
-                                    : 'secondary'
-                                }
-                                className={cn({
-                                    'bg-green-100 text-green-800 border-green-200': selectedAppointment.status === 'Completed',
-                                    'bg-blue-100 text-blue-800 border-blue-200': selectedAppointment.status === 'Scheduled',
-                                    'bg-red-100 text-red-800 border-red-200': selectedAppointment.status === 'Canceled',
-                                    'bg-yellow-100 text-yellow-800 border-yellow-200': selectedAppointment.status === 'In-progress'
-                                })}
-                            >
-                                {selectedAppointment.status}
-                            </Badge>
-                        </div>
-                    </div>
-                    <DialogFooter className="sm:justify-between">
-                        <div className="flex gap-2">
-                             <Button onClick={() => handleStatusChange('Completed')} disabled={selectedAppointment.status === 'Completed'}>Complete</Button>
-                             <Button onClick={() => handleStatusChange('In-progress')} disabled={selectedAppointment.status === 'In-progress'}>Set In-Progress</Button>
-                             <Button variant="destructive" onClick={() => handleStatusChange('Canceled')} disabled={selectedAppointment.status === 'Canceled'}>Cancel</Button>
-                        </div>
-                        <Button variant="outline" onClick={() => { setIsDetailsModalOpen(false); }}>Close</Button>
-                    </DialogFooter>
-                      <Separator />
-                     <div className="pt-4">
-                        <h4 className="font-semibold mb-2">Reschedule</h4>
-                        <div className="flex gap-2">
-                           <Input type="date" defaultValue={selectedAppointment.date} />
-                           <Input type="time" defaultValue={selectedAppointment.time} />
-                           <Button>Save Changes</Button>
-                        </div>
-                     </div>
-                </DialogContent>
-            </Dialog>
+    <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
+        {isModalOpen && (
+            <AppointmentForm 
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                selectedDate={selectedDate}
+                onSubmit={handleAddAppointment}
+            />
         )}
-
-        {isNewAppointmentModalOpen && <AppointmentForm onClose={() => setIsNewAppointmentModalOpen(false)} />}
-
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold font-headline">Citas</h1>
-          <p className="text-muted-foreground">
-            Visualiza y gestiona las citas de los pacientes.
-          </p>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold font-headline capitalize">
+          {format(currentDate, 'MMMM yyyy', { locale: es })}
+        </h1>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-8 w-8">
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-8 w-8">
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
-        <Button size="sm" className="h-9 gap-1" onClick={() => setIsNewAppointmentModalOpen(true)}>
-          <PlusCircle className="h-4 w-4" />
-          <span className="hidden sm:inline-block">
-            Nueva Cita
-          </span>
-        </Button>
       </div>
 
-      <Tabs defaultValue="today">
-        <TabsList>
-          <TabsTrigger value="today">Hoy</TabsTrigger>
-          <TabsTrigger value="upcoming">Próximas</TabsTrigger>
-          <TabsTrigger value="past">Pasadas</TabsTrigger>
-        </TabsList>
-        <TabsContent value="today">
-          <Card>
-            <CardHeader>
-              <CardTitle>Citas de Hoy</CardTitle>
-              <CardDescription>
-                Citas programadas para el día de hoy.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>{renderTable(todaysAppointments)}</CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="upcoming">
-          <Card>
-            <CardHeader>
-              <CardTitle>Próximas Citas</CardTitle>
-              <CardDescription>
-                Citas agendadas para el futuro.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>{renderTable(upcomingAppointments)}</CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="past">
-            <Card>
-                <CardHeader>
-                <CardTitle>Citas Pasadas</CardTitle>
-                <CardDescription>
-                    Historial de todas las citas anteriores.
-                </CardDescription>
-                </CardHeader>
-                <CardContent>{renderTable(pastAppointments)}</CardContent>
-            </Card>
-        </TabsContent>
-      </Tabs>
-    </DashboardLayout>
+      <div className="grid grid-cols-7 border-t border-l border-gray-200">
+        {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((day) => (
+          <div key={day} className="p-2 text-center text-sm font-medium text-gray-500 border-b border-r border-gray-200">
+            {day}
+          </div>
+        ))}
+        {daysInMonth.map((day) => {
+          const appointmentsForDay = getAppointmentsForDay(day);
+          const maxVisible = 3;
+          const hiddenCount = appointmentsForDay.length - maxVisible;
+
+          return (
+            <div
+              key={day.toString()}
+              onClick={() => handleDayClick(day)}
+              className={cn(
+                'relative h-28 sm:h-36 p-2 border-b border-r border-gray-200 flex flex-col cursor-pointer hover:bg-gray-50 transition-colors',
+                !isSameMonth(day, currentDate) && 'bg-gray-50 text-gray-400',
+              )}
+            >
+              <time
+                dateTime={format(day, 'yyyy-MM-dd')}
+                className={cn(
+                  'text-xs font-semibold',
+                  isToday(day) && 'flex items-center justify-center h-6 w-6 rounded-full bg-primary text-white'
+                )}
+              >
+                {format(day, 'd')}
+              </time>
+              <div className="mt-1 flex-grow overflow-y-auto text-xs space-y-1">
+                {appointmentsForDay.slice(0, maxVisible).map(app => (
+                  <div key={app.id} className="p-1 bg-primary/10 rounded-md text-primary-dark font-medium truncate">
+                    {app.time} - {app.patientName}
+                  </div>
+                ))}
+                {hiddenCount > 0 && (
+                  <div className="text-gray-500 font-medium pt-1">
+                    +{hiddenCount} más
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
