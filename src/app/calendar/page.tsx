@@ -54,11 +54,11 @@ export default function CalendarPage() {
                     }}
                     components={{
                         DayContent: ({ date }) => {
-                            const isAppointment = appointmentDates.some(d => d.toDateString() === date.toDateString());
+                            const isAppointmentDay = appointmentDates.some(d => d.toDateString() === date.toDateString());
                             return (
                                 <div className="relative h-full w-full flex items-center justify-center">
                                     <span>{date.getDate()}</span>
-                                    {isAppointment && <div className="absolute bottom-2 h-1.5 w-1.5 rounded-full bg-primary" />}
+                                    {isAppointmentDay && <div className="absolute bottom-2 h-1.5 w-1.5 rounded-full bg-primary" />}
                                 </div>
                             );
                         }
@@ -112,5 +112,3 @@ export default function CalendarPage() {
     </DashboardLayout>
   );
 }
-
-    

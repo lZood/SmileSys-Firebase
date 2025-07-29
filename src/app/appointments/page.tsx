@@ -78,75 +78,69 @@ export default function AppointmentsPage() {
   };
   
   const AppointmentForm = ({ appointment, onClose }: { appointment?: Appointment | null, onClose: () => void }) => {
-    const [patientSearch, setPatientSearch] = React.useState('');
-    const [selectedPatient, setSelectedPatient] = React.useState<string | null>(appointment ? appointment.patientName : null);
+    const [patientName, setPatientName] = React.useState(appointment?.patientName || '');
+    const [date, setDate] = React.useState<Date | undefined>(appointment ? new Date(appointment.date) : undefined);
     
-    const filteredPatients = patients.filter(p => p.name.toLowerCase().includes(patientSearch.toLowerCase()));
+    const appointmentDates = React.useMemo(() => 
+        appointments.map(app => new Date(app.date)), 
+    [appointments]);
 
     return (
         <Dialog open onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>{appointment ? "Edit Appointment" : "New Appointment"}</DialogTitle>
                     <DialogDescription>
-                        {appointment ? "Update the details for this appointment." : "Schedule a new appointment for a patient."}
+                        {appointment ? "Update the details for this appointment." : "Schedule a new appointment."}
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="patient-name" className="text-right">Patient</Label>
-                        <div className="col-span-3">
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" className="w-full justify-start">
-                                        {selectedPatient || "Select a patient"}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[375px] p-0" align="start">
-                                    <div className="p-2">
-                                     <Input
-                                        placeholder="Search patients..."
-                                        value={patientSearch}
-                                        onChange={(e) => setPatientSearch(e.target.value)}
-                                        className="w-full"
-                                    />
-                                    </div>
-                                    <div className="max-h-48 overflow-y-auto">
-                                        {filteredPatients.map(p => (
-                                            <div key={p.id} className="p-2 hover:bg-accent cursor-pointer" onClick={() => setSelectedPatient(p.name)}>
-                                                {p.name}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
+                     <div className="grid gap-2">
+                        <Label htmlFor="patient-name">Patient Name</Label>
+                        <Input 
+                            id="patient-name"
+                            placeholder="Select or type for a guest"
+                            value={patientName}
+                            onChange={(e) => setPatientName(e.target.value)}
+                            list="patients-list"
+                        />
+                         <datalist id="patients-list">
+                            {patients.map(p => <option key={p.id} value={p.name} />)}
+                        </datalist>
+                    </div>
+                     <div className="grid gap-2">
+                        <Label>Date</Label>
+                        <Calendar
+                            mode="single"
+                            selected={date}
+                            onSelect={setDate}
+                            className="rounded-md border"
+                            components={{
+                                DayContent: ({ date }) => {
+                                    const isAppointmentDay = appointmentDates.some(d => d.toDateString() === date.toDateString());
+                                    return (
+                                        <div className="relative h-full w-full flex items-center justify-center">
+                                            <span>{date.getDate()}</span>
+                                            {isAppointmentDay && <div className="absolute bottom-1 h-1.5 w-1.5 rounded-full bg-primary" />}
+                                        </div>
+                                    );
+                                }
+                            }}
+                        />
+                    </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="time">Time</Label>
+                            <Input id="time" type="time" defaultValue={appointment?.time} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="service">Service</Label>
+                            <Input id="service" defaultValue={appointment?.service} placeholder="e.g. Check-up" />
                         </div>
                     </div>
-                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="date" className="text-right">Date</Label>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" className={cn("col-span-3 justify-start text-left font-normal", !appointment?.date && "text-muted-foreground")}>
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {appointment?.date ? format(new Date(appointment.date), "PPP") : <span>Pick a date</span>}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                                <Calendar mode="single" initialFocus />
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="time" className="text-right">Time</Label>
-                        <Input id="time" type="time" defaultValue={appointment?.time} className="col-span-3" />
-                    </div>
-                     <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="service" className="text-right">Service</Label>
-                        <Input id="service" defaultValue={appointment?.service} className="col-span-3" />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="notes" className="text-right">Notes</Label>
-                        <Textarea id="notes" placeholder="Optional notes about the appointment." className="col-span-3" />
+                    <div className="grid gap-2">
+                        <Label htmlFor="notes">Notes</Label>
+                        <Textarea id="notes" placeholder="Optional notes about the appointment." />
                     </div>
                 </div>
                 <DialogFooter>
@@ -324,5 +318,3 @@ export default function AppointmentsPage() {
     </DashboardLayout>
   );
 }
-
-    
