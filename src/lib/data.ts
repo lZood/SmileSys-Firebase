@@ -25,7 +25,7 @@ export type Appointment = {
   doctor: string;
   service: string;
   time: string;
-  date: string;
+  date: string; // YYYY-MM-DD
   status: 'Scheduled' | 'Completed' | 'Canceled' | 'In-progress';
 };
 
@@ -44,13 +44,15 @@ const formatDate = (date: Date) => {
 }
 
 export const appointments: Appointment[] = [
-    { id: 'APP001', patientName: 'Robert Johnson', doctor: 'Dr. Adams', service: 'Check-up', time: '09:00 AM', date: formatDate(getRelativeDate(-1)), status: 'Completed' },
-    { id: 'APP002', patientName: 'John Doe', doctor: 'Dr. Adams', service: 'Cleaning', time: '10:00 AM', date: formatDate(getRelativeDate(0)), status: 'Scheduled' },
-    { id: 'APP003', patientName: 'Michael Brown', doctor: 'Dr. Wilson', service: 'Extraction', time: '11:00 AM', date: formatDate(getRelativeDate(0)), status: 'Scheduled' },
-    { id: 'APP004', patientName: 'Sarah Miller', doctor: 'Dr. Adams', service: 'Filling', time: '02:00 PM', date: formatDate(getRelativeDate(1)), status: 'Scheduled' },
-    { id: 'APP005', patientName: 'David Garcia', doctor: 'Dr. Wilson', service: 'Check-up', time: '03:00 PM', date: formatDate(getRelativeDate(7)), status: 'Scheduled' },
-    { id: 'APP006', patientName: 'Emily Williams', doctor: 'Dr. Carter', service: 'Root Canal', time: '01:00 PM', date: formatDate(getRelativeDate(-1)), status: 'Canceled' },
-    { id: 'APP007', patientName: 'Jane Smith', doctor: 'Dr. Adams', service: 'Crown', time: '04:00 PM', date: formatDate(getRelativeDate(0)), status: 'In-progress' },
+    { id: 'APP001', patientName: 'Robert Johnson', doctor: 'Dr. Adams', service: 'Check-up', time: '09:00', date: formatDate(getRelativeDate(-1)), status: 'Completed' },
+    { id: 'APP002', patientName: 'John Doe', doctor: 'Dr. Adams', service: 'Cleaning', time: '10:00', date: formatDate(getRelativeDate(0)), status: 'Scheduled' },
+    { id: 'APP003', patientName: 'Michael Brown', doctor: 'Dr. Wilson', service: 'Extraction', time: '11:00', date: formatDate(getRelativeDate(0)), status: 'Scheduled' },
+    { id: 'APP004', patientName: 'Sarah Miller', doctor: 'Dr. Adams', service: 'Filling', time: '14:00', date: formatDate(getRelativeDate(1)), status: 'Scheduled' },
+    { id: 'APP005', patientName: 'David Garcia', doctor: 'Dr. Wilson', service: 'Check-up', time: '15:00', date: formatDate(getRelativeDate(7)), status: 'Scheduled' },
+    { id: 'APP006', patientName: 'Emily Williams', doctor: 'Dr. Carter', service: 'Root Canal', time: '13:00', date: formatDate(getRelativeDate(-1)), status: 'Canceled' },
+    { id: 'APP007', patientName: 'Jane Smith', doctor: 'Dr. Adams', service: 'Crown', time: '16:00', date: formatDate(getRelativeDate(0)), status: 'In-progress' },
+    { id: 'APP008', patientName: 'Graciela Lugo', doctor: 'Dr. Adams', service: 'Check-up', time: '12:00', date: formatDate(getRelativeDate(0)), status: 'Scheduled' },
+    { id: 'APP009', patientName: 'Christian Reyes', doctor: 'Dr. Carter', service: 'Whitening', time: '09:00', date: formatDate(getRelativeDate(2)), status: 'Scheduled' },
 ];
 
 export const treatmentStatsData = [
@@ -62,10 +64,24 @@ export const treatmentStatsData = [
     { name: 'Implants', value: 189 },
 ];
 
-export const inventoryItems = [
-    { id: 'INV001', name: 'Dental Gloves', category: 'Consumables', stock: 5, status: 'Low Stock' },
-    { id: 'INV002', name: 'Surgical Masks', category: 'Consumables', stock: 20, status: 'In Stock' },
-    { id: 'INV003', name: 'Anesthetic', category: 'Medication', stock: 0, status: 'Out of Stock' },
-    { id: 'INV004', name: 'Dental Mirror', category: 'Instruments', stock: 50, status: 'In Stock' },
-    { id: 'INV005', name: 'X-Ray Film', category: 'Imaging', stock: 12, status: 'In Stock' },
+export type InventoryItem = {
+    id: string;
+    name: string;
+    category: string;
+    stock: number;
+    minStock: number;
+    price: number;
+    status: 'In Stock' | 'Low Stock' | 'Out of Stock';
+    provider: string;
+    lastOrdered: string; // YYYY-MM-DD
+};
+
+
+export const inventoryItems: InventoryItem[] = [
+    { id: 'INV001', name: 'Guantes de Nitrilo (Caja)', category: 'Consumibles', stock: 5, minStock: 10, price: 15.00, status: 'Low Stock', provider: 'DentalSupplies Co.', lastOrdered: '2023-10-15' },
+    { id: 'INV002', name: 'Mascarillas Quirúrgicas (Caja)', category: 'Consumibles', stock: 20, minStock: 15, price: 12.50, status: 'In Stock', provider: 'MediSafe Inc.', lastOrdered: '2023-10-20' },
+    { id: 'INV003', name: 'Anestésico Local (Botella)', category: 'Medicación', stock: 0, minStock: 5, price: 25.00, status: 'Out of Stock', provider: 'PharmaHeal', lastOrdered: '2023-09-30' },
+    { id: 'INV004', name: 'Espejo Dental', category: 'Instrumental', stock: 50, minStock: 20, price: 5.75, status: 'In Stock', provider: 'Precision Tools', lastOrdered: '2023-08-01' },
+    { id: 'INV005', name: 'Película de Rayos X (Paquete)', category: 'Imagenología', stock: 12, minStock: 10, price: 55.00, status: 'Low Stock', provider: 'RadiaTech', lastOrdered: '2023-10-05' },
+    { id: 'INV006', name: 'Resina Compuesta (Jeringa)', category: 'Materiales Restauradores', stock: 30, minStock: 25, price: 45.00, status: 'In Stock', provider: 'BioFill', lastOrdered: '2023-11-01' },
 ];
