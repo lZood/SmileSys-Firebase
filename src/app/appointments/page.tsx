@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Edit, Trash2, X } from 'lucide-react';
 import {
   eachDayOfInterval,
   endOfMonth,
@@ -29,27 +29,41 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 
 const AppointmentForm = ({ 
   isOpen, 
   onClose, 
   selectedDate, 
-  onSubmit 
+  onSubmit,
+  existingAppointment
 }: { 
   isOpen: boolean, 
   onClose: () => void, 
   selectedDate: Date, 
-  onSubmit: (newAppointment: Omit<Appointment, 'id' | 'status'>) => void 
+  onSubmit: (newAppointment: Omit<Appointment, 'id' | 'status'>) => void,
+  existingAppointment?: Appointment | null
 }) => {
     const [patientName, setPatientName] = React.useState('');
     const [time, setTime] = React.useState('10:00');
     const [service, setService] = React.useState('');
     const [doctor, setDoctor] = React.useState('');
 
+    React.useEffect(() => {
+        if(existingAppointment) {
+            setPatientName(existingAppointment.patientName);
+            setTime(existingAppointment.time);
+            setService(existingAppointment.service);
+            setDoctor(existingAppointment.doctor);
+        } else {
+             setPatientName('');
+             setTime('10:00');
+             setService('');
+             setDoctor('');
+        }
+    }, [existingAppointment]);
+
     const handleSubmit = () => {
         if (!patientName || !time || !service || !doctor) {
-            // Add toast notification for incomplete fields
             console.error("Please fill all fields");
             return;
         }
@@ -67,9 +81,9 @@ const AppointmentForm = ({
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Nueva Cita</DialogTitle>
+                    <DialogTitle>{existingAppointment ? 'Editar Cita' : 'Nueva Cita'}</DialogTitle>
                     <DialogDescription>
-                        Agendando cita para el {format(selectedDate, 'd \'de\' MMMM \'de\' yyyy', { locale: es })}.
+                        {existingAppointment ? 'Editando' : 'Agendando'} cita para el {format(selectedDate, 'd \'de\' MMMM \'de\' yyyy', { locale: es })}.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
@@ -110,12 +124,74 @@ const AppointmentForm = ({
     );
 };
 
+const AppointmentDetailsModal = ({
+    isOpen,
+    onClose,
+    date,
+    appointments,
+    onAdd,
+    onEdit,
+    onDelete
+} : {
+    isOpen: boolean,
+    onClose: () => void,
+    date: Date,
+    appointments: Appointment[],
+    onAdd: () => void,
+    onEdit: (app: Appointment) => void,
+    onDelete: (id: string) => void
+}) => {
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>Citas para el {format(date, 'd \'de\' MMMM', { locale: es })}</DialogTitle>
+                     <DialogDescription>
+                        {appointments.length > 0 
+                            ? `Hay ${appointments.length} cita(s) programada(s).` 
+                            : 'No hay citas para este día.'}
+                     </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 max-h-80 overflow-y-auto">
+                    {appointments.length > 0 ? (
+                        <div className="space-y-3">
+                        {appointments.map(app => (
+                            <div key={app.id} className="flex justify-between items-center p-3 bg-muted rounded-lg">
+                                <div>
+                                    <p className="font-semibold">{app.time} - {app.patientName}</p>
+                                    <p className="text-sm text-muted-foreground">{app.service} con {app.doctor}</p>
+                                </div>
+                                <div className="flex gap-2">
+                                     <Button variant="ghost" size="icon" onClick={() => onEdit(app)}>
+                                        <Edit className="w-4 h-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600" onClick={() => onDelete(app.id)}>
+                                        <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    ) : (
+                        <p className="text-center text-muted-foreground py-8">No hay citas programadas.</p>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>Cerrar</Button>
+                    <Button onClick={onAdd}><Plus className="h-4 w-4 mr-2" /> Agregar Nueva Cita</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function AppointmentsCalendarPage() {
   const [currentDate, setCurrentDate] = React.useState(new Date());
   const [appointments, setAppointments] = React.useState<Appointment[]>(initialAppointments);
-  const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [isFormModalOpen, setIsFormModalOpen] = React.useState(false);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = React.useState(false);
   const [selectedDate, setSelectedDate] = React.useState(new Date());
+  const [selectedAppointment, setSelectedAppointment] = React.useState<Appointment | null>(null);
 
   const firstDayOfMonth = startOfMonth(currentDate);
   const lastDayOfMonth = endOfMonth(currentDate);
@@ -135,7 +211,7 @@ export default function AppointmentsCalendarPage() {
 
   const handleDayClick = (day: Date) => {
     setSelectedDate(day);
-    setIsModalOpen(true);
+    setIsDetailsModalOpen(true);
   };
   
   const handleAddAppointment = (newAppointmentData: Omit<Appointment, 'id' | 'status'>) => {
@@ -147,6 +223,24 @@ export default function AppointmentsCalendarPage() {
         setAppointments(prev => [...prev, newAppointment]);
   };
 
+  const openAddForm = () => {
+      setSelectedAppointment(null);
+      setIsDetailsModalOpen(false);
+      setIsFormModalOpen(true);
+  }
+
+  const openEditForm = (appointment: Appointment) => {
+      setSelectedAppointment(appointment);
+      setIsDetailsModalOpen(false);
+      setIsFormModalOpen(true);
+  }
+  
+  const handleDeleteAppointment = (id: string) => {
+      // Logic to delete appointment, e.g. from Supabase
+      // For now, we filter the state
+      setAppointments(prev => prev.filter(app => app.id !== id));
+  }
+
 
   const getAppointmentsForDay = (day: Date) => {
     return appointments.filter((appointment) =>
@@ -156,12 +250,24 @@ export default function AppointmentsCalendarPage() {
 
   return (
     <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
-        {isModalOpen && (
+        {isFormModalOpen && (
             <AppointmentForm 
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                isOpen={isFormModalOpen}
+                onClose={() => setIsFormModalOpen(false)}
                 selectedDate={selectedDate}
                 onSubmit={handleAddAppointment}
+                existingAppointment={selectedAppointment}
+            />
+        )}
+         {isDetailsModalOpen && (
+            <AppointmentDetailsModal 
+                isOpen={isDetailsModalOpen}
+                onClose={() => setIsDetailsModalOpen(false)}
+                date={selectedDate}
+                appointments={getAppointmentsForDay(selectedDate)}
+                onAdd={openAddForm}
+                onEdit={openEditForm}
+                onDelete={handleDeleteAppointment}
             />
         )}
       <div className="flex items-center justify-between mb-6">
@@ -226,3 +332,5 @@ export default function AppointmentsCalendarPage() {
     </div>
   );
 }
+
+    
