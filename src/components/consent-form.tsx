@@ -74,9 +74,14 @@ export const ConsentForm = ({ patientName, onClose }: ConsentFormProps) => {
         doc.text("Términos y Condiciones", 20, autoTableFinalY + 15);
         const splitTerms = doc.splitTextToSize(termsAndConditions, 170);
         doc.text(splitTerms, 20, autoTableFinalY + 22);
+        
+        // Acceptance statement
+        const termsFinalY = autoTableFinalY + 22 + (splitTerms.length * 5); // Approximate height of terms text
+        doc.setFontSize(10);
+        doc.text("Declaro que he leído y comprendido la información anterior y acepto los términos y condiciones del tratamiento.", 20, termsFinalY + 15);
 
         // Signature Area
-        const finalY = autoTableFinalY + 22 + (splitTerms.length * 7) + 20;
+        const finalY = termsFinalY + 40;
         doc.line(40, finalY, 100, finalY);
         doc.text('Firma del Paciente', 55, finalY + 5);
 
