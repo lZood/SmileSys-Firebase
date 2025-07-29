@@ -29,14 +29,12 @@ export type Appointment = {
   status: 'Scheduled' | 'Completed' | 'Canceled' | 'In-progress';
 };
 
-const today = new Date();
-const tomorrow = new Date(today);
-tomorrow.setDate(tomorrow.getDate() + 1);
-const yesterday = new Date(today);
-yesterday.setDate(yesterday.getDate() - 1);
-const nextWeek = new Date(today);
-nextWeek.setDate(nextWeek.getDate() + 7);
 
+const getRelativeDate = (dayOffset: number): Date => {
+    const date = new Date();
+    date.setDate(date.getDate() + dayOffset);
+    return date;
+}
 
 const formatDate = (date: Date) => {
     const year = date.getFullYear();
@@ -45,15 +43,14 @@ const formatDate = (date: Date) => {
     return `${year}-${month}-${day}`;
 }
 
-
 export const appointments: Appointment[] = [
-    { id: 'APP001', patientName: 'Robert Johnson', doctor: 'Dr. Adams', service: 'Check-up', time: '09:00 AM', date: formatDate(yesterday), status: 'Completed' },
-    { id: 'APP002', patientName: 'John Doe', doctor: 'Dr. Adams', service: 'Cleaning', time: '10:00 AM', date: formatDate(today), status: 'Scheduled' },
-    { id: 'APP003', patientName: 'Michael Brown', doctor: 'Dr. Wilson', service: 'Extraction', time: '11:00 AM', date: formatDate(today), status: 'Scheduled' },
-    { id: 'APP004', patientName: 'Sarah Miller', doctor: 'Dr. Adams', service: 'Filling', time: '02:00 PM', date: formatDate(tomorrow), status: 'Scheduled' },
-    { id: 'APP005', patientName: 'David Garcia', doctor: 'Dr. Wilson', service: 'Check-up', time: '03:00 PM', date: formatDate(nextWeek), status: 'Scheduled' },
-    { id: 'APP006', patientName: 'Emily Williams', doctor: 'Dr. Carter', service: 'Root Canal', time: '01:00 PM', date: formatDate(yesterday), status: 'Canceled' },
-    { id: 'APP007', patientName: 'Jane Smith', doctor: 'Dr. Adams', service: 'Crown', time: '04:00 PM', date: formatDate(today), status: 'In-progress' },
+    { id: 'APP001', patientName: 'Robert Johnson', doctor: 'Dr. Adams', service: 'Check-up', time: '09:00 AM', date: formatDate(getRelativeDate(-1)), status: 'Completed' },
+    { id: 'APP002', patientName: 'John Doe', doctor: 'Dr. Adams', service: 'Cleaning', time: '10:00 AM', date: formatDate(getRelativeDate(0)), status: 'Scheduled' },
+    { id: 'APP003', patientName: 'Michael Brown', doctor: 'Dr. Wilson', service: 'Extraction', time: '11:00 AM', date: formatDate(getRelativeDate(0)), status: 'Scheduled' },
+    { id: 'APP004', patientName: 'Sarah Miller', doctor: 'Dr. Adams', service: 'Filling', time: '02:00 PM', date: formatDate(getRelativeDate(1)), status: 'Scheduled' },
+    { id: 'APP005', patientName: 'David Garcia', doctor: 'Dr. Wilson', service: 'Check-up', time: '03:00 PM', date: formatDate(getRelativeDate(7)), status: 'Scheduled' },
+    { id: 'APP006', patientName: 'Emily Williams', doctor: 'Dr. Carter', service: 'Root Canal', time: '01:00 PM', date: formatDate(getRelativeDate(-1)), status: 'Canceled' },
+    { id: 'APP007', patientName: 'Jane Smith', doctor: 'Dr. Adams', service: 'Crown', time: '04:00 PM', date: formatDate(getRelativeDate(0)), status: 'In-progress' },
 ];
 
 export const treatmentStatsData = [

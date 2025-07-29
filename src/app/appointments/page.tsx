@@ -186,12 +186,24 @@ const AppointmentDetailsModal = ({
 }
 
 export default function AppointmentsCalendarPage() {
-  const [currentDate, setCurrentDate] = React.useState(new Date());
+  const [currentDate, setCurrentDate] = React.useState<Date | null>(null);
   const [appointments, setAppointments] = React.useState<Appointment[]>(initialAppointments);
   const [isFormModalOpen, setIsFormModalOpen] = React.useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = React.useState(false);
-  const [selectedDate, setSelectedDate] = React.useState(new Date());
+  const [selectedDate, setSelectedDate] = React.useState<Date | null>(null);
   const [selectedAppointment, setSelectedAppointment] = React.useState<Appointment | null>(null);
+  
+  React.useEffect(() => {
+    // Set dates on client-side to avoid hydration mismatch
+    const now = new Date();
+    setCurrentDate(now);
+    setSelectedDate(now);
+  }, []);
+
+  if (!currentDate || !selectedDate) {
+    // Render a loading state or nothing until the date is set client-side
+    return null;
+  }
 
   const firstDayOfMonth = startOfMonth(currentDate);
   const lastDayOfMonth = endOfMonth(currentDate);
@@ -332,5 +344,3 @@ export default function AppointmentsCalendarPage() {
     </div>
   );
 }
-
-    
