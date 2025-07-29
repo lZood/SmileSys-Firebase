@@ -46,11 +46,11 @@ const toothNumbers = {
   upperRightAdult: ['18', '17', '16', '15', '14', '13', '12', '11'],
   upperLeftAdult: ['21', '22', '23', '24', '25', '26', '27', '28'],
   lowerLeftAdult: ['31', '32', '33', '34', '35', '36', '37', '38'],
-  lowerRightAdult: ['48', '47', '46', '45', '44', '43', '42', '41'],
+  lowerRightAdult: ['41', '42', '43', '44', '45', '46', '47', '48'],
   upperRightDeciduous: ['55', '54', '53', '52', '51'],
   upperLeftDeciduous: ['61', '62', '63', '64', '65'],
   lowerLeftDeciduous: ['71', '72', '73', '74', '75'],
-  lowerRightDeciduous: ['85', '84', '83', '82', '81'],
+  lowerRightDeciduous: ['81', '82', '83', '84', '85'],
 };
 
 const Tooth = ({ id, condition, onConditionChange }: { id: string; condition: Condition; onConditionChange: (id: string, condition: Condition) => void; }) => {
@@ -130,7 +130,7 @@ export function Odontogram() {
       <div className="flex flex-col gap-4 min-w-max">
         {/* Adult Teeth */}
         <div className="flex justify-between">
-            {renderQuadrant(toothNumbers.upperRightAdult.slice().reverse())}
+            {renderQuadrant(toothNumbers.upperRightAdult)}
             {renderQuadrant(toothNumbers.upperLeftAdult)}
         </div>
          <div className="flex justify-between">
@@ -142,7 +142,7 @@ export function Odontogram() {
 
         {/* Deciduous Teeth */}
          <div className="flex justify-between">
-            {renderQuadrant(toothNumbers.upperRightDeciduous.slice().reverse())}
+            {renderQuadrant(toothNumbers.upperRightDeciduous)}
             {renderQuadrant(toothNumbers.upperLeftDeciduous)}
         </div>
          <div className="flex justify-between">
