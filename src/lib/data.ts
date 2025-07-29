@@ -107,3 +107,56 @@ export const payments: Payment[] = [
     { id: 'PAY006', invoiceNumber: 'INV-20231112-006', patientId: 'PAT004', patientName: 'Emily Williams', amount: 500, date: '2023-11-12', status: 'Canceled', method: 'Card', concept: 'Ortodoncia - Pago Inicial' },
 ];
 
+export type QuoteItem = { description: string; cost: number; };
+export type Quote = {
+    id: string;
+    patientId: string;
+    patientName: string;
+    items: QuoteItem[];
+    total: number;
+    status: 'Draft' | 'Presented' | 'Accepted' | 'Expired';
+    createdAt: string; // YYYY-MM-DD
+    expiresAt: string; // YYYY-MM-DD
+};
+
+export const quotes: Quote[] = [
+    {
+        id: 'QUO001',
+        patientId: 'PAT003',
+        patientName: 'Robert Johnson',
+        items: [
+            { description: 'Implante Dental (Tornillo)', cost: 800 },
+            { description: 'Corona de Porcelana', cost: 450 },
+            { description: 'Cirugía de Colocación', cost: 200 },
+        ],
+        total: 1450,
+        status: 'Presented',
+        createdAt: '2023-10-28',
+        expiresAt: '2023-11-28',
+    },
+    {
+        id: 'QUO002',
+        patientId: 'PAT007',
+        patientName: 'Christian Reyes',
+        items: [
+            { description: 'Blanqueamiento Dental Zoom', cost: 250 },
+            { description: 'Limpieza Profunda', cost: 120 },
+        ],
+        total: 370,
+        status: 'Accepted',
+        createdAt: '2023-11-05',
+        expiresAt: '2023-12-05',
+    },
+    {
+        id: 'QUO003',
+        patientId: 'PAT002',
+        patientName: 'Jane Smith',
+        items: [
+            { description: 'Set de Carillas (8 dientes)', cost: 3200 },
+        ],
+        total: 3200,
+        status: 'Draft',
+        createdAt: '2023-11-10',
+        expiresAt: '2023-12-10',
+    },
+];

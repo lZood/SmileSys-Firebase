@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,19 +33,24 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { payments as initialPayments, patients, Payment } from '@/lib/data';
-import { DollarSign, Receipt, Hourglass, PlusCircle, MoreHorizontal } from 'lucide-react';
+import { payments as initialPayments, patients, Payment, quotes as initialQuotes, Quote, QuoteItem } from '@/lib/data';
+import { DollarSign, Receipt, Hourglass, PlusCircle, MoreHorizontal, FileText, Trash2 } from 'lucide-react';
 import { getPaymentMethodIcon } from '@/components/icons/payment-method-icons';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
-const getStatusClass = (status: Payment['status']) => {
+const getStatusClass = (status: Payment['status'] | Quote['status']) => {
   switch (status) {
     case 'Paid':
+    case 'Accepted':
       return 'bg-green-100 text-green-800 border-green-200';
     case 'Pending':
+    case 'Presented':
       return 'bg-yellow-100 text-yellow-800 border-yellow-200';
     case 'Canceled':
+    case 'Expired':
       return 'bg-red-100 text-red-800 border-red-200';
+    case 'Draft':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
     default:
       return 'bg-gray-100 text-gray-800';
   }
@@ -146,18 +152,105 @@ const NewPaymentForm = ({
   );
 };
 
+const NewQuoteForm = ({
+    isOpen,
+    onClose,
+    onAddQuote,
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    onAddQuote: (quote: Omit<Quote, 'id' | 'createdAt' | 'expiresAt' | 'total'>) => void;
+}) => {
+    const { toast } = useToast();
+    const [patientId, setPatientId] = React.useState('');
+    const [items, setItems] = React.useState<QuoteItem[]>([{ description: '', cost: 0 }]);
+    
+    const handleItemChange = (index: number, field: keyof QuoteItem, value: string | number) => {
+        const newItems = [...items];
+        (newItems[index] as any)[field] = value;
+        setItems(newItems);
+    };
+
+    const addItem = () => setItems([...items, { description: '', cost: 0 }]);
+    const removeItem = (index: number) => setItems(items.filter((_, i) => i !== index));
+
+    const handleSubmit = () => {
+        if (!patientId || items.some(item => !item.description || item.cost <= 0)) {
+            toast({ variant: "destructive", title: "Campos Incompletos", description: "Seleccione un paciente y complete todos los campos de los servicios." });
+            return;
+        }
+
+        const patient = patients.find(p => p.id === patientId);
+        if (!patient) return;
+
+        onAddQuote({
+            patientId,
+            patientName: patient.name,
+            items,
+            status: 'Draft',
+        });
+        onClose();
+    };
+
+    const total = items.reduce((sum, item) => sum + Number(item.cost || 0), 0);
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Crear Nuevo Presupuesto</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="patient-quote">Paciente</Label>
+                        <Select onValueChange={setPatientId}>
+                            <SelectTrigger id="patient-quote"><SelectValue placeholder="Seleccionar un paciente" /></SelectTrigger>
+                            <SelectContent>{patients.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-4">
+                        <Label>Servicios/Tratamientos</Label>
+                        {items.map((item, index) => (
+                            <div key={index} className="flex items-center gap-2">
+                                <Input placeholder="Descripción del servicio" value={item.description} onChange={(e) => handleItemChange(index, 'description', e.target.value)} />
+                                <Input type="number" placeholder="Costo" className="w-32" value={item.cost} onChange={(e) => handleItemChange(index, 'cost', Number(e.target.value))} />
+                                <Button variant="outline" size="icon" onClick={() => removeItem(index)}><Trash2 className="h-4 w-4 text-red-500"/></Button>
+                            </div>
+                        ))}
+                         <Button variant="outline" size="sm" onClick={addItem}><PlusCircle className="h-4 w-4 mr-2"/>Añadir Fila</Button>
+                    </div>
+
+                    <div className="flex justify-end items-center gap-4 pt-4 border-t">
+                        <span className="font-semibold text-lg">Total:</span>
+                        <span className="font-bold text-xl">${total.toFixed(2)}</span>
+                    </div>
+
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                    <Button onClick={handleSubmit}>Guardar Presupuesto</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+
 export default function BillingPage() {
     const { toast } = useToast();
     const [payments, setPayments] = React.useState<Payment[]>(initialPayments);
+    const [quotes, setQuotes] = React.useState<Quote[]>(initialQuotes);
     const [isNewPaymentModalOpen, setIsNewPaymentModalOpen] = React.useState(false);
-    
+    const [isNewQuoteModalOpen, setIsNewQuoteModalOpen] = React.useState(false);
+
     // Stats calculation
     const today = new Date();
     const monthlyRevenue = payments
         .filter(p => p.status === 'Paid' && new Date(p.date).getMonth() === today.getMonth())
         .reduce((sum, p) => sum + p.amount, 0);
-    const completedPayments = payments.filter(p => p.status === 'Paid').length;
     const pendingInvoices = payments.filter(p => p.status === 'Pending').length;
+    const activeQuotes = quotes.filter(q => q.status === 'Presented' || q.status === 'Draft').length;
 
     const handleAddPayment = (newPaymentData: Omit<Payment, 'id' | 'invoiceNumber'>) => {
         const newPayment: Payment = {
@@ -166,21 +259,30 @@ export default function BillingPage() {
             ...newPaymentData,
         };
         setPayments(prev => [newPayment, ...prev]);
-        toast({
-            title: "Pago Registrado",
-            description: `El pago de ${newPayment.patientName} ha sido guardado.`,
-        });
+        toast({ title: "Pago Registrado", description: `El pago de ${newPayment.patientName} ha sido guardado.` });
+    };
+
+    const handleAddQuote = (newQuoteData: Omit<Quote, 'id' | 'createdAt' | 'expiresAt' | 'total'>) => {
+        const now = new Date();
+        const expires = new Date();
+        expires.setMonth(expires.getMonth() + 1);
+
+        const newQuote: Quote = {
+            id: `QUO${String(quotes.length + 1).padStart(3, '0')}`,
+            ...newQuoteData,
+            total: newQuoteData.items.reduce((sum, item) => sum + item.cost, 0),
+            createdAt: now.toISOString().split('T')[0],
+            expiresAt: expires.toISOString().split('T')[0],
+        };
+        setQuotes(prev => [newQuote, ...prev]);
+        toast({ title: "Presupuesto Creado", description: `El presupuesto para ${newQuote.patientName} ha sido guardado.`});
     };
 
   return (
     <div className="space-y-6">
-        {isNewPaymentModalOpen && (
-            <NewPaymentForm 
-                isOpen={isNewPaymentModalOpen} 
-                onClose={() => setIsNewPaymentModalOpen(false)} 
-                onAddPayment={handleAddPayment} 
-            />
-        )}
+        {isNewPaymentModalOpen && <NewPaymentForm isOpen={isNewPaymentModalOpen} onClose={() => setIsNewPaymentModalOpen(false)} onAddPayment={handleAddPayment} />}
+        {isNewQuoteModalOpen && <NewQuoteForm isOpen={isNewQuoteModalOpen} onClose={() => setIsNewQuoteModalOpen(false)} onAddQuote={handleAddQuote} />}
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -194,16 +296,6 @@ export default function BillingPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pagos Completados</CardTitle>
-            <Receipt className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{completedPayments}</div>
-            <p className="text-xs text-muted-foreground">Total de transacciones pagadas.</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Facturas Pendientes</CardTitle>
             <Hourglass className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -212,70 +304,129 @@ export default function BillingPage() {
             <p className="text-xs text-muted-foreground">Facturas esperando pago.</p>
           </CardContent>
         </Card>
+         <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Presupuestos Activos</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{activeQuotes}</div>
+            <p className="text-xs text-muted-foreground">Presupuestos en estado Borrador o Presentado.</p>
+          </CardContent>
+        </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Historial de Pagos</CardTitle>
-              <CardDescription>
-                Un registro de todas las transacciones financieras.
-              </CardDescription>
-            </div>
-            <Button size="sm" className="h-9 gap-2" onClick={() => setIsNewPaymentModalOpen(true)}>
-              <PlusCircle className="h-4 w-4" />
-              <span>Registrar Pago</span>
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Paciente</TableHead>
-                <TableHead className="hidden sm:table-cell">Nº Factura</TableHead>
-                <TableHead>Monto</TableHead>
-                <TableHead className="hidden md:table-cell">Método</TableHead>
-                <TableHead className="hidden md:table-cell">Fecha</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead><span className="sr-only">Acciones</span></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {payments.map((payment) => (
-                <TableRow key={payment.id}>
-                  <TableCell className="font-medium">{payment.patientName}</TableCell>
-                  <TableCell className="hidden sm:table-cell">{payment.invoiceNumber}</TableCell>
-                  <TableCell>${payment.amount.toFixed(2)}</TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <div className="flex items-center gap-2">
-                        {getPaymentMethodIcon(payment.method)}
-                        <span>{payment.method}</span>
+      <Tabs defaultValue="payments">
+        <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="payments">Historial de Pagos</TabsTrigger>
+            <TabsTrigger value="quotes">Presupuestos</TabsTrigger>
+        </TabsList>
+        <TabsContent value="payments">
+            <Card>
+                <CardHeader>
+                <div className="flex items-center justify-between">
+                    <div>
+                    <CardTitle>Pagos</CardTitle>
+                    <CardDescription>Un registro de todas las transacciones financieras.</CardDescription>
                     </div>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">{payment.date}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={cn('capitalize', getStatusClass(payment.status))}>
-                      {payment.status.toLowerCase()}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4"/></Button></DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem>Ver Detalles</DropdownMenuItem>
-                        <DropdownMenuItem>Marcar como Pagado</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">Cancelar Factura</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                    <Button size="sm" className="h-9 gap-2" onClick={() => setIsNewPaymentModalOpen(true)}>
+                    <PlusCircle className="h-4 w-4" /><span>Registrar Pago</span>
+                    </Button>
+                </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                <Table>
+                    <TableHeader>
+                    <TableRow>
+                        <TableHead>Paciente</TableHead>
+                        <TableHead className="hidden sm:table-cell">Nº Factura</TableHead>
+                        <TableHead>Monto</TableHead>
+                        <TableHead className="hidden md:table-cell">Método</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead><span className="sr-only">Acciones</span></TableHead>
+                    </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                    {payments.map((payment) => (
+                        <TableRow key={payment.id}>
+                        <TableCell className="font-medium">{payment.patientName}</TableCell>
+                        <TableCell className="hidden sm:table-cell">{payment.invoiceNumber}</TableCell>
+                        <TableCell>${payment.amount.toFixed(2)}</TableCell>
+                        <TableCell className="hidden md:table-cell">
+                            <div className="flex items-center gap-2">{getPaymentMethodIcon(payment.method)}<span>{payment.method}</span></div>
+                        </TableCell>
+                        <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(payment.status))}>{payment.status.toLowerCase()}</Badge></TableCell>
+                        <TableCell>
+                            <DropdownMenu>
+                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4"/></Button></DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                                <DropdownMenuItem>Ver Detalles</DropdownMenuItem>
+                                <DropdownMenuItem>Marcar como Pagado</DropdownMenuItem>
+                            </DropdownMenuContent>
+                            </DropdownMenu>
+                        </TableCell>
+                        </TableRow>
+                    ))}
+                    </TableBody>
+                </Table>
+                </CardContent>
+            </Card>
+        </TabsContent>
+        <TabsContent value="quotes">
+             <Card>
+                <CardHeader>
+                <div className="flex items-center justify-between">
+                    <div>
+                    <CardTitle>Presupuestos</CardTitle>
+                    <CardDescription>Planes de tratamiento y sus costos estimados.</CardDescription>
+                    </div>
+                    <Button size="sm" className="h-9 gap-2" onClick={() => setIsNewQuoteModalOpen(true)}>
+                    <PlusCircle className="h-4 w-4" /><span>Crear Presupuesto</span>
+                    </Button>
+                </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                <Table>
+                    <TableHeader>
+                    <TableRow>
+                        <TableHead>Paciente</TableHead>
+                        <TableHead>Total</TableHead>
+                        <TableHead className="hidden md:table-cell">Creado</TableHead>
+                        <TableHead className="hidden md:table-cell">Vence</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead><span className="sr-only">Acciones</span></TableHead>
+                    </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                    {quotes.map((quote) => (
+                        <TableRow key={quote.id}>
+                        <TableCell className="font-medium">{quote.patientName}</TableCell>
+                        <TableCell>${quote.total.toFixed(2)}</TableCell>
+                        <TableCell className="hidden md:table-cell">{quote.createdAt}</TableCell>
+                        <TableCell className="hidden md:table-cell">{quote.expiresAt}</TableCell>
+                        <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(quote.status))}>{quote.status.toLowerCase()}</Badge></TableCell>
+                        <TableCell>
+                           <DropdownMenu>
+                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4"/></Button></DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                <DropdownMenuItem>Ver/Editar</DropdownMenuItem>
+                                <DropdownMenuItem>Marcar como Presentado</DropdownMenuItem>
+                                <DropdownMenuItem>Marcar como Aceptado</DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-destructive">Eliminar</DropdownMenuItem>
+                            </DropdownMenuContent>
+                            </DropdownMenu>
+                        </TableCell>
+                        </TableRow>
+                    ))}
+                    </TableBody>
+                </Table>
+                </CardContent>
+            </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
+
