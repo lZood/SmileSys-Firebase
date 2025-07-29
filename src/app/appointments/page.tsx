@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronLeft, ChevronRight, Plus, Edit, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Edit, Trash2, CalendarClock, ListTodo, CalendarDays } from 'lucide-react';
 import {
   eachDayOfInterval,
   endOfMonth,
@@ -14,6 +14,8 @@ import {
   endOfWeek,
   add,
   isSameDay,
+  isAfter,
+  isBefore,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { appointments as initialAppointments, Appointment, patients } from '@/lib/data';
@@ -26,6 +28,7 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -210,6 +213,18 @@ export default function AppointmentsCalendarPage() {
     // Render a loading state or nothing until the date is set client-side
     return null;
   }
+  
+  // Stats Calculation
+  const today = new Date();
+  const pendingToday = appointments.filter(app => isToday(new Date(app.date)) && (app.status === 'Scheduled' || app.status === 'In-progress')).length;
+  const startOfNextDay = add(new Date(today).setHours(0,0,0,0), { days: 1 });
+  const endOfWeekDate = endOfWeek(today, { weekStartsOn: 1 });
+  const appointmentsThisWeek = appointments.filter(app => {
+      const appDate = new Date(app.date);
+      return isAfter(appDate, startOfNextDay) && isBefore(appDate, endOfWeekDate);
+  }).length;
+  const appointmentsThisMonth = appointments.filter(app => isSameMonth(new Date(app.date), currentDate)).length;
+
 
   const firstDayOfMonth = startOfMonth(currentDate);
   const lastDayOfMonth = endOfMonth(currentDate);
@@ -254,8 +269,6 @@ export default function AppointmentsCalendarPage() {
   }
   
   const handleDeleteAppointment = (id: string) => {
-      // Logic to delete appointment, e.g. from Supabase
-      // For now, we filter the state
       setAppointments(prev => prev.filter(app => app.id !== id));
   }
 
@@ -267,86 +280,122 @@ export default function AppointmentsCalendarPage() {
   };
 
   return (
-    <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
-        {isFormModalOpen && (
-            <AppointmentForm 
-                isOpen={isFormModalOpen}
-                onClose={() => setIsFormModalOpen(false)}
-                selectedDate={selectedDate}
-                onSubmit={handleAddAppointment}
-                existingAppointment={selectedAppointment}
-            />
-        )}
-         {isDetailsModalOpen && (
-            <AppointmentDetailsModal 
-                isOpen={isDetailsModalOpen}
-                onClose={() => setIsDetailsModalOpen(false)}
-                date={selectedDate}
-                appointments={getAppointmentsForDay(selectedDate)}
-                onAdd={openAddForm}
-                onEdit={openEditForm}
-                onDelete={handleDeleteAppointment}
-            />
-        )}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold font-headline capitalize">
-          {format(currentDate, 'MMMM yyyy', { locale: es })}
-        </h1>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-8 w-8">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-8 w-8">
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+    <div className="flex flex-col gap-6">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+             <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Citas Pendientes Hoy</CardTitle>
+                    <ListTodo className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{pendingToday}</div>
+                    <p className="text-xs text-muted-foreground">Citas programadas o en progreso.</p>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Citas Restantes (Semana)</CardTitle>
+                    <CalendarClock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{appointmentsThisWeek}</div>
+                    <p className="text-xs text-muted-foreground">Citas para el resto de la semana.</p>
+                </CardContent>
+            </Card>
+             <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Citas (Mes)</CardTitle>
+                    <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{appointmentsThisMonth}</div>
+                     <p className="text-xs text-muted-foreground">En {format(currentDate, 'MMMM', { locale: es })}.</p>
+                </CardContent>
+            </Card>
         </div>
-      </div>
-
-      <div className="grid grid-cols-7 border-t border-l border-gray-200">
-        {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((day) => (
-          <div key={day} className="p-2 text-center text-sm font-medium text-gray-500 border-b border-r border-gray-200">
-            {day}
-          </div>
-        ))}
-        {daysInMonth.map((day) => {
-          const appointmentsForDay = getAppointmentsForDay(day);
-          const maxVisible = 3;
-          const hiddenCount = appointmentsForDay.length - maxVisible;
-
-          return (
-            <div
-              key={day.toString()}
-              onClick={() => handleDayClick(day)}
-              className={cn(
-                'relative h-28 sm:h-36 p-2 border-b border-r border-gray-200 flex flex-col cursor-pointer hover:bg-gray-50 transition-colors',
-                !isSameMonth(day, currentDate) && 'bg-gray-50 text-gray-400',
-              )}
-            >
-              <time
-                dateTime={format(day, 'yyyy-MM-dd')}
-                className={cn(
-                  'text-xs font-semibold',
-                  isToday(day) && 'flex items-center justify-center h-6 w-6 rounded-full bg-primary text-white'
-                )}
-              >
-                {format(day, 'd')}
-              </time>
-              <div className="mt-1 flex-grow overflow-y-auto text-xs space-y-1">
-                {appointmentsForDay.slice(0, maxVisible).map(app => (
-                  <div key={app.id} className="p-1 bg-primary/10 rounded-md text-primary-dark font-medium truncate">
-                    {app.time} - {app.patientName}
-                  </div>
-                ))}
-                {hiddenCount > 0 && (
-                  <div className="text-gray-500 font-medium pt-1">
-                    +{hiddenCount} más
-                  </div>
-                )}
-              </div>
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
+            {isFormModalOpen && (
+                <AppointmentForm 
+                    isOpen={isFormModalOpen}
+                    onClose={() => setIsFormModalOpen(false)}
+                    selectedDate={selectedDate}
+                    onSubmit={handleAddAppointment}
+                    existingAppointment={selectedAppointment}
+                />
+            )}
+             {isDetailsModalOpen && (
+                <AppointmentDetailsModal 
+                    isOpen={isDetailsModalOpen}
+                    onClose={() => setIsDetailsModalOpen(false)}
+                    date={selectedDate}
+                    appointments={getAppointmentsForDay(selectedDate)}
+                    onAdd={openAddForm}
+                    onEdit={openEditForm}
+                    onDelete={handleDeleteAppointment}
+                />
+            )}
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-xl sm:text-2xl font-bold font-headline capitalize">
+              {format(currentDate, 'MMMM yyyy', { locale: es })}
+            </h1>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={goToPreviousMonth} className="h-8 w-8">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-8 w-8">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
-          );
-        })}
-      </div>
+          </div>
+
+          <div className="grid grid-cols-7 border-t border-l border-gray-200">
+            {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((day) => (
+              <div key={day} className="p-2 text-center text-sm font-medium text-gray-500 border-b border-r border-gray-200">
+                {day}
+              </div>
+            ))}
+            {daysInMonth.map((day) => {
+              const appointmentsForDay = getAppointmentsForDay(day);
+              const maxVisible = 3;
+              const hiddenCount = appointmentsForDay.length - maxVisible;
+
+              return (
+                <div
+                  key={day.toString()}
+                  onClick={() => handleDayClick(day)}
+                  className={cn(
+                    'relative h-28 sm:h-36 p-2 border-b border-r border-gray-200 flex flex-col cursor-pointer hover:bg-gray-50 transition-colors',
+                    !isSameMonth(day, currentDate) && 'bg-gray-50 text-gray-400',
+                  )}
+                >
+                  <time
+                    dateTime={format(day, 'yyyy-MM-dd')}
+                    className={cn(
+                      'text-xs font-semibold',
+                      isToday(day) && 'flex items-center justify-center h-6 w-6 rounded-full bg-primary text-white'
+                    )}
+                  >
+                    {format(day, 'd')}
+                  </time>
+                  <div className="mt-1 flex-grow overflow-y-auto text-xs space-y-1">
+                    {appointmentsForDay.slice(0, maxVisible).map(app => (
+                      <div key={app.id} className="p-1 bg-primary/10 rounded-md text-primary-dark font-medium truncate">
+                        {app.time} - {app.patientName}
+                      </div>
+                    ))}
+                    {hiddenCount > 0 && (
+                      <div className="text-gray-500 font-medium pt-1">
+                        +{hiddenCount} más
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
     </div>
   );
 }
+
+    
