@@ -53,8 +53,8 @@ export default function ReportsPage() {
     const acceptedQuotes = quotes.filter(q => q.status === 'Accepted').length;
     const quoteConversionRate = presentedQuotes > 0 ? (acceptedQuotes / presentedQuotes) * 100 : 0;
     const quoteConversionData = [
-        { name: 'Accepted', value: acceptedQuotes },
-        { name: 'Presented (Not Accepted)', value: presentedQuotes - acceptedQuotes }
+        { name: 'Aceptados', value: acceptedQuotes },
+        { name: 'Presentados (No Aceptados)', value: presentedQuotes - acceptedQuotes }
     ];
 
     // 3. Monthly Revenue
@@ -66,56 +66,56 @@ export default function ReportsPage() {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-3xl font-bold font-headline">Reports & Analytics</h1>
+                <h1 className="text-3xl font-bold font-headline">Reportes y Analíticas</h1>
                 <p className="text-muted-foreground">
-                    Insights into your clinic's performance.
+                    Análisis sobre el rendimiento de tu clínica.
                 </p>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">This Month's Revenue</CardTitle>
+                        <CardTitle className="text-sm font-medium">Ingresos de este Mes</CardTitle>
                         <DollarSign className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">${currentMonthRevenue.toLocaleString()}</div>
                         <p className={`text-xs ${revenueChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {revenueChange >= 0 ? '+' : ''}{revenueChange.toFixed(2)}% from last month
+                            {revenueChange >= 0 ? '+' : ''}{revenueChange.toFixed(2)}% desde el mes pasado
                         </p>
                     </CardContent>
                 </Card>
                  <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Quote Acceptance Rate</CardTitle>
+                        <CardTitle className="text-sm font-medium">Tasa de Aceptación de Presupuestos</CardTitle>
                         <FileCheck2 className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{quoteConversionRate.toFixed(1)}%</div>
                         <p className="text-xs text-muted-foreground">
-                            {acceptedQuotes} of {presentedQuotes} quotes accepted.
+                            {acceptedQuotes} de {presentedQuotes} presupuestos aceptados.
                         </p>
                     </CardContent>
                 </Card>
                  <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">New Patients (Month)</CardTitle>
+                        <CardTitle className="text-sm font-medium">Nuevos Pacientes (Mes)</CardTitle>
                         <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">+{newPatientsData[newPatientsData.length - 1].count}</div>
-                        <p className="text-xs text-muted-foreground">New patients this month.</p>
+                        <p className="text-xs text-muted-foreground">Nuevos pacientes este mes.</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Busiest Doctor</CardTitle>
+                        <CardTitle className="text-sm font-medium">Doctor con más Actividad</CardTitle>
                         <TrendingUp className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{appointmentsByDoctorData.reduce((prev, current) => (prev.appointments > current.appointments) ? prev : current).doctor}</div>
                         <p className="text-xs text-muted-foreground">
-                            Highest number of appointments.
+                            Mayor número de citas.
                         </p>
                     </CardContent>
                 </Card>
@@ -124,8 +124,8 @@ export default function ReportsPage() {
             <div className="grid gap-6 lg:grid-cols-2">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Monthly Revenue</CardTitle>
-                        <CardDescription>Income trend over the last 6 months.</CardDescription>
+                        <CardTitle>Ingresos Mensuales</CardTitle>
+                        <CardDescription>Tendencia de ingresos en los últimos 6 meses.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <ResponsiveContainer width="100%" height={300}>
@@ -141,8 +141,8 @@ export default function ReportsPage() {
                 </Card>
                 <Card>
                     <CardHeader>
-                        <CardTitle>Revenue by Treatment</CardTitle>
-                        <CardDescription>Breakdown of income from different services.</CardDescription>
+                        <CardTitle>Ingresos por Tratamiento</CardTitle>
+                        <CardDescription>Desglose de ingresos por diferentes servicios.</CardDescription>
                     </CardHeader>
                     <CardContent>
                          <ResponsiveContainer width="100%" height={300}>
@@ -157,8 +157,8 @@ export default function ReportsPage() {
                 </Card>
                  <Card>
                     <CardHeader>
-                        <CardTitle>Quote Conversion</CardTitle>
-                        <CardDescription>How many presented quotes are accepted.</CardDescription>
+                        <CardTitle>Conversión de Presupuestos</CardTitle>
+                        <CardDescription>Cuántos presupuestos presentados son aceptados.</CardDescription>
                     </CardHeader>
                     <CardContent>
                          <ResponsiveContainer width="100%" height={300}>
@@ -176,8 +176,8 @@ export default function ReportsPage() {
                 </Card>
                  <Card>
                     <CardHeader>
-                        <CardTitle>Appointments per Doctor</CardTitle>
-                        <CardDescription>Distribution of workload among doctors.</CardDescription>
+                        <CardTitle>Citas por Doctor</CardTitle>
+                        <CardDescription>Distribución de la carga de trabajo entre doctores.</CardDescription>
                     </CardHeader>
                     <CardContent>
                          <ResponsiveContainer width="100%" height={300}>
