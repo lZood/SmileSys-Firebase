@@ -326,7 +326,7 @@ export default function AppointmentsCalendarPage() {
                 </CardContent>
             </Card>
         </div>
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm">
+        <div className="bg-card p-4 sm:p-6 rounded-lg shadow-sm">
             {isFormModalOpen && (
                 <AppointmentForm 
                     isOpen={isFormModalOpen}
@@ -361,9 +361,9 @@ export default function AppointmentsCalendarPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-7 border-t border-l border-gray-200">
+          <div className="grid grid-cols-7 border-t border-l border-border">
             {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((day) => (
-              <div key={day} className="p-2 text-center text-sm font-medium text-gray-500 border-b border-r border-gray-200">
+              <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground border-b border-r border-border">
                 {day}
               </div>
             ))}
@@ -377,15 +377,15 @@ export default function AppointmentsCalendarPage() {
                   key={day.toString()}
                   onClick={() => handleDayClick(day)}
                   className={cn(
-                    'relative h-28 sm:h-36 p-2 border-b border-r border-gray-200 flex flex-col cursor-pointer hover:bg-gray-50 transition-colors',
-                    !isSameMonth(day, currentDate) && 'bg-gray-50 text-gray-400',
+                    'relative h-28 sm:h-36 p-2 border-b border-r border-border flex flex-col cursor-pointer hover:bg-muted transition-colors',
+                    !isSameMonth(day, currentDate) && 'bg-muted/50 text-muted-foreground',
                   )}
                 >
                   <time
                     dateTime={format(day, 'yyyy-MM-dd')}
                     className={cn(
                       'text-xs font-semibold',
-                      isToday(day) && 'flex items-center justify-center h-6 w-6 rounded-full bg-primary text-white'
+                      isToday(day) && 'flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground'
                     )}
                   >
                     {format(day, 'd')}
@@ -397,7 +397,7 @@ export default function AppointmentsCalendarPage() {
                       </div>
                     ))}
                     {hiddenCount > 0 && (
-                      <div className="text-gray-500 font-medium pt-1">
+                      <div className="text-muted-foreground font-medium pt-1">
                         +{hiddenCount} más
                       </div>
                     )}
