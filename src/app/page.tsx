@@ -23,9 +23,9 @@ export default function LoginPage() {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' && session) {
-            // A user who clicked an invite link will have an `aal` of 'aal1'.
-            // A user who signed in with a password will have an `aal` of 'aal2'.
-            if (session.user.aud === 'authenticated' && session.user.aal === 'aal1') {
+            // An invited user will have a 'role' in their user_metadata from the invite.
+            // A regular user signing in with a password will not.
+            if (session.user.user_metadata?.role) {
                  router.push('/signup');
             } else if (session.user.email === 'admin@smilesys.com') {
                 router.push('/admin');
