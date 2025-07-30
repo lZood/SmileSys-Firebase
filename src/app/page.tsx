@@ -24,7 +24,7 @@ export default function LoginPage() {
     setIsLoading(true);
     
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -35,8 +35,13 @@ export default function LoginPage() {
         title: "Error de Autenticación",
         description: error.message,
       });
-    } else {
-      router.push('/dashboard');
+    } else if (data.user) {
+      // Check if the logged-in user is the super admin
+      if (data.user.email === 'admin@smilesys.com') {
+        router.push('/admin');
+      } else {
+        router.push('/dashboard');
+      }
     }
     
     setIsLoading(false);
