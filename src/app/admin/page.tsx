@@ -4,82 +4,140 @@
 import * as React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { inviteClinicFlow } from './actions';
+import { getClinicsWithAdmin, ClinicWithAdmin } from './actions';
+import { PlusCircle, Building, Users } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { InviteClinicForm } from '@/components/admin/invite-clinic-form';
 
-export default function AdminPage() {
+export default function AdminDashboardPage() {
     const { toast } = useToast();
-    const [clinicName, setClinicName] = React.useState('');
-    const [adminEmail, setAdminEmail] = React.useState('');
-    const [isSubmitting, setIsSubmitting] = React.useState(false);
+    const [clinics, setClinics] = React.useState<ClinicWithAdmin[]>([]);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [isInviteModalOpen, setIsInviteModalOpen] = React.useState(false);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!clinicName || !adminEmail) {
-            toast({
-                variant: 'destructive',
-                title: 'Campos Incompletos',
-                description: 'Por favor, complete todos los campos para invitar a una nueva clínica.',
-            });
-            return;
+    React.useEffect(() => {
+        async function loadClinics() {
+            setIsLoading(true);
+            const { data, error } = await getClinicsWithAdmin();
+            if (error) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Error al Cargar Clínicas',
+                    description: error,
+                });
+            } else {
+                setClinics(data || []);
+            }
+            setIsLoading(false);
         }
+        loadClinics();
+    }, [toast]);
 
-        setIsSubmitting(true);
-        const { error } = await inviteClinicFlow({ clinicName, adminEmail });
-        setIsSubmitting(false);
-
-        if (error) {
-            toast({
-                variant: 'destructive',
-                title: 'Error al Invitar Clínica',
-                description: error,
-            });
-        } else {
-            toast({
-                title: 'Invitación Enviada',
-                description: `Se ha enviado una invitación a ${adminEmail} para la clínica ${clinicName}.`,
-            });
-            setClinicName('');
-            setAdminEmail('');
+    const handleInvitationSent = () => {
+        // Refresh the list of clinics after a new one is invited
+        async function refreshClinics() {
+            const { data, error } = await getClinicsWithAdmin();
+            if (!error) {
+                setClinics(data || []);
+            }
         }
+        refreshClinics();
     };
+    
+    const totalClinics = clinics.length;
+    const activeSubscriptions = clinics.filter(c => c.subscription_status === 'active').length;
 
     return (
-        <div className="flex justify-center items-center min-h-screen bg-muted/40">
-            <Card className="w-full max-w-lg">
+        <div className="flex flex-col gap-6 p-4 sm:p-6">
+            {isInviteModalOpen && (
+                <InviteClinicForm 
+                    isOpen={isInviteModalOpen}
+                    onClose={() => setIsInviteModalOpen(false)}
+                    onInvitationSent={handleInvitationSent}
+                />
+            )}
+
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold font-headline">Panel de Super-Admin</h1>
+                    <p className="text-muted-foreground">Gestiona todas las clínicas y suscripciones del sistema.</p>
+                </div>
+                 <Button onClick={() => setIsInviteModalOpen(true)}>
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Invitar Nueva Clínica
+                </Button>
+            </div>
+            
+             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total de Clínicas</CardTitle>
+                        <Building className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{totalClinics}</div>
+                        <p className="text-xs text-muted-foreground">Clínicas registradas en el sistema.</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Suscripciones Activas</CardTitle>
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold">{activeSubscriptions}</div>
+                        <p className="text-xs text-muted-foreground">Actualmente con un plan activo.</p>
+                    </CardContent>
+                </Card>
+            </div>
+
+
+            <Card>
                 <CardHeader>
-                    <CardTitle>Panel de Super-Admin</CardTitle>
-                    <CardDescription>Invita a nuevas clínicas a unirse a SmileSys.</CardDescription>
+                    <CardTitle>Clínicas Registradas</CardTitle>
+                    <CardDescription>Una lista de todas las clínicas en la plataforma.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="space-y-2">
-                            <Label htmlFor="clinicName">Nombre de la Clínica</Label>
-                            <Input
-                                id="clinicName"
-                                placeholder="Ej. Dental Total"
-                                value={clinicName}
-                                onChange={(e) => setClinicName(e.target.value)}
-                                required
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="adminEmail">Email del Administrador</Label>
-                            <Input
-                                id="adminEmail"
-                                type="email"
-                                placeholder="doctor@dentaltotal.com"
-                                value={adminEmail}
-                                onChange={(e) => setAdminEmail(e.target.value)}
-                                required
-                            />
-                        </div>
-                        <Button type="submit" className="w-full" disabled={isSubmitting}>
-                            {isSubmitting ? 'Enviando Invitación...' : 'Invitar Nueva Clínica'}
-                        </Button>
-                    </form>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Nombre de la Clínica</TableHead>
+                                <TableHead>Administrador</TableHead>
+                                <TableHead>Estado de Suscripción</TableHead>
+                                <TableHead>Fecha de Registro</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {isLoading ? (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="h-24 text-center">
+                                        Cargando clínicas...
+                                    </TableCell>
+                                </TableRow>
+                            ) : clinics.length > 0 ? (
+                                clinics.map((clinic) => (
+                                    <TableRow key={clinic.id}>
+                                        <TableCell className="font-medium">{clinic.name}</TableCell>
+                                        <TableCell>{clinic.adminEmail || 'N/A'}</TableCell>
+                                        <TableCell>
+                                            <Badge variant={clinic.subscription_status === 'active' ? 'default' : 'secondary'}>
+                                                {clinic.subscription_status}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>{new Date(clinic.created_at).toLocaleDateString()}</TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="h-24 text-center">
+                                        No se encontraron clínicas. Invita a la primera.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
                 </CardContent>
             </Card>
         </div>

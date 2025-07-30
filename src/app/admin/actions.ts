@@ -22,7 +22,7 @@ export async function inviteClinicFlow(input: { clinicName: string; adminEmail: 
   // Step 1: Create the clinic
   const { data: clinic, error: clinicError } = await supabase
     .from('clinics')
-    .insert({ name: clinicName })
+    .insert({ name: clinicName, subscription_status: 'trial' })
     .select()
     .single();
 
@@ -65,5 +65,65 @@ export async function inviteClinicFlow(input: { clinicName: string; adminEmail: 
     return { error: 'User invited, but failed to create their profile.' };
   }
 
-  return { error: null };
+  return { data: clinic, error: null };
+}
+
+
+export type ClinicWithAdmin = {
+    id: string;
+    name: string;
+    subscription_status: string;
+    created_at: string;
+    adminEmail?: string;
+};
+
+export async function getClinicsWithAdmin(): Promise<{ data: ClinicWithAdmin[] | null, error: string | null }> {
+    const supabase = createClient();
+
+    const { data: clinics, error: clinicsError } = await supabase
+        .from('clinics')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (clinicsError) {
+        console.error("Error fetching clinics:", clinicsError);
+        return { data: null, error: "Could not fetch clinics." };
+    }
+
+    const clinicIds = clinics.map(c => c.id);
+
+    const { data: admins, error: adminsError } = await supabase
+        .from('profiles')
+        .select('id, clinic_id')
+        .in('clinic_id', clinicIds)
+        .eq('role', 'admin');
+
+    if (adminsError) {
+        console.error("Error fetching admin profiles:", adminsError);
+        return { data: null, error: "Could not fetch clinic administrators." };
+    }
+    
+    const { data: { users } } = await supabase.auth.admin.listUsers();
+    
+    const adminUserMap = users.reduce((acc, user) => {
+        acc[user.id] = user.email;
+        return acc;
+    }, {} as Record<string, string | undefined>);
+    
+    const adminProfileMap = admins.reduce((acc, profile) => {
+        acc[profile.clinic_id] = profile.id;
+        return acc;
+    }, {} as Record<string, string>);
+
+
+    const clinicsWithAdmins: ClinicWithAdmin[] = clinics.map(clinic => {
+        const adminId = adminProfileMap[clinic.id];
+        const adminEmail = adminId ? adminUserMap[adminId] : undefined;
+        return {
+            ...clinic,
+            adminEmail,
+        };
+    });
+
+    return { data: clinicsWithAdmins, error: null };
 }
