@@ -20,21 +20,20 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const supabase = createClient();
 
+  // This effect will run once on component mount to check
+  // if the user is already logged in from a previous session.
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        // If user is invited, their user_metadata will have a 'role'.
-        // This is a good indicator they haven't set their password yet.
-        if (session.user?.user_metadata?.role) {
-          router.push('/signup');
-        } else if (event === 'SIGNED_IN') {
-          router.push('/dashboard');
-        }
+        // If a session exists, redirect to dashboard.
+        // This handles cases where user revisits the page while logged in.
+        router.push('/dashboard');
       }
-    });
-  
-    return () => subscription.unsubscribe();
+    };
+    checkUser();
   }, [router, supabase]);
+
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -50,7 +49,7 @@ export default function LoginPage() {
       return;
     }
     
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -61,8 +60,10 @@ export default function LoginPage() {
         title: "Error de Autenticación",
         description: error.message,
       });
+    } else if (data.session) {
+      // On successful login, explicitly redirect to the dashboard.
+      router.push('/dashboard');
     }
-    // The onAuthStateChange listener will handle the redirect
     
     setIsLoading(false);
   };
