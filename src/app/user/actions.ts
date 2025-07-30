@@ -3,19 +3,19 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
+import { cache } from 'react';
 
-export async function getUserData() {
+export const getUserData = cache(async () => {
     const cookieStore = cookies();
     const supabase = createClient(cookieStore);
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
-        console.error('Error fetching user or no user logged in:', authError);
+        console.error('Error fetching user or no user logged in:', authError?.message);
         return null;
     }
     
-    // 1. Get user profile
     const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -23,11 +23,10 @@ export async function getUserData() {
         .single();
     
     if (profileError || !profile) {
-        console.error('Error fetching profile:', profileError);
+        console.error('Error fetching profile:', profileError?.message);
         return { user, profile: null, clinic: null, teamMembers: [] };
     }
 
-    // 2. Get clinic data
     const { data: clinic, error: clinicError } = await supabase
         .from('clinics')
         .select('*')
@@ -35,30 +34,28 @@ export async function getUserData() {
         .single();
 
     if (clinicError) {
-        console.error('Error fetching clinic:', clinicError);
+        console.error('Error fetching clinic:', clinicError?.message);
     }
     
-    // 3. Get team members
     const { data: teamMembersData, error: teamMembersError } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, role, user_email:users(email)')
+        .select('*, users(email)')
         .eq('clinic_id', profile.clinic_id);
 
     if (teamMembersError) {
-        console.error('Error fetching team members:', teamMembersError);
+        console.error('Error fetching team members:', teamMembersError.message);
     }
 
-    // Workaround to get user email into the team member object
     const teamMembers = teamMembersData?.map((member: any) => ({
         ...member,
-        user_email: member.users.email
+        user_email: member.users.email,
+        users: undefined, // remove nested users object
     })) || [];
-
 
     return {
       user,
-      profile: { ...profile, user }, // Attach user object to profile for convenience
+      profile,
       clinic,
       teamMembers,
     };
-}
+});

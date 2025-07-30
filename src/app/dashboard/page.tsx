@@ -10,20 +10,20 @@ import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recha
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { WelcomeTour } from '@/components/welcome-tour';
 import { getUserData } from '../user/actions';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Data will be fetched from Supabase
 const treatmentStatsData: any[] = [];
 const appointments: any[] = [];
 const patients: any[] = [];
 
-type DashboardPageProps = {
-  userData: Awaited<ReturnType<typeof getUserData>>;
-};
+type UserData = Awaited<ReturnType<typeof getUserData>>;
 
 export default function DashboardPage() {
   const [today, setToday] = React.useState(new Date());
   const [isWelcomeTourOpen, setIsWelcomeTourOpen] = React.useState(false);
-  const [userData, setUserData] = React.useState<DashboardPageProps['userData'] | null>(null);
+  const [userData, setUserData] = React.useState<UserData | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
 
   const appointmentsToday = appointments.filter(
     (app) => new Date(app.date).toDateString() === today.toDateString()
@@ -36,6 +36,7 @@ export default function DashboardPage() {
         if (data) {
             setUserData(data);
         }
+        setIsLoading(false);
     });
 
     const hasSeenWelcomeTour = localStorage.getItem('hasSeenWelcomeTour');
@@ -56,7 +57,11 @@ export default function DashboardPage() {
       <div className="flex flex-col gap-4">
         <div className="mb-4">
             <h1 className="text-3xl font-bold font-headline">
-                Hola, {userData?.profile?.first_name || 'Doctor'}!
+                {isLoading ? (
+                  <Skeleton className="h-8 w-48" />
+                ) : (
+                  `Hola, ${userData?.profile?.first_name || 'Usuario'}!`
+                )}
             </h1>
             <p className="text-muted-foreground">
                 Aquí tienes un resumen de la actividad de tu clínica hoy.

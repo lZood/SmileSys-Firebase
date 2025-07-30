@@ -15,12 +15,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { getUserData } from '../user/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 
-type SettingsPageProps = {
-  userData: Awaited<ReturnType<typeof getUserData>>;
-};
+type UserData = Awaited<ReturnType<typeof getUserData>>;
 
 export default function SettingsPage() {
-  const [userData, setUserData] = React.useState<SettingsPageProps['userData'] | null>(null);
+  const [userData, setUserData] = React.useState<UserData | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
 
   React.useEffect(() => {
@@ -41,7 +39,20 @@ export default function SettingsPage() {
                     <h1 className="text-3xl font-bold font-headline">Settings</h1>
                     <p className="text-muted-foreground">Manage your profile, clinic, and integrations.</p>
                 </div>
-                 <Skeleton className="w-full h-[600px]" />
+                 <Card>
+                    <CardHeader>
+                        <Skeleton className="h-6 w-32" />
+                        <Skeleton className="h-4 w-48" />
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2"><Skeleton className="h-4 w-16" /><Skeleton className="h-10 w-full" /></div>
+                            <div className="space-y-2"><Skeleton className="h-4 w-16" /><Skeleton className="h-10 w-full" /></div>
+                        </div>
+                        <div className="space-y-2"><Skeleton className="h-4 w-12" /><Skeleton className="h-10 w-full" /></div>
+                         <Skeleton className="h-10 w-32" />
+                    </CardContent>
+                 </Card>
             </div>
           </DashboardLayout>
       )
@@ -86,7 +97,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" defaultValue={profile?.user.email || ''} readOnly />
+                  <Input id="email" type="email" defaultValue={userData?.user.email || ''} readOnly />
                 </div>
                 <Button>Save Changes</Button>
               </CardContent>
@@ -153,7 +164,7 @@ export default function SettingsPage() {
                                         <div className="font-medium">{member.first_name} {member.last_name}</div>
                                         <div className="text-sm text-muted-foreground">{member.user_email}</div>
                                     </TableCell>
-                                    <TableCell>{member.role}</TableCell>
+                                    <TableCell className="capitalize">{member.role}</TableCell>
                                     <TableCell>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="w-4 h-4"/></Button></DropdownMenuTrigger>
