@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
+import { WelcomeTour } from '@/components/welcome-tour';
 
 // Data will be fetched from Supabase
 const treatmentStatsData: any[] = [];
@@ -17,6 +18,7 @@ const patients: any[] = [];
 
 export default function DashboardPage() {
   const [today, setToday] = React.useState(new Date());
+  const [isWelcomeTourOpen, setIsWelcomeTourOpen] = React.useState(false);
   
   const appointmentsToday = appointments.filter(
     (app) => new Date(app.date).toDateString() === today.toDateString()
@@ -25,10 +27,22 @@ export default function DashboardPage() {
   React.useEffect(() => {
     setToday(new Date());
     // TODO: Fetch all dashboard data from Supabase
+
+    const hasSeenWelcomeTour = localStorage.getItem('hasSeenWelcomeTour');
+    if (!hasSeenWelcomeTour) {
+      setIsWelcomeTourOpen(true);
+    }
+
   }, []);
+
+  const handleTourClose = () => {
+    localStorage.setItem('hasSeenWelcomeTour', 'true');
+    setIsWelcomeTourOpen(false);
+  };
 
   return (
     <DashboardLayout>
+      <WelcomeTour isOpen={isWelcomeTourOpen} onClose={handleTourClose} />
       <div className="flex flex-col gap-4">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
