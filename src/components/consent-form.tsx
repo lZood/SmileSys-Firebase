@@ -12,6 +12,9 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { useToast } from '@/hooks/use-toast';
 import { uploadConsentForm } from '@/app/patients/actions';
+import { getUserData } from '@/app/user/actions';
+import { Checkbox } from './ui/checkbox';
+import { ScrollArea } from './ui/scroll-area';
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -19,16 +22,19 @@ declare module 'jspdf' {
   }
 }
 
+type Clinic = NonNullable<Awaited<ReturnType<typeof getUserData>>['clinic']>;
+
 type ConsentFormProps = {
     patientId: string;
     patientName: string;
-    clinicId: string;
+    clinic: Clinic;
     onClose: (wasSubmitted: boolean) => void;
 };
 
-export const ConsentForm = ({ patientId, patientName, clinicId, onClose }: ConsentFormProps) => {
+export const ConsentForm = ({ patientId, patientName, clinic, onClose }: ConsentFormProps) => {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = React.useState(false);
+    const [acceptedTerms, setAcceptedTerms] = React.useState(false);
     const [formData, setFormData] = React.useState({
         treatment: '',
         duration: '',
@@ -54,19 +60,23 @@ export const ConsentForm = ({ patientId, patientName, clinicId, onClose }: Conse
              toast({ variant: "destructive", title: "Faltan Firmas", description: "Tanto el paciente como el doctor deben firmar el documento." });
             return;
         }
+        if (!acceptedTerms) {
+            toast({ variant: "destructive", title: "Términos no Aceptados", description: "El paciente debe aceptar los términos y condiciones para continuar." });
+            return;
+        }
 
         setIsLoading(true);
 
-        const clinicName = "SmileSys Dental Care";
-        const clinicAddress = "123 Dental Ave, Smiletown";
-        const termsAndConditions = "1. Los pagos deben realizarse mensualmente. 2. Cualquier cita cancelada con menos de 24 horas de antelación incurrirá en un cargo. 3. Este plan de tratamiento es una estimación y puede cambiar según la respuesta del paciente.";
+        const clinicName = clinic.name || "Clínica Dental";
+        const clinicInfo = [clinic.address, clinic.phone].filter(Boolean).join(' | ');
+        const termsAndConditions = clinic.terms_and_conditions || "No se han especificado términos y condiciones.";
 
         const doc = new jsPDF();
         
         doc.setFontSize(22);
         doc.text(clinicName, 105, 20, { align: 'center' });
-        doc.setFontSize(12);
-        doc.text(clinicAddress, 105, 28, { align: 'center' });
+        doc.setFontSize(10);
+        doc.text(clinicInfo, 105, 28, { align: 'center' });
         doc.setFontSize(18);
         doc.text('Consentimiento Informado de Tratamiento', 105, 45, { align: 'center' });
         doc.text(`Paciente: ${patientName}`, 20, 60);
@@ -91,7 +101,6 @@ export const ConsentForm = ({ patientId, patientName, clinicId, onClose }: Conse
 
         const finalY = termsFinalY + 40;
         
-        // Add signatures
         const patientSig = patientSignatureRef.current.toDataURL('image/png');
         const doctorSig = doctorSignatureRef.current.toDataURL('image/png');
 
@@ -106,7 +115,7 @@ export const ConsentForm = ({ patientId, patientName, clinicId, onClose }: Conse
         const pdfBlob = doc.output('blob');
         const fileName = `consentimiento-${patientId}-${Date.now()}.pdf`;
         
-        const { error } = await uploadConsentForm(patientId, clinicId, pdfBlob, fileName);
+        const { error } = await uploadConsentForm(patientId, clinic.id, pdfBlob, fileName);
         
         setIsLoading(false);
 
@@ -120,42 +129,60 @@ export const ConsentForm = ({ patientId, patientName, clinicId, onClose }: Conse
 
     return (
         <Dialog open onOpenChange={() => onClose(false)}>
-            <DialogContent className="sm:max-w-3xl">
+            <DialogContent className="sm:max-w-4xl">
                 <DialogHeader>
                     <DialogTitle>Generar Consentimiento Informado</DialogTitle>
                     <DialogDescription>
                         Complete los detalles del tratamiento para {patientName} y recoja las firmas.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-6 py-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="treatment">Tratamiento</Label>
-                        <Textarea id="treatment" placeholder="Describa el tratamiento a realizar..." value={formData.treatment} onChange={handleChange} />
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                        <div className="grid gap-2"><Label htmlFor="duration">Duración</Label><Input id="duration" placeholder="Ej. 12 meses" value={formData.duration} onChange={handleChange} /></div>
-                        <div className="grid gap-2"><Label htmlFor="totalCost">Costo Total ($)</Label><Input id="totalCost" type="number" placeholder="2500" value={formData.totalCost} onChange={handleChange} /></div>
-                        <div className="grid gap-2"><Label htmlFor="monthlyPayment">Pago Mensual ($)</Label><Input id="monthlyPayment" type="number" placeholder="200" value={formData.monthlyPayment} onChange={handleChange} /></div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid md:grid-cols-2 gap-8 py-4">
+                    {/* Columna Izquierda: Formulario */}
+                    <div className="space-y-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="treatment">Tratamiento</Label>
+                            <Textarea id="treatment" placeholder="Describa el tratamiento a realizar..." value={formData.treatment} onChange={handleChange} />
+                        </div>
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="grid gap-2"><Label htmlFor="duration">Duración</Label><Input id="duration" placeholder="Ej. 12 meses" value={formData.duration} onChange={handleChange} /></div>
+                            <div className="grid gap-2"><Label htmlFor="totalCost">Costo Total ($)</Label><Input id="totalCost" type="number" placeholder="2500" value={formData.totalCost} onChange={handleChange} /></div>
+                            <div className="grid gap-2"><Label htmlFor="monthlyPayment">Pago Mensual ($)</Label><Input id="monthlyPayment" type="number" placeholder="200" value={formData.monthlyPayment} onChange={handleChange} /></div>
+                        </div>
                         <div className="space-y-2">
                             <div className="flex justify-between items-center">
                                 <Label>Firma del Paciente</Label>
                                 <Button variant="ghost" size="sm" onClick={clearPatientSignature}>Limpiar</Button>
                             </div>
-                            <div className="border rounded-md bg-secondary"><SignatureCanvas ref={patientSignatureRef} canvasProps={{ className: 'w-full h-[150px]' }} /></div>
+                            <div className="border rounded-md bg-secondary"><SignatureCanvas ref={patientSignatureRef} canvasProps={{ className: 'w-full h-[120px]' }} /></div>
                         </div>
-                         <div className="space-y-2">
+                        <div className="space-y-2">
                             <div className="flex justify-between items-center">
                                 <Label>Firma del Profesional</Label>
                                 <Button variant="ghost" size="sm" onClick={clearDoctorSignature}>Limpiar</Button>
                             </div>
-                            <div className="border rounded-md bg-secondary"><SignatureCanvas ref={doctorSignatureRef} canvasProps={{ className: 'w-full h-[150px]' }} /></div>
+                            <div className="border rounded-md bg-secondary"><SignatureCanvas ref={doctorSignatureRef} canvasProps={{ className: 'w-full h-[120px]' }} /></div>
                         </div>
                     </div>
-
+                    {/* Columna Derecha: Términos y Condiciones */}
+                    <div className="space-y-4 flex flex-col">
+                        <Label className="font-semibold">Términos y Condiciones</Label>
+                        <ScrollArea className="flex-grow border rounded-md p-4 bg-muted/50 h-96">
+                            <p className="text-sm whitespace-pre-wrap">
+                                {clinic.terms_and_conditions || 'No se han especificado términos y condiciones en los ajustes de la clínica.'}
+                            </p>
+                        </ScrollArea>
+                        <div className="flex items-center space-x-2">
+                            <Checkbox id="terms" checked={acceptedTerms} onCheckedChange={(checked) => setAcceptedTerms(!!checked)} />
+                            <label
+                                htmlFor="terms"
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                            >
+                                El paciente ha leído y acepta los términos y condiciones.
+                            </label>
+                        </div>
+                    </div>
                 </div>
+
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onClose(false)} disabled={isLoading}>Cancelar</Button>
                     <Button onClick={handleSave} disabled={isLoading}>{isLoading ? 'Guardando...' : 'Generar y Guardar PDF'}</Button>
@@ -164,5 +191,3 @@ export const ConsentForm = ({ patientId, patientName, clinicId, onClose }: Conse
         </Dialog>
     );
 };
-
-    

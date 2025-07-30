@@ -15,8 +15,74 @@ import { Textarea } from "@/components/ui/textarea";
 import { getUserData } from '../user/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AppearanceForm } from './appearance-form';
+import { useToast } from '@/hooks/use-toast';
+import { updateClinicInfo } from './actions';
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
+
+const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: NonNullable<UserData['clinic']>, isAdmin: boolean }) => {
+    const { toast } = useToast();
+    const [isLoading, setIsLoading] = React.useState(false);
+    const [clinicData, setClinicData] = React.useState({
+        name: clinic?.name || '',
+        address: clinic?.address || '',
+        phone: clinic?.phone || '',
+        logo_url: clinic?.logo_url || '',
+        terms_and_conditions: clinic?.terms_and_conditions || '',
+    });
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        setClinicData({ ...clinicData, [e.target.id]: e.target.value });
+    }
+
+    const handleSave = async () => {
+        setIsLoading(true);
+        const result = await updateClinicInfo({ clinicId: clinic.id, ...clinicData });
+        setIsLoading(false);
+
+        if (result.error) {
+            toast({ variant: 'destructive', title: 'Error', description: result.error });
+        } else {
+            toast({ title: 'Información Actualizada', description: 'Los datos de la clínica han sido guardados.' });
+        }
+    };
+
+    return (
+         <CardContent className="space-y-4">
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                    <Label htmlFor="name">Nombre de la Clínica</Label>
+                    <Input id="name" value={clinicData.name} onChange={handleChange} disabled={!isAdmin || isLoading} />
+                </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="phone">Teléfono</Label>
+                    <Input id="phone" value={clinicData.phone} onChange={handleChange} placeholder="+52 55 1234 5678" disabled={!isAdmin || isLoading} />
+                </div>
+            </div>
+             <div className="grid gap-2">
+              <Label htmlFor="address">Dirección</Label>
+              <Input id="address" value={clinicData.address} onChange={handleChange} placeholder="Av. Dental 123, Sonrisas" disabled={!isAdmin || isLoading} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="logo_url">URL del Logo de la Clínica</Label>
+              <Input id="logo_url" value={clinicData.logo_url} onChange={handleChange} placeholder="https://tu-clinica.com/logo.png" disabled={!isAdmin || isLoading} />
+            </div>
+            <div className="grid gap-2">
+                <Label htmlFor="terms_and_conditions">Términos y Condiciones para Consentimientos</Label>
+                <Textarea 
+                    id="terms_and_conditions" 
+                    value={clinicData.terms_and_conditions} 
+                    onChange={handleChange} 
+                    placeholder="Introduce los términos y condiciones que aparecerán en cada PDF de consentimiento..." 
+                    className="min-h-[150px]" 
+                    disabled={!isAdmin || isLoading}
+                />
+            </div>
+            {isAdmin && <Button onClick={handleSave} disabled={isLoading}>{isLoading ? 'Guardando...' : 'Guardar Cambios'}</Button>}
+        </CardContent>
+    );
+};
+
 
 export default function SettingsPage() {
   const [userData, setUserData] = React.useState<UserData | null>(null);
@@ -60,6 +126,7 @@ export default function SettingsPage() {
   }
 
   const { user, profile, clinic, teamMembers } = userData || {};
+  const isAdmin = profile?.role === 'admin';
 
   return (
     <DashboardLayout>
@@ -71,9 +138,10 @@ export default function SettingsPage() {
           </p>
         </div>
         <Tabs defaultValue="profile" className="flex-1">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="profile">Perfil</TabsTrigger>
             <TabsTrigger value="clinic">Clínica</TabsTrigger>
+            <TabsTrigger value="appearance">Apariencia</TabsTrigger>
             <TabsTrigger value="members">Miembros</TabsTrigger>
             <TabsTrigger value="integrations">Integraciones</TabsTrigger>
           </TabsList>
@@ -112,26 +180,11 @@ export default function SettingsPage() {
                   Gestiona los detalles de tu clínica para la generación de PDF (solo Admin).
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                 <div className="grid gap-2">
-                  <Label htmlFor="clinic-name">Nombre de la Clínica</Label>
-                  <Input id="clinic-name" defaultValue={clinic?.name || ''} />
-                </div>
-                 <div className="grid gap-2">
-                  <Label htmlFor="clinic-address">Dirección</Label>
-                  <Input id="clinic-address" placeholder="Av. Dental 123, Sonrisas" />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="clinic-logo">URL del Logo de la Clínica</Label>
-                  <Input id="clinic-logo" placeholder="https://tu-clinica.com/logo.png" />
-                </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="terms">Términos y Condiciones para Consentimientos</Label>
-                    <Textarea id="terms" placeholder="Introduce los términos y condiciones que aparecerán en cada PDF de consentimiento..." className="min-h-[150px]" />
-                </div>
-                <Button>Guardar Cambios</Button>
-              </CardContent>
+              {clinic && <ClinicInfoForm clinic={clinic} isAdmin={isAdmin} />}
             </Card>
+          </TabsContent>
+          <TabsContent value="appearance">
+            {clinic && <AppearanceForm clinic={clinic} />}
           </TabsContent>
           <TabsContent value="members">
             <Card>
@@ -141,7 +194,7 @@ export default function SettingsPage() {
                             <CardTitle>Miembros del Equipo</CardTitle>
                             <CardDescription>Gestiona el personal de tu clínica (solo Admin).</CardDescription>
                         </div>
-                         <Button size="sm" className="h-8 gap-1">
+                         <Button size="sm" className="h-8 gap-1" disabled={!isAdmin}>
                             <PlusCircle className="h-3.5 w-3.5" />
                             <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
                                 Invitar Miembro
@@ -167,7 +220,7 @@ export default function SettingsPage() {
                                     <TableCell className="capitalize">{member.role}</TableCell>
                                     <TableCell>
                                         <DropdownMenu>
-                                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="w-4 h-4"/></Button></DropdownMenuTrigger>
+                                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" disabled={!isAdmin}><MoreHorizontal className="w-4 h-4"/></Button></DropdownMenuTrigger>
                                             <DropdownMenuContent>
                                                 <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                                                 <DropdownMenuItem>Editar Rol</DropdownMenuItem>

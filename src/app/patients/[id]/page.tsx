@@ -16,18 +16,10 @@ import { ConsentForm } from '@/components/consent-form';
 import { getPatientById, getConsentFormsForPatient } from '../actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createClient } from '@/lib/supabase/client';
+import { getUserData } from '@/app/user/actions';
 
-type Patient = {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string | null;
-  phone: string | null;
-  created_at: string;
-  status: string;
-  dental_chart: any;
-  clinic_id: string;
-};
+type Patient = Awaited<ReturnType<typeof getPatientById>>;
+type Clinic = Awaited<ReturnType<typeof getUserData>>['clinic'];
 
 type ConsentDocument = {
     id: string;
@@ -37,17 +29,23 @@ type ConsentDocument = {
 
 export default function PatientDetailPage({ params }: { params: { id: string } }) {
   const [patient, setPatient] = React.useState<Patient | null>(null);
+  const [clinic, setClinic] = React.useState<Clinic | null>(null);
   const [consentForms, setConsentForms] = React.useState<ConsentDocument[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isConsentModalOpen, setIsConsentModalOpen] = React.useState(false);
   const [consentFormsLoading, setConsentFormsLoading] = React.useState(true);
   const supabase = createClient();
 
-  const fetchPatientData = React.useCallback(async () => {
+  const fetchPatientAndClinicData = React.useCallback(async () => {
     setIsLoading(true);
     const fetchedPatient = await getPatientById(params.id);
     if (fetchedPatient) {
-      setPatient(fetchedPatient as Patient);
+      setPatient(fetchedPatient);
+      // Once we have the patient, we can get clinic data
+      const userData = await getUserData();
+      if(userData && userData.clinic?.id === fetchedPatient.clinic_id) {
+          setClinic(userData.clinic);
+      }
     } else {
       notFound();
     }
@@ -63,9 +61,9 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
 
 
   React.useEffect(() => {
-    fetchPatientData();
+    fetchPatientAndClinicData();
     fetchConsentForms();
-  }, [fetchPatientData, fetchConsentForms]);
+  }, [fetchPatientAndClinicData, fetchConsentForms]);
   
   const handleConsentModalClose = (wasSubmitted: boolean) => {
       setIsConsentModalOpen(false);
@@ -118,7 +116,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
     );
   }
 
-  if (!patient) {
+  if (!patient || !clinic) {
     return notFound();
   }
 
@@ -130,7 +128,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
           <ConsentForm 
             patientId={patient.id}
             patientName={patientFullName}
-            clinicId={patient.clinic_id} 
+            clinic={clinic} 
             onClose={handleConsentModalClose}
           />
         )}
