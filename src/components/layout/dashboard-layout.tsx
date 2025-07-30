@@ -39,10 +39,15 @@ import { SmileSysLogo } from '../icons/smilesys-logo';
 import { useTheme } from 'next-themes';
 import { Switch } from '../ui/switch';
 import { createClient } from '@/lib/supabase/client';
+import { getUserData } from '@/app/user/actions';
+import { Skeleton } from '../ui/skeleton';
+import Image from 'next/image';
 
 type DashboardLayoutProps = {
   children: React.ReactNode;
 };
+
+type UserData = Awaited<ReturnType<typeof getUserData>>;
 
 const navItems = [
   { href: '/dashboard', icon: Home, label: 'Dashboard' },
@@ -64,7 +69,7 @@ const ThemeSwitcher = ({ inMobileNav = false }: { inMobileNav?: boolean }) => {
     }, []);
 
     if (!isMounted) {
-        return null; // Don't render on server to avoid hydration mismatch
+        return null;
     }
 
     if (inMobileNav) {
@@ -89,6 +94,7 @@ const ThemeSwitcher = ({ inMobileNav = false }: { inMobileNav?: boolean }) => {
                 <div className="flex h-9 w-full items-center justify-center gap-3 rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8">
                      <Sun className="h-5 w-5" />
                      <Switch
+                        id="theme-switcher-desktop"
                         checked={theme === 'dark'}
                         onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
                         aria-label="Cambiar tema"
@@ -106,6 +112,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [isExpanded, setIsExpanded] = React.useState(true);
+  const [userData, setUserData] = React.useState<UserData | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+  
+  React.useEffect(() => {
+    getUserData().then(data => {
+      setUserData(data);
+      setIsLoading(false);
+    });
+  }, []);
 
   const isNavItemActive = (href: string) => {
     return pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
@@ -246,7 +261,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               "flex items-center gap-2 font-semibold",
               !isExpanded && "justify-center"
             )}>
-              <SmileSysLogo className={cn("h-8", isExpanded ? "w-8" : "w-8" )} />
+              {userData?.clinic?.logo_url ? (
+                  <Image src={userData.clinic.logo_url} alt="Clinic Logo" width={32} height={32} className="h-8 w-8 rounded-md object-contain" />
+              ) : (
+                  <SmileSysLogo className={cn("h-8", isExpanded ? "w-8" : "w-8" )} />
+              )}
               <span className={cn(isExpanded ? "block" : "hidden")}>SmileSys</span>
           </Link>
           <Button variant="ghost" size="icon" onClick={() => setIsExpanded(!isExpanded)} className={cn(!isExpanded && "absolute right-0 top-14 translate-x-1/2 bg-background border rounded-full ")}>
@@ -307,10 +326,21 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" className="overflow-hidden rounded-full">
-                <Avatar>
-                  <AvatarImage src="https://placehold.co/32x32.png" alt="@user" data-ai-hint="person" />
-                  <AvatarFallback>AD</AvatarFallback>
-                </Avatar>
+                {isLoading ? (
+                    <Skeleton className="h-8 w-8 rounded-full" />
+                ) : (
+                    <Avatar>
+                      {userData?.clinic?.logo_url ? (
+                          <AvatarImage src={userData.clinic.logo_url} alt="Clinic Logo" />
+                      ) : (
+                          <AvatarImage src="https://placehold.co/32x32.png" alt="@user" data-ai-hint="person" />
+                      )}
+                      <AvatarFallback>
+                        {userData?.profile?.first_name?.charAt(0)}
+                        {userData?.profile?.last_name?.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -321,7 +351,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </DropdownMenuItem>
               <DropdownMenuItem>Soporte</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut}>
+              <DropdownMenuItem onClick={handleSignOut} className="text-red-500 hover:!text-red-500">
                 Cerrar Sesión
               </DropdownMenuItem>
             </DropdownMenuContent>

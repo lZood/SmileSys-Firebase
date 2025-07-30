@@ -1,33 +1,17 @@
+
 'use server';
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-export async function updateTheme(clinicId: string, theme: any) {
-    const supabase = createClient();
-
-    const { error } = await supabase
-        .from('clinics')
-        .update({ theme: theme })
-        .eq('id', clinicId);
-    
-    if (error) {
-        console.error('Error updating theme:', error);
-        return { error: `Error al actualizar el tema: ${error.message}` };
-    }
-    
-    revalidatePath('/', 'layout');
-    return { error: null };
-}
-
 const clinicInfoSchema = z.object({
     clinicId: z.string().uuid(),
     name: z.string().min(1, "El nombre de la clínica no puede estar vacío."),
-    address: z.string().optional(),
-    phone: z.string().optional(),
-    logo_url: z.string().url().optional().or(z.literal('')),
-    terms_and_conditions: z.string().optional(),
+    address: z.string().optional().nullable(),
+    phone: z.string().optional().nullable(),
+    logo_url: z.string().url().optional().nullable(),
+    terms_and_conditions: z.string().optional().nullable(),
 });
 
 export async function updateClinicInfo(data: z.infer<typeof clinicInfoSchema>) {
@@ -69,6 +53,39 @@ export async function updateClinicInfo(data: z.infer<typeof clinicInfoSchema>) {
     }
     
     revalidatePath('/settings');
-    revalidatePath('/patients'); // To refresh clinic data for consent forms
+    revalidatePath('/patients/[id]', 'layout'); // To refresh clinic data for consent forms and layout
     return { error: null };
+}
+
+
+export async function uploadClinicLogo(file: File, clinicId: string) {
+    const supabase = createClient();
+
+    // Validate user permissions
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'No autorizado: Usuario no autenticado.' };
+
+    const { data: profile } = await supabase.from('profiles').select('clinic_id, role').eq('id', user.id).single();
+    if (!profile || profile.clinic_id !== clinicId || profile.role !== 'admin') {
+        return { error: 'No autorizado: No tienes permiso para realizar esta acción.' };
+    }
+
+    const filePath = `${clinicId}/logo-${Date.now()}.${file.name.split('.').pop()}`;
+
+    const { error: uploadError } = await supabase.storage
+        .from('clinic-logos')
+        .upload(filePath, file, {
+            upsert: true, // Overwrite if file with same name exists
+        });
+
+    if (uploadError) {
+        console.error('Error uploading logo:', uploadError);
+        return { error: `Error al subir el logo: ${uploadError.message}` };
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+        .from('clinic-logos')
+        .getPublicUrl(filePath);
+
+    return { publicUrl, error: null };
 }

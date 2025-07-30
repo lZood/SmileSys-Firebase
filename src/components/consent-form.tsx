@@ -31,6 +31,19 @@ type ConsentFormProps = {
     onClose: (wasSubmitted: boolean) => void;
 };
 
+// Helper function to fetch image as base64
+const toBase64 = async (url: string) => {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+};
+
+
 export const ConsentForm = ({ patientId, patientName, clinic, onClose }: ConsentFormProps) => {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = React.useState(false);
@@ -67,63 +80,109 @@ export const ConsentForm = ({ patientId, patientName, clinic, onClose }: Consent
 
         setIsLoading(true);
 
-        const clinicName = clinic.name || "Clínica Dental";
-        const clinicInfo = [clinic.address, clinic.phone].filter(Boolean).join(' | ');
-        const termsAndConditions = clinic.terms_and_conditions || "No se han especificado términos y condiciones.";
+        try {
+            const clinicName = clinic.name || "Clínica Dental";
+            const clinicInfo = [clinic.address, clinic.phone].filter(Boolean).join(' | ');
+            const termsAndConditions = clinic.terms_and_conditions || "No se han especificado términos y condiciones.";
 
-        const doc = new jsPDF();
-        
-        doc.setFontSize(22);
-        doc.text(clinicName, 105, 20, { align: 'center' });
-        doc.setFontSize(10);
-        doc.text(clinicInfo, 105, 28, { align: 'center' });
-        doc.setFontSize(18);
-        doc.text('Consentimiento Informado de Tratamiento', 105, 45, { align: 'center' });
-        doc.text(`Paciente: ${patientName}`, 20, 60);
-        doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 150, 60);
+            const doc = new jsPDF();
+            const pageHeight = doc.internal.pageSize.height;
+            const pageWidth = doc.internal.pageSize.width;
+            const margin = 20;
+            let cursorY = 20;
 
-        doc.autoTable({
-            startY: 70,
-            head: [['Descripción del Tratamiento', 'Duración Estimada', 'Costo Total', 'Pago Mensual']],
-            body: [[formData.treatment, formData.duration, `$${formData.totalCost}`, `$${formData.monthlyPayment || 'N/A'}`]],
-            theme: 'grid',
-        });
-        
-        const autoTableFinalY = (doc as any).lastAutoTable.finalY || 85;
-        doc.setFontSize(12);
-        doc.text("Términos y Condiciones", 20, autoTableFinalY + 15);
-        const splitTerms = doc.splitTextToSize(termsAndConditions, 170);
-        doc.text(splitTerms, 20, autoTableFinalY + 22);
-        
-        const termsFinalY = autoTableFinalY + 22 + (splitTerms.length * 5);
-        doc.setFontSize(10);
-        doc.text("Declaro que he leído y comprendido la información anterior y acepto los términos y condiciones del tratamiento.", 20, termsFinalY + 15);
+            // --- Header with Logo ---
+            if (clinic.logo_url) {
+                try {
+                    const logoBase64 = await toBase64(clinic.logo_url);
+                    doc.addImage(logoBase64 as string, 'PNG', margin, cursorY - 10, 30, 30);
+                } catch (e) {
+                    console.error("Error loading clinic logo:", e);
+                }
+            }
+            doc.setFontSize(22);
+            doc.text(clinicName, pageWidth / 2, cursorY, { align: 'center' });
+            cursorY += 8;
+            doc.setFontSize(10);
+            doc.text(clinicInfo, pageWidth / 2, cursorY, { align: 'center' });
+            cursorY += 15;
+            
+            // --- Document Title ---
+            doc.setFontSize(18);
+            doc.text('Consentimiento Informado de Tratamiento', pageWidth / 2, cursorY, { align: 'center' });
+            cursorY += 15;
 
-        const finalY = termsFinalY + 40;
-        
-        const patientSig = patientSignatureRef.current.toDataURL('image/png');
-        const doctorSig = doctorSignatureRef.current.toDataURL('image/png');
+            // --- Patient Info ---
+            doc.text(`Paciente: ${patientName}`, margin, cursorY);
+            doc.text(`Fecha: ${new Date().toLocaleDateString()}`, pageWidth - margin, cursorY, { align: 'right' });
+            cursorY += 10;
+            
+            // --- Treatment Table ---
+            doc.autoTable({
+                startY: cursorY,
+                head: [['Descripción del Tratamiento', 'Duración Estimada', 'Costo Total', 'Pago Mensual']],
+                body: [[formData.treatment, formData.duration, `$${formData.totalCost}`, `$${formData.monthlyPayment || 'N/A'}`]],
+                theme: 'grid',
+                margin: { left: margin, right: margin }
+            });
+            cursorY = (doc as any).lastAutoTable.finalY + 15;
 
-        doc.addImage(patientSig, 'PNG', 20, finalY - 15, 60, 20);
-        doc.line(20, finalY + 5, 80, finalY + 5);
-        doc.text('Firma del Paciente', 45, finalY + 10, { align: 'center' });
+            // --- Terms and Conditions (with pagination) ---
+            doc.setFontSize(12);
+            doc.text("Términos y Condiciones", margin, cursorY);
+            cursorY += 7;
+            doc.setFontSize(10);
+            const splitTerms = doc.splitTextToSize(termsAndConditions, pageWidth - (margin * 2));
+            
+            splitTerms.forEach((line: string) => {
+                if (cursorY + 5 > pageHeight - margin) {
+                    doc.addPage();
+                    cursorY = margin;
+                }
+                doc.text(line, margin, cursorY);
+                cursorY += 5;
+            });
 
-        doc.addImage(doctorSig, 'PNG', 130, finalY - 15, 60, 20);
-        doc.line(130, finalY + 5, 190, finalY + 5);
-        doc.text('Firma del Profesional', 160, finalY + 10, { align: 'center' });
+            // --- Acceptance Text ---
+            cursorY += 10;
+            if (cursorY + 15 > pageHeight - margin) { doc.addPage(); cursorY = margin; }
+            doc.text("Declaro que he leído y comprendido la información anterior y acepto los términos y condiciones del tratamiento.", margin, cursorY);
+            cursorY += 20;
 
-        const pdfBlob = doc.output('blob');
-        const fileName = `consentimiento-${patientId}-${Date.now()}.pdf`;
-        
-        const { error } = await uploadConsentForm(patientId, clinic.id, pdfBlob, fileName);
-        
-        setIsLoading(false);
+            // --- Signatures ---
+            const sigHeight = 20;
+            const sigWidth = 60;
+            if (cursorY + sigHeight + 15 > pageHeight - margin) { doc.addPage(); cursorY = margin; }
+            
+            const patientSig = patientSignatureRef.current.toDataURL('image/png');
+            const doctorSig = doctorSignatureRef.current.toDataURL('image/png');
 
-        if (error) {
-            toast({ variant: 'destructive', title: 'Error al Guardar', description: error });
-        } else {
+            doc.addImage(patientSig, 'PNG', margin, cursorY - 15, sigWidth, sigHeight);
+            doc.line(margin, cursorY + sigHeight - 10, margin + sigWidth, cursorY + sigHeight - 10);
+            doc.text('Firma del Paciente', margin + (sigWidth / 2), cursorY + sigHeight - 5, { align: 'center' });
+
+            const doctorSigX = pageWidth - margin - sigWidth;
+            doc.addImage(doctorSig, 'PNG', doctorSigX, cursorY - 15, sigWidth, sigHeight);
+            doc.line(doctorSigX, cursorY + sigHeight - 10, doctorSigX + sigWidth, cursorY + sigHeight - 10);
+            doc.text('Firma del Profesional', doctorSigX + (sigWidth / 2), cursorY + sigHeight - 5, { align: 'center' });
+
+            // --- Upload PDF ---
+            const pdfBlob = doc.output('blob');
+            const fileName = `consentimiento-${patientId}-${Date.now()}.pdf`;
+            
+            const { error } = await uploadConsentForm(patientId, clinic.id, pdfBlob, fileName);
+            
+            if (error) {
+                throw new Error(error);
+            }
+            
             toast({ title: 'Consentimiento Guardado', description: 'El documento ha sido guardado exitosamente.' });
             onClose(true);
+
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Error al Guardar', description: err.message });
+        } finally {
+            setIsLoading(false);
         }
     };
 

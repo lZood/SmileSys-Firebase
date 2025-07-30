@@ -14,15 +14,18 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLab
 import { Textarea } from "@/components/ui/textarea";
 import { getUserData } from '../user/actions';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AppearanceForm } from './appearance-form';
 import { useToast } from '@/hooks/use-toast';
-import { updateClinicInfo } from './actions';
+import { updateClinicInfo, uploadClinicLogo } from './actions';
+import Image from 'next/image';
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
 
 const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: NonNullable<UserData['clinic']>, isAdmin: boolean }) => {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = React.useState(false);
+    const [logoFile, setLogoFile] = React.useState<File | null>(null);
+    const [logoPreview, setLogoPreview] = React.useState<string | null>(clinic?.logo_url || null);
+    
     const [clinicData, setClinicData] = React.useState({
         name: clinic?.name || '',
         address: clinic?.address || '',
@@ -34,10 +37,35 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: NonNullable<UserData['cli
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         setClinicData({ ...clinicData, [e.target.id]: e.target.value });
     }
+    
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            setLogoFile(file);
+            setLogoPreview(URL.createObjectURL(file));
+        }
+    };
 
     const handleSave = async () => {
         setIsLoading(true);
-        const result = await updateClinicInfo({ clinicId: clinic.id, ...clinicData });
+        let finalLogoUrl = clinicData.logo_url;
+
+        if (logoFile) {
+            const uploadResult = await uploadClinicLogo(logoFile, clinic.id);
+            if (uploadResult.error) {
+                toast({ variant: 'destructive', title: 'Error al subir el logo', description: uploadResult.error });
+                setIsLoading(false);
+                return;
+            }
+            finalLogoUrl = uploadResult.publicUrl!;
+        }
+
+        const result = await updateClinicInfo({ 
+            clinicId: clinic.id, 
+            ...clinicData,
+            logo_url: finalLogoUrl
+        });
+
         setIsLoading(false);
 
         if (result.error) {
@@ -49,6 +77,17 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: NonNullable<UserData['cli
 
     return (
          <CardContent className="space-y-4">
+             <div className="grid gap-2">
+                <Label>Logo de la Clínica</Label>
+                 <div className="flex items-center gap-4">
+                    {logoPreview ? (
+                        <Image src={logoPreview} alt="Logo Preview" width={64} height={64} className="h-16 w-16 rounded-lg object-cover" />
+                    ) : (
+                        <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center text-muted-foreground text-xs">Sin Logo</div>
+                    )}
+                    <Input id="logo-upload" type="file" onChange={handleFileChange} className="max-w-xs" disabled={!isAdmin || isLoading} accept="image/*"/>
+                 </div>
+             </div>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="grid gap-2">
                     <Label htmlFor="name">Nombre de la Clínica</Label>
@@ -56,22 +95,18 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: NonNullable<UserData['cli
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="phone">Teléfono</Label>
-                    <Input id="phone" value={clinicData.phone} onChange={handleChange} placeholder="+52 55 1234 5678" disabled={!isAdmin || isLoading} />
+                    <Input id="phone" value={clinicData.phone || ''} onChange={handleChange} placeholder="+52 55 1234 5678" disabled={!isAdmin || isLoading} />
                 </div>
             </div>
              <div className="grid gap-2">
               <Label htmlFor="address">Dirección</Label>
-              <Input id="address" value={clinicData.address} onChange={handleChange} placeholder="Av. Dental 123, Sonrisas" disabled={!isAdmin || isLoading} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="logo_url">URL del Logo de la Clínica</Label>
-              <Input id="logo_url" value={clinicData.logo_url} onChange={handleChange} placeholder="https://tu-clinica.com/logo.png" disabled={!isAdmin || isLoading} />
+              <Input id="address" value={clinicData.address || ''} onChange={handleChange} placeholder="Av. Dental 123, Sonrisas" disabled={!isAdmin || isLoading} />
             </div>
             <div className="grid gap-2">
                 <Label htmlFor="terms_and_conditions">Términos y Condiciones para Consentimientos</Label>
                 <Textarea 
                     id="terms_and_conditions" 
-                    value={clinicData.terms_and_conditions} 
+                    value={clinicData.terms_and_conditions || ''} 
                     onChange={handleChange} 
                     placeholder="Introduce los términos y condiciones que aparecerán en cada PDF de consentimiento..." 
                     className="min-h-[150px]" 
@@ -138,10 +173,9 @@ export default function SettingsPage() {
           </p>
         </div>
         <Tabs defaultValue="profile" className="flex-1">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="profile">Perfil</TabsTrigger>
             <TabsTrigger value="clinic">Clínica</TabsTrigger>
-            <TabsTrigger value="appearance">Apariencia</TabsTrigger>
             <TabsTrigger value="members">Miembros</TabsTrigger>
             <TabsTrigger value="integrations">Integraciones</TabsTrigger>
           </TabsList>
@@ -182,9 +216,6 @@ export default function SettingsPage() {
               </CardHeader>
               {clinic && <ClinicInfoForm clinic={clinic} isAdmin={isAdmin} />}
             </Card>
-          </TabsContent>
-          <TabsContent value="appearance">
-            {clinic && <AppearanceForm clinic={clinic} />}
           </TabsContent>
           <TabsContent value="members">
             <Card>
@@ -270,5 +301,3 @@ export default function SettingsPage() {
     </DashboardLayout>
   );
 }
-
-    
