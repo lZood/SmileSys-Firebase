@@ -18,6 +18,8 @@ import {
   LogOut,
   CreditCard,
   LineChart,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -34,6 +36,8 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { SmileSysLogo } from '../icons/smilesys-logo';
+import { useTheme } from 'next-themes';
+import { Switch } from '../ui/switch';
 
 type DashboardLayoutProps = {
   children: React.ReactNode;
@@ -49,6 +53,44 @@ const navItems = [
 ];
 
 const bottomNavItems = [{ href: '/settings', icon: Settings, label: 'Settings' }];
+
+const ThemeSwitcher = ({ inMobileNav = false }: { inMobileNav?: boolean }) => {
+    const { theme, setTheme } = useTheme();
+
+    if (inMobileNav) {
+        return (
+            <div className="flex items-center justify-between gap-4 px-2.5 text-muted-foreground hover:text-foreground">
+                <div className="flex items-center gap-4">
+                    <Sun className="h-5 w-5" />
+                    <span>Light / Dark</span>
+                </div>
+                <Switch
+                    checked={theme === 'dark'}
+                    onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
+                    aria-label="Toggle theme"
+                />
+            </div>
+        )
+    }
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <div className="flex h-9 w-full items-center justify-center gap-3 rounded-lg text-muted-foreground transition-colors hover:text-foreground md:h-8">
+                     <Sun className="h-5 w-5" />
+                     <Switch
+                        checked={theme === 'dark'}
+                        onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
+                        aria-label="Toggle theme"
+                    />
+                    <Moon className="h-5 w-5" />
+                </div>
+            </TooltipTrigger>
+            <TooltipContent side="right">Toggle Theme</TooltipContent>
+        </Tooltip>
+    );
+};
+
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
@@ -141,6 +183,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               )}
             </React.Fragment>
           ))}
+           <div className="pt-2 w-full">
+            {mobile ? <ThemeSwitcher inMobileNav /> : (isExpanded ? <ThemeSwitcher /> : <Tooltip><TooltipTrigger asChild><ThemeSwitcher /></TooltipTrigger><TooltipContent side="right">Toggle Theme</TooltipContent></Tooltip>)}
+            </div>
+
             {mobile ? (
                <Link href="/" className="flex items-center gap-4 px-2.5 text-red-500 hover:text-red-600">
                   <LogOut className="h-5 w-5" />
