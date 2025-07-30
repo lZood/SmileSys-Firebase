@@ -9,24 +9,34 @@ import { Badge } from '@/components/ui/badge';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { WelcomeTour } from '@/components/welcome-tour';
+import { getUserData } from '../user/actions';
 
 // Data will be fetched from Supabase
 const treatmentStatsData: any[] = [];
 const appointments: any[] = [];
 const patients: any[] = [];
 
+type DashboardPageProps = {
+  userData: Awaited<ReturnType<typeof getUserData>>;
+};
 
 export default function DashboardPage() {
   const [today, setToday] = React.useState(new Date());
   const [isWelcomeTourOpen, setIsWelcomeTourOpen] = React.useState(false);
-  
+  const [userData, setUserData] = React.useState<DashboardPageProps['userData'] | null>(null);
+
   const appointmentsToday = appointments.filter(
     (app) => new Date(app.date).toDateString() === today.toDateString()
   ).length;
 
   React.useEffect(() => {
     setToday(new Date());
-    // TODO: Fetch all dashboard data from Supabase
+    
+    getUserData().then(data => {
+        if (data) {
+            setUserData(data);
+        }
+    });
 
     const hasSeenWelcomeTour = localStorage.getItem('hasSeenWelcomeTour');
     if (!hasSeenWelcomeTour) {
@@ -44,6 +54,14 @@ export default function DashboardPage() {
     <DashboardLayout>
       <WelcomeTour isOpen={isWelcomeTourOpen} onClose={handleTourClose} />
       <div className="flex flex-col gap-4">
+        <div className="mb-4">
+            <h1 className="text-3xl font-bold font-headline">
+                Hola, {userData?.profile?.first_name || 'Doctor'}!
+            </h1>
+            <p className="text-muted-foreground">
+                Aquí tienes un resumen de la actividad de tu clínica hoy.
+            </p>
+        </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

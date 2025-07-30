@@ -1,4 +1,7 @@
 
+'use client';
+
+import * as React from 'react';
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,14 +12,43 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { MoreHorizontal, PlusCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
+import { getUserData } from '../user/actions';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const teamMembers = [
-    { name: 'Dr. Emily Carter', role: 'Admin, Doctor', email: 'emily.c@smilesys.com' },
-    { name: 'Dr. Ben Adams', role: 'Doctor', email: 'ben.a@smilesys.com' },
-    { name: 'Sarah Lee', role: 'Staff', email: 'sarah.l@smilesys.com' },
-];
+type SettingsPageProps = {
+  userData: Awaited<ReturnType<typeof getUserData>>;
+};
 
 export default function SettingsPage() {
+  const [userData, setUserData] = React.useState<SettingsPageProps['userData'] | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    setIsLoading(true);
+    getUserData().then(data => {
+      if (data) {
+        setUserData(data);
+      }
+      setIsLoading(false);
+    });
+  }, []);
+
+  if (isLoading) {
+      return (
+          <DashboardLayout>
+            <div className="flex flex-col gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold font-headline">Settings</h1>
+                    <p className="text-muted-foreground">Manage your profile, clinic, and integrations.</p>
+                </div>
+                 <Skeleton className="w-full h-[600px]" />
+            </div>
+          </DashboardLayout>
+      )
+  }
+
+  const { profile, clinic, teamMembers } = userData || {};
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-4">
@@ -42,13 +74,19 @@ export default function SettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input id="name" defaultValue="Dr. Emily Carter" />
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="firstName">First Name</Label>
+                        <Input id="firstName" defaultValue={profile?.first_name || ''} />
+                    </div>
+                     <div className="grid gap-2">
+                        <Label htmlFor="lastName">Last Name</Label>
+                        <Input id="lastName" defaultValue={profile?.last_name || ''} />
+                    </div>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" defaultValue="emily.c@smilesys.com" />
+                  <Input id="email" type="email" defaultValue={profile?.user.email || ''} readOnly />
                 </div>
                 <Button>Save Changes</Button>
               </CardContent>
@@ -65,11 +103,11 @@ export default function SettingsPage() {
               <CardContent className="space-y-4">
                  <div className="grid gap-2">
                   <Label htmlFor="clinic-name">Clinic Name</Label>
-                  <Input id="clinic-name" defaultValue="SmileSys Dental Care" />
+                  <Input id="clinic-name" defaultValue={clinic?.name || ''} />
                 </div>
                  <div className="grid gap-2">
                   <Label htmlFor="clinic-address">Address</Label>
-                  <Input id="clinic-address" defaultValue="123 Dental Ave, Smiletown" />
+                  <Input id="clinic-address" placeholder="123 Dental Ave, Smiletown" />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="clinic-logo">Clinic Logo URL</Label>
@@ -109,11 +147,11 @@ export default function SettingsPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {teamMembers.map(member => (
-                                <TableRow key={member.email}>
+                            {teamMembers && teamMembers.map(member => (
+                                <TableRow key={member.id}>
                                     <TableCell>
-                                        <div className="font-medium">{member.name}</div>
-                                        <div className="text-sm text-muted-foreground">{member.email}</div>
+                                        <div className="font-medium">{member.first_name} {member.last_name}</div>
+                                        <div className="text-sm text-muted-foreground">{member.user_email}</div>
                                     </TableCell>
                                     <TableCell>{member.role}</TableCell>
                                     <TableCell>
