@@ -2,12 +2,10 @@
 'use server';
 
 import { createClient } from "@/lib/supabase/server";
-import { cookies } from "next/headers";
 import { cache } from 'react';
 
 export const getUserData = cache(async () => {
-    const cookieStore = cookies();
-    const supabase = createClient(cookieStore);
+    const supabase = createClient();
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
