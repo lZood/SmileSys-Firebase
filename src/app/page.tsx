@@ -22,6 +22,16 @@ export default function LoginPage() {
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
     setIsLoading(true);
+
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+       toast({
+        variant: "destructive",
+        title: "Configuración Incompleta",
+        description: "Las variables de entorno de Supabase no están configuradas. Revisa tu archivo .env.",
+      });
+      setIsLoading(false);
+      return;
+    }
     
     const supabase = createClient();
     const { data, error } = await supabase.auth.signInWithPassword({
