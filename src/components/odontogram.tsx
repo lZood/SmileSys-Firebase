@@ -27,7 +27,7 @@ type Condition =
 type ToothState = { [key: string]: Condition };
 
 const conditions: { id: Condition; label: string; color: string }[] = [
-    { id: 'healthy', label: 'Healthy', color: 'fill-white' },
+    { id: 'healthy', label: 'Sano', color: 'fill-white' },
     { id: 'missing', label: 'Ausente', color: 'fill-gray-500' },
     { id: 'restoration', label: 'Restauración', color: 'fill-blue-500' },
     { id: 'caries', label: 'Caries', color: 'fill-red-500' },
@@ -77,10 +77,9 @@ const Tooth = ({ id, condition, onConditionChange }: { id: string; condition: Co
           <ScrollArea className="h-48">
             <RadioGroup defaultValue={condition} onValueChange={(value) => onConditionChange(id, value as Condition)} className="p-1">
               {conditions.map(c => (
-                <div key={c.id} className="flex items-center space-x-2">
+                <div key={c.id} className="flex items-center space-x-2 py-1">
                   <RadioGroupItem value={c.id} id={`cond-${id}-${c.id}`} />
-                  <Label htmlFor={`cond-${id}-${c.id}`} className="flex items-center gap-2 cursor-pointer">
-                    <div className={cn("w-3 h-3 rounded-full", c.color, c.id === 'healthy' && 'border border-gray-300')}></div>
+                  <Label htmlFor={`cond-${id}-${c.id}`} className="flex items-center gap-2 cursor-pointer font-normal">
                     {c.label}
                   </Label>
                 </div>
