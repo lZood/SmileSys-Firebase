@@ -50,7 +50,7 @@ export default function SettingsPage() {
                             <div className="space-y-2"><Skeleton className="h-4 w-16" /><Skeleton className="h-10 w-full" /></div>
                         </div>
                         <div className="space-y-2"><Skeleton className="h-4 w-12" /><Skeleton className="h-10 w-full" /></div>
-                         <Skeleton className="h-10 w-32" />
+                         <Skeleton className="h-10 w-32 mt-4" />
                     </CardContent>
                  </Card>
             </div>
@@ -58,7 +58,7 @@ export default function SettingsPage() {
       )
   }
 
-  const { profile, clinic, teamMembers } = userData || {};
+  const { user, profile, clinic, teamMembers } = userData || {};
 
   return (
     <DashboardLayout>
@@ -97,7 +97,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" defaultValue={userData?.user.email || ''} readOnly />
+                  <Input id="email" type="email" defaultValue={user?.email || ''} readOnly />
                 </div>
                 <Button>Save Changes</Button>
               </CardContent>
@@ -153,6 +153,7 @@ export default function SettingsPage() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
+                                <TableHead>Email</TableHead>
                                 <TableHead>Role</TableHead>
                                 <TableHead><span className="sr-only">Actions</span></TableHead>
                             </TableRow>
@@ -160,10 +161,8 @@ export default function SettingsPage() {
                         <TableBody>
                             {teamMembers && teamMembers.map(member => (
                                 <TableRow key={member.id}>
-                                    <TableCell>
-                                        <div className="font-medium">{member.first_name} {member.last_name}</div>
-                                        <div className="text-sm text-muted-foreground">{member.user_email}</div>
-                                    </TableCell>
+                                    <TableCell className="font-medium">{member.first_name} {member.last_name}</TableCell>
+                                    <TableCell>{member.user_email}</TableCell>
                                     <TableCell className="capitalize">{member.role}</TableCell>
                                     <TableCell>
                                         <DropdownMenu>
