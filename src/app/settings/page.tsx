@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLab
 import { Textarea } from "@/components/ui/textarea";
 import { getUserData } from '../user/actions';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AppearanceForm } from './appearance-form';
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
 
@@ -70,10 +71,11 @@ export default function SettingsPage() {
           </p>
         </div>
         <Tabs defaultValue="profile" className="flex-1">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="clinic">Clinic</TabsTrigger>
             <TabsTrigger value="members">Members</TabsTrigger>
+            <TabsTrigger value="appearance">Appearance</TabsTrigger>
             <TabsTrigger value="integrations">Integrations</TabsTrigger>
           </TabsList>
           <TabsContent value="profile">
@@ -180,6 +182,9 @@ export default function SettingsPage() {
                     </Table>
                 </CardContent>
             </Card>
+          </TabsContent>
+          <TabsContent value="appearance">
+              <AppearanceForm clinic={clinic} />
           </TabsContent>
           <TabsContent value="integrations">
             <Card>
