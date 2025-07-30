@@ -10,6 +10,7 @@ import { Step2MedicalHistory } from './patient-form/step2-medical-history';
 import { Step3VitalSigns } from './patient-form/step3-vital-signs';
 import { Step4Odontogram } from './patient-form/step4-odontogram';
 import { useToast } from '@/hooks/use-toast';
+import { addPatient } from '@/app/patients/actions';
 
 const totalSteps = 4;
 
@@ -47,9 +48,10 @@ const initialFormData = {
 };
 
 
-export const NewPatientForm = ({ onClose }: { onClose: () => void }) => {
+export const NewPatientForm = ({ onClose }: { onClose: (wasSubmitted: boolean) => void }) => {
     const [currentStep, setCurrentStep] = React.useState(1);
     const [formData, setFormData] = React.useState(initialFormData);
+    const [isLoading, setIsLoading] = React.useState(false);
     const { toast } = useToast();
 
     const handleNext = () => {
@@ -61,12 +63,12 @@ export const NewPatientForm = ({ onClose }: { onClose: () => void }) => {
     
     const validateStep = () => {
         if (currentStep === 1) {
-            const { firstName, lastName, age, phone, email } = formData;
-            if (!firstName || !lastName || !age || !phone || !email) {
+            const { firstName, lastName, age, phone } = formData;
+            if (!firstName || !lastName || !age || !phone) {
                 toast({
                     variant: "destructive",
                     title: "Campos Incompletos",
-                    description: "Por favor, llena todos los campos obligatorios de Información Personal.",
+                    description: "Por favor, llena los campos obligatorios de Nombre, Apellido, Edad y Teléfono.",
                 });
                 return false;
             }
@@ -84,17 +86,26 @@ export const NewPatientForm = ({ onClose }: { onClose: () => void }) => {
         return true;
     }
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (!validateStep()) return;
         
-        // This is where you would call handleAddPatient passed via props
-        // and handle the Supabase insertion.
-        console.log("Form data submitted:", formData);
-        toast({
-            title: "Paciente Guardado",
-            description: "El nuevo paciente ha sido guardado exitosamente.",
-        });
-        onClose();
+        setIsLoading(true);
+        const { error } = await addPatient(formData);
+        setIsLoading(false);
+
+        if (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Error al guardar',
+                description: error,
+            });
+        } else {
+            toast({
+                title: "Paciente Guardado",
+                description: `${formData.firstName} ${formData.lastName} ha sido guardado exitosamente.`,
+            });
+            onClose(true);
+        }
     };
 
     const progress = (currentStep / totalSteps) * 100;
@@ -108,7 +119,7 @@ export const NewPatientForm = ({ onClose }: { onClose: () => void }) => {
 
 
     return (
-        <Dialog open onOpenChange={onClose}>
+        <Dialog open onOpenChange={() => onClose(false)}>
             <DialogContent className="sm:max-w-4xl">
                 <DialogHeader>
                     <DialogTitle>Agregar Nuevo Paciente</DialogTitle>
@@ -137,23 +148,23 @@ export const NewPatientForm = ({ onClose }: { onClose: () => void }) => {
                 <DialogFooter className="justify-between">
                     <div>
                         {currentStep > 1 && (
-                            <Button variant="outline" onClick={handleBack}>
+                            <Button variant="outline" onClick={handleBack} disabled={isLoading}>
                                 Anterior
                             </Button>
                         )}
                     </div>
                     <div className="flex items-center gap-2">
-                         <Button variant="ghost" onClick={onClose}>
+                         <Button variant="ghost" onClick={() => onClose(false)} disabled={isLoading}>
                             Cancelar
                         </Button>
                         {currentStep < totalSteps && (
-                            <Button onClick={handleNext}>
+                            <Button onClick={handleNext} disabled={isLoading}>
                                 Siguiente
                             </Button>
                         )}
                         {currentStep === totalSteps && (
-                            <Button onClick={handleSubmit}>
-                                Guardar Paciente
+                            <Button onClick={handleSubmit} disabled={isLoading}>
+                                {isLoading ? 'Guardando...' : 'Guardar Paciente'}
                             </Button>
                         )}
                     </div>
@@ -162,5 +173,3 @@ export const NewPatientForm = ({ onClose }: { onClose: () => void }) => {
         </Dialog>
     );
 };
-
-    

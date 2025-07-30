@@ -24,7 +24,7 @@ type Condition =
   | 'mobility'
   | 'food-impaction';
   
-type ToothState = { [key: string]: Condition };
+export type ToothState = { [key: string]: Condition };
 
 const conditions: { id: Condition; label: string; color: string }[] = [
     { id: 'healthy', label: 'Sano', color: 'fill-white' },
@@ -93,32 +93,51 @@ const Tooth = ({ id, condition, onConditionChange }: { id: string; condition: Co
   );
 };
 
-export function Odontogram() {
-  const [toothState, setToothState] = React.useState<ToothState>(() => {
+// Props for Odontogram
+type OdontogramProps = {
+    initialData?: ToothState | null;
+    onChange?: (newState: ToothState) => void;
+    isReadOnly?: boolean;
+};
+
+// Function to create an empty (all healthy) chart state
+const createDefaultChartState = (): ToothState => {
     const initialState: ToothState = {};
     const allTeeth = Object.values(toothNumbers).flat();
     allTeeth.forEach(num => {
-      initialState[num] = 'healthy';
+        initialState[num] = 'healthy';
     });
-    // Example initial states
-    initialState['16'] = 'caries';
-    initialState['26'] = 'restoration';
-    initialState['46'] = 'missing';
-    initialState['55'] = 'pain';
-
-
     return initialState;
+}
+
+export function Odontogram({ initialData, onChange, isReadOnly = false }: OdontogramProps) {
+  const [toothState, setToothState] = React.useState<ToothState>(() => {
+    return initialData && Object.keys(initialData).length > 0 ? initialData : createDefaultChartState();
   });
 
+  React.useEffect(() => {
+     // If parent component sends new initialData, update the state
+     if (initialData && Object.keys(initialData).length > 0) {
+        setToothState(initialData);
+     }
+  }, [initialData]);
+
   const handleConditionChange = (id: string, condition: Condition) => {
-    setToothState(prev => ({ ...prev, [id]: condition }));
+    if (isReadOnly) return;
+    
+    const newState = { ...toothState, [id]: condition };
+    setToothState(newState);
+
+    if (onChange) {
+        onChange(newState);
+    }
   };
 
   const renderQuadrant = (quadrant: string[]) => {
     return (
         <div className="flex justify-center space-x-1">
         {quadrant.map(num => (
-            <Tooth key={num} id={num} condition={toothState[num]} onConditionChange={handleConditionChange} />
+            <Tooth key={num} id={num} condition={toothState[num] || 'healthy'} onConditionChange={handleConditionChange} />
         ))}
         </div>
     );

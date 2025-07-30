@@ -1,10 +1,11 @@
 
-import { Odontogram } from '@/components/odontogram';
+import { Odontogram, ToothState } from '@/components/odontogram';
 import { Label } from '@/components/ui/label';
+import * as React from 'react';
 
 export const Step4Odontogram = ({ formData, setFormData }: { formData: any, setFormData: Function }) => {
     
-    const handleOdontogramChange = (toothState: any) => {
+    const handleOdontogramChange = (toothState: ToothState) => {
         setFormData({ ...formData, dentalChart: toothState });
     };
 
@@ -13,18 +14,12 @@ export const Step4Odontogram = ({ formData, setFormData }: { formData: any, setF
              <div>
                 <Label className="text-base font-semibold">Odontograma</Label>
                 <p className="text-sm text-muted-foreground">
-                    Haz clic en un diente y luego selecciona la condición en el menú inferior para marcarla.
+                    Haz clic en un diente para seleccionar su condición. El estado inicial es "Sano" para todos los dientes.
                 </p>
             </div>
             <Odontogram 
-                // This assumes Odontogram has an `onChange` prop to lift its state up.
-                // You might need to modify the Odontogram component to support this.
-                // For now, we simulate this interaction.
-                // onConditionChange={(id, condition) => {
-                //     const newChart = { ...formData.dentalChart, [id]: condition };
-                //     handleOdontogramChange(newChart);
-                // }}
-                // initialData={formData.dentalChart}
+                onChange={handleOdontogramChange}
+                initialData={formData.dentalChart}
             />
              <div className="text-xs text-center text-muted-foreground pt-4">
                 El estado del odontograma se guardará junto con el resto del formulario.

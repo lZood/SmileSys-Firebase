@@ -9,8 +9,6 @@ import {
     Eye, 
     Calendar, 
     FileText, 
-    FilePlus, 
-    UserCog, 
     Trash2,
     MoreHorizontal
 } from "lucide-react";
@@ -45,43 +43,67 @@ import {
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 import { useRouter } from 'next/navigation';
+import { deletePatient, getPatients } from './actions';
+import { useToast } from '@/hooks/use-toast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
-// This type will eventually come from Supabase generated types
 export type Patient = {
   id: string;
-  name: string;
-  email: string;
-  phone: string;
-  lastVisit: string;
-  status: 'Active' | 'Inactive' | 'Pending' | 'Archived';
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  created_at: string;
+  status: string;
 };
 
-
-type PatientStatus = 'Active' | 'Inactive' | 'Pending' | 'Archived';
-
-const statusStyles: Record<PatientStatus, string> = {
+const statusStyles: Record<string, string> = {
     Active: "bg-green-100 text-green-800 border-green-200",
     Inactive: "bg-gray-100 text-gray-800 border-gray-200",
     Pending: "bg-yellow-100 text-yellow-800 border-yellow-200",
     Archived: "bg-red-100 text-red-800 border-red-200",
 };
 
-
 export default function PatientsPage() {
     const router = useRouter();
-    const [patients, setPatients] = React.useState<Patient[]>([]); // Data will be fetched from Supabase
+    const { toast } = useToast();
+    const [patients, setPatients] = React.useState<Patient[]>([]);
+    const [isLoading, setIsLoading] = React.useState(true);
     const [searchTerm, setSearchTerm] = React.useState('');
     const [isNewPatientModalOpen, setIsNewPatientModalOpen] = React.useState(false);
-    const [statusFilter, setStatusFilter] = React.useState<PatientStatus | 'all'>('all');
+    const [statusFilter, setStatusFilter] = React.useState<string>('all');
 
-    // TODO: Fetch patients from Supabase based on clinic_id
+    const fetchPatients = React.useCallback(async () => {
+        setIsLoading(true);
+        const fetchedPatients = await getPatients();
+        setPatients(fetchedPatients as Patient[]);
+        setIsLoading(false);
+    }, []);
 
-    const handleStatusFilterChange = (status: PatientStatus | 'all') => {
-        setStatusFilter(status === statusFilter ? 'all' : status);
+    React.useEffect(() => {
+        fetchPatients();
+    }, [fetchPatients]);
+
+    const handleFormClose = (wasSubmitted: boolean) => {
+        setIsNewPatientModalOpen(false);
+        if (wasSubmitted) {
+            fetchPatients();
+        }
+    };
+
+    const handleDelete = async (patientId: string) => {
+        const { error } = await deletePatient(patientId);
+        if (error) {
+            toast({ variant: 'destructive', title: 'Error', description: error });
+        } else {
+            toast({ title: 'Paciente Eliminado', description: 'El paciente ha sido eliminado exitosamente.' });
+            fetchPatients(); // Refetch patients after deletion
+        }
     };
 
     const filteredPatients = patients.filter(patient => {
-        const matchesSearch = patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        const fullName = `${patient.first_name} ${patient.last_name}`;
+        const matchesSearch = fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                               (patient.email && patient.email.toLowerCase().includes(searchTerm.toLowerCase()));
         const matchesStatus = statusFilter === 'all' || patient.status === statusFilter;
         return matchesSearch && matchesStatus;
@@ -89,14 +111,14 @@ export default function PatientsPage() {
 
   return (
     <DashboardLayout>
-
-        {isNewPatientModalOpen && <NewPatientForm onClose={() => setIsNewPatientModalOpen(false)} />}
+        {isNewPatientModalOpen && <NewPatientForm onClose={handleFormClose} />}
 
       <Card>
         <CardHeader>
             <div className="flex items-center justify-between gap-4">
                 <div>
                     <CardTitle>Pacientes</CardTitle>
+                    <CardDescription>Gestiona la lista de pacientes de tu clínica.</CardDescription>
                 </div>
                 <div className="flex-1 flex justify-end">
                      <Button size="sm" className="h-9 gap-2" onClick={() => setIsNewPatientModalOpen(true)}>
@@ -129,8 +151,6 @@ export default function PatientsPage() {
                         <DropdownMenuCheckboxItem checked={statusFilter === 'all'} onSelect={() => setStatusFilter('all')}>Todos</DropdownMenuCheckboxItem>
                         <DropdownMenuCheckboxItem checked={statusFilter === 'Active'} onSelect={() => setStatusFilter('Active')}>Activo</DropdownMenuCheckboxItem>
                         <DropdownMenuCheckboxItem checked={statusFilter === 'Inactive'} onSelect={() => setStatusFilter('Inactive')}>Inactivo</DropdownMenuCheckboxItem>
-                        <DropdownMenuCheckboxItem checked={statusFilter === 'Pending'} onSelect={() => setStatusFilter('Pending')}>Pendiente</DropdownMenuCheckboxItem>
-                        <DropdownMenuCheckboxItem checked={statusFilter === 'Archived'} onSelect={() => setStatusFilter('Archived')}>Archivado</DropdownMenuCheckboxItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
@@ -142,66 +162,74 @@ export default function PatientsPage() {
                 <TableHead>Nombre</TableHead>
                 <TableHead className="hidden lg:table-cell">Email</TableHead>
                 <TableHead className="hidden md:table-cell">Teléfono</TableHead>
-                <TableHead className="hidden lg:table-cell">Última Visita</TableHead>
+                <TableHead className="hidden lg:table-cell">Fecha de Registro</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead><span className="sr-only">Acciones</span></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredPatients.length > 0 ? filteredPatients.map((patient) => (
+              {isLoading ? (
+                <TableRow><TableCell colSpan={6} className="h-24 text-center">Cargando pacientes...</TableCell></TableRow>
+              ) : filteredPatients.length > 0 ? filteredPatients.map((patient) => (
                 <TableRow key={patient.id}>
                   <TableCell className="font-medium">
-                    <div className="hover:underline cursor-pointer" onClick={() => router.push(`/patients/${patient.id}`)}>{patient.name}</div>
-                    <div className="text-xs text-muted-foreground">ID: {patient.id}</div>
+                    <div className="hover:underline cursor-pointer" onClick={() => router.push(`/patients/${patient.id}`)}>{patient.first_name} {patient.last_name}</div>
+                    <div className="text-xs text-muted-foreground">ID: {patient.id.substring(0,8)}</div>
                   </TableCell>
-                   <TableCell className="hidden lg:table-cell">{patient.email}</TableCell>
+                   <TableCell className="hidden lg:table-cell">{patient.email || 'N/A'}</TableCell>
                   <TableCell className="hidden md:table-cell">
-                    {patient.phone}
+                    {patient.phone || 'N/A'}
                   </TableCell>
                   <TableCell className="hidden lg:table-cell">
-                    {patient.lastVisit}
+                    {new Date(patient.created_at).toLocaleDateString()}
                   </TableCell>
                    <TableCell>
-                    <Badge variant="outline" className={cn("capitalize", statusStyles[patient.status as PatientStatus])}>
-                      {patient.status.toLowerCase()}
+                    <Badge variant="outline" className={cn("capitalize", statusStyles[patient.status as keyof typeof statusStyles])}>
+                      {patient.status}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          aria-haspopup="true"
-                          size="icon"
-                          variant="ghost"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Toggle menu</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => router.push(`/patients/${patient.id}`)}>
-                            <Eye className="mr-2 h-4 w-4" /> Ver Detalles
-                        </DropdownMenuItem>
-                         <DropdownMenuItem>
-                            <Calendar className="mr-2 h-4 w-4" /> Citas
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                            <FileText className="mr-2 h-4 w-4" /> Pagos
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                             <FilePlus className="mr-2 h-4 w-4" /> Consentimiento
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                             <UserCog className="mr-2 h-4 w-4" /> Cambiar Estado
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-red-600">
-                             <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <AlertDialog>
+                        <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button aria-haspopup="true" size="icon" variant="ghost">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Toggle menu</span>
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => router.push(`/patients/${patient.id}`)}>
+                                <Eye className="mr-2 h-4 w-4" /> Ver Detalles
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                                <Calendar className="mr-2 h-4 w-4" /> Citas
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                                <FileText className="mr-2 h-4 w-4" /> Pagos
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <AlertDialogTrigger asChild>
+                                <DropdownMenuItem className="text-red-600">
+                                    <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                                </DropdownMenuItem>
+                            </AlertDialogTrigger>
+                        </DropdownMenuContent>
+                        </DropdownMenu>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                            <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Esta acción no se puede deshacer. Esto eliminará permanentemente al paciente y todos sus datos asociados.
+                            </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(patient.id)}>Continuar</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                   </TableCell>
                 </TableRow>
               )) : (
@@ -218,5 +246,3 @@ export default function PatientsPage() {
     </DashboardLayout>
   );
 }
-
-    
