@@ -8,48 +8,77 @@ import { notFound } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { FileText, Pencil, Trash2, ChevronLeft } from "lucide-react";
+import { FileText, Pencil, Trash2, ChevronLeft, Download } from "lucide-react";
 import { Odontogram } from "@/components/odontogram";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
 import { ConsentForm } from '@/components/consent-form';
-import { getPatientById } from '../actions';
+import { getPatientById, getConsentFormsForPatient } from '../actions';
 import { Skeleton } from '@/components/ui/skeleton';
+import { createClient } from '@/lib/supabase/client';
 
-// Define a more complete type based on the DB schema
 type Patient = {
   id: string;
   first_name: string;
   last_name: string;
   email: string | null;
   phone: string | null;
-  created_at: string; // Assuming last visit is creation date for now
+  created_at: string;
   status: string;
-  dental_chart: any; // The odontogram data
+  dental_chart: any;
+  clinic_id: string;
 };
 
+type ConsentDocument = {
+    id: string;
+    file_path: string;
+    created_at: string;
+};
 
 export default function PatientDetailPage({ params }: { params: { id: string } }) {
   const [patient, setPatient] = React.useState<Patient | null>(null);
+  const [consentForms, setConsentForms] = React.useState<ConsentDocument[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isConsentModalOpen, setIsConsentModalOpen] = React.useState(false);
+  const [consentFormsLoading, setConsentFormsLoading] = React.useState(true);
+  const supabase = createClient();
+
+  const fetchPatientData = React.useCallback(async () => {
+    setIsLoading(true);
+    const fetchedPatient = await getPatientById(params.id);
+    if (fetchedPatient) {
+      setPatient(fetchedPatient as Patient);
+    } else {
+      notFound();
+    }
+    setIsLoading(false);
+  }, [params.id]);
+
+  const fetchConsentForms = React.useCallback(async () => {
+    setConsentFormsLoading(true);
+    const forms = await getConsentFormsForPatient(params.id);
+    setConsentForms(forms as ConsentDocument[]);
+    setConsentFormsLoading(false);
+  }, [params.id]);
+
 
   React.useEffect(() => {
-    const fetchPatient = async () => {
-      setIsLoading(true);
-      const fetchedPatient = await getPatientById(params.id);
-      if (fetchedPatient) {
-        setPatient(fetchedPatient as Patient);
-      } else {
-        // Handle case where patient is not found
-        notFound();
-      }
-      setIsLoading(false);
-    };
-
-    fetchPatient();
-  }, [params.id]);
+    fetchPatientData();
+    fetchConsentForms();
+  }, [fetchPatientData, fetchConsentForms]);
   
+  const handleConsentModalClose = (wasSubmitted: boolean) => {
+      setIsConsentModalOpen(false);
+      if(wasSubmitted) {
+          fetchConsentForms(); // Refresh the list
+      }
+  }
+
+  const getPublicUrl = (filePath: string) => {
+    const { data } = supabase.storage.from('consent-forms').getPublicUrl(filePath);
+    return data.publicUrl;
+  }
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -99,8 +128,10 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
     <DashboardLayout>
        {isConsentModalOpen && (
           <ConsentForm 
-            patientName={patientFullName} 
-            onClose={() => setIsConsentModalOpen(false)}
+            patientId={patient.id}
+            patientName={patientFullName}
+            clinicId={patient.clinic_id} 
+            onClose={handleConsentModalClose}
           />
         )}
       <div className="mb-4">
@@ -158,7 +189,24 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
                  <Button className="w-full" onClick={() => setIsConsentModalOpen(true)}>
                     <FileText className="w-4 h-4 mr-2" /> Generar Nuevo Consentimiento
                  </Button>
-                 <div className="text-xs text-muted-foreground mt-2 text-center">No se encontraron consentimientos.</div>
+                  <div className="text-sm space-y-2 mt-4">
+                      {consentFormsLoading ? (
+                          <Skeleton className="h-8 w-full" />
+                      ) : consentForms.length > 0 ? (
+                          consentForms.map(form => (
+                              <div key={form.id} className="flex justify-between items-center p-2 rounded-md bg-muted">
+                                  <span>Consentimiento - {new Date(form.created_at).toLocaleDateString()}</span>
+                                   <Button asChild variant="ghost" size="icon">
+                                      <a href={getPublicUrl(form.file_path)} target="_blank" rel="noopener noreferrer">
+                                        <Download className="h-4 w-4" />
+                                      </a>
+                                  </Button>
+                              </div>
+                          ))
+                      ) : (
+                         <div className="text-xs text-muted-foreground mt-2 text-center">No se encontraron consentimientos.</div>
+                      )}
+                 </div>
               </CardContent>
             </Card>
         </div>

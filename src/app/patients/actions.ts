@@ -1,3 +1,4 @@
+
 'use server';
 
 import { createClient } from "@/lib/supabase/server";
@@ -6,7 +7,6 @@ import { revalidatePath } from "next/cache";
 export async function addPatient(formData: any) {
     const supabase = createClient();
     
-    // 1. Get current user's profile to find clinic_id
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
         return { error: 'No se pudo autenticar al usuario. Por favor, inicie sesión de nuevo.' };
@@ -111,4 +111,51 @@ export async function deletePatient(id: string) {
     
     revalidatePath('/patients');
     return { error: null };
+}
+
+export async function uploadConsentForm(patientId: string, clinicId: string, file: Blob, fileName: string) {
+    const supabase = createClient();
+    const filePath = `${clinicId}/${patientId}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+        .from('consent-forms')
+        .upload(filePath, file);
+
+    if (uploadError) {
+        console.error('Error uploading consent form:', uploadError);
+        return { error: `Error al subir el archivo: ${uploadError.message}` };
+    }
+
+    const { error: dbError } = await supabase
+        .from('consent_documents')
+        .insert({
+            patient_id: patientId,
+            clinic_id: clinicId,
+            file_path: filePath,
+        });
+    
+    if (dbError) {
+        console.error('Error saving consent document record:', dbError);
+        // Attempt to delete the orphaned file from storage
+        await supabase.storage.from('consent-forms').remove([filePath]);
+        return { error: `Error al guardar el registro del documento: ${dbError.message}` };
+    }
+
+    revalidatePath(`/patients/${patientId}`);
+    return { error: null };
+}
+
+export async function getConsentFormsForPatient(patientId: string) {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('consent_documents')
+        .select('id, file_path, created_at')
+        .eq('patient_id', patientId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching consent forms:', error);
+        return [];
+    }
+    return data;
 }
