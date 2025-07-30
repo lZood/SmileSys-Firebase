@@ -18,7 +18,6 @@ import {
   isBefore,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { appointments as initialAppointments, Appointment, patients } from '@/lib/data';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -33,6 +32,17 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+
+// Types will be adapted for Supabase
+export type Appointment = {
+  id: string;
+  patientName: string;
+  doctor: string;
+  service: string;
+  time: string;
+  date: string; // YYYY-MM-DD
+  status: 'Scheduled' | 'Completed' | 'Canceled' | 'In-progress';
+};
 
 const AppointmentForm = ({ 
   isOpen, 
@@ -106,7 +116,7 @@ const AppointmentForm = ({
                             list="patients-list"
                         />
                          <datalist id="patients-list">
-                            {patients.map(p => <option key={p.id} value={p.name} />)}
+                            {/* Patients list will be fetched from Supabase */}
                         </datalist>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -196,7 +206,7 @@ const AppointmentDetailsModal = ({
 
 export default function AppointmentsCalendarPage() {
   const [currentDate, setCurrentDate] = React.useState<Date | null>(null);
-  const [appointments, setAppointments] = React.useState<Appointment[]>(initialAppointments);
+  const [appointments, setAppointments] = React.useState<Appointment[]>([]); // Data will be fetched from Supabase
   const [isFormModalOpen, setIsFormModalOpen] = React.useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = React.useState(false);
   const [selectedDate, setSelectedDate] = React.useState<Date | null>(null);
@@ -207,6 +217,7 @@ export default function AppointmentsCalendarPage() {
     const now = new Date();
     setCurrentDate(now);
     setSelectedDate(now);
+    // TODO: Fetch appointments from Supabase for the current month
   }, []);
 
   if (!currentDate || !selectedDate) {
@@ -248,6 +259,7 @@ export default function AppointmentsCalendarPage() {
   };
   
   const handleAddAppointment = (newAppointmentData: Omit<Appointment, 'id' | 'status'>) => {
+        // TODO: Implement Supabase insert
         const newAppointment: Appointment = {
             id: `APP${String(appointments.length + 1).padStart(3, '0')}`,
             ...newAppointmentData,
@@ -269,6 +281,7 @@ export default function AppointmentsCalendarPage() {
   }
   
   const handleDeleteAppointment = (id: string) => {
+      // TODO: Implement Supabase delete
       setAppointments(prev => prev.filter(app => app.id !== id));
   }
 
@@ -397,5 +410,3 @@ export default function AppointmentsCalendarPage() {
     </div>
   );
 }
-
-    

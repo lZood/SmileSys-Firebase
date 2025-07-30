@@ -21,13 +21,25 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { inventoryItems as initialInventory, InventoryItem } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+
+// Type will be adapted for Supabase
+export type InventoryItem = {
+    id: string;
+    name: string;
+    category: string;
+    stock: number;
+    minStock: number;
+    price: number;
+    status: 'In Stock' | 'Low Stock' | 'Out of Stock';
+    provider: string;
+    lastOrdered: string; // YYYY-MM-DD
+};
 
 const getStatusClass = (status: string) => {
     switch (status) {
@@ -149,10 +161,12 @@ const InventoryActionsModal = ({
 
 export default function InventoryPage() {
     const { toast } = useToast();
-    const [inventory, setInventory] = React.useState<InventoryItem[]>(initialInventory);
+    const [inventory, setInventory] = React.useState<InventoryItem[]>([]); // Data will be fetched from Supabase
     const [selectedItem, setSelectedItem] = React.useState<InventoryItem | null>(null);
     const [isNewItemModalOpen, setIsNewItemModalOpen] = React.useState(false);
     const [isActionsModalOpen, setIsActionsModalOpen] = React.useState(false);
+
+    // TODO: Fetch inventory from Supabase
 
     const lowStockItems = inventory.filter(item => item.status === 'Low Stock' || item.status === 'Out of Stock');
 
@@ -166,6 +180,7 @@ export default function InventoryPage() {
             status = 'In Stock';
         }
 
+        // TODO: Implement Supabase insert
         const newItem: InventoryItem = {
             id: `INV${String(inventory.length + 1).padStart(3, '0')}`,
             ...newItemData,
@@ -177,6 +192,7 @@ export default function InventoryPage() {
     };
 
     const handleUpdateStock = (itemId: string, amount: number) => {
+        // TODO: Implement Supabase update
         setInventory(prev => prev.map(item => {
             if (item.id === itemId) {
                 const newStock = Math.max(0, item.stock + amount);

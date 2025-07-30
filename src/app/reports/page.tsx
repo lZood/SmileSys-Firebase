@@ -23,13 +23,21 @@ import {
   LineChart,
   Line,
 } from 'recharts';
-import { payments, quotes, appointmentsByDoctorData, monthlyRevenueData, newPatientsData } from '@/lib/data';
 import { DollarSign, TrendingUp, Users, FileCheck2 } from 'lucide-react';
+
+// All data will now be fetched from Supabase
+const payments: any[] = [];
+const quotes: any[] = [];
+const appointmentsByDoctorData: any[] = [];
+const monthlyRevenueData: any[] = [];
+const newPatientsData: any[] = [];
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
 export default function ReportsPage() {
     // --- Data Processing ---
+    // This logic remains, but will operate on data fetched from Supabase
+    // TODO: Fetch all report data from Supabase
 
     // 1. Revenue by Treatment Type
     const revenueByTreatment = payments
@@ -58,9 +66,9 @@ export default function ReportsPage() {
     ];
 
     // 3. Monthly Revenue
-    const currentMonthRevenue = monthlyRevenueData[monthlyRevenueData.length - 1].revenue;
-    const previousMonthRevenue = monthlyRevenueData[monthlyRevenueData.length - 2].revenue;
-    const revenueChange = ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100;
+    const currentMonthRevenue = monthlyRevenueData.length > 0 ? monthlyRevenueData[monthlyRevenueData.length - 1].revenue : 0;
+    const previousMonthRevenue = monthlyRevenueData.length > 1 ? monthlyRevenueData[monthlyRevenueData.length - 2].revenue : 0;
+    const revenueChange = previousMonthRevenue > 0 ? ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100 : 0;
 
 
     return (
@@ -103,7 +111,7 @@ export default function ReportsPage() {
                         <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">+{newPatientsData[newPatientsData.length - 1].count}</div>
+                        <div className="text-2xl font-bold">+{newPatientsData.length > 0 ? newPatientsData[newPatientsData.length - 1].count : 0}</div>
                         <p className="text-xs text-muted-foreground">Nuevos pacientes este mes.</p>
                     </CardContent>
                 </Card>
@@ -113,7 +121,7 @@ export default function ReportsPage() {
                         <TrendingUp className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{appointmentsByDoctorData.reduce((prev, current) => (prev.appointments > current.appointments) ? prev : current).doctor}</div>
+                        <div className="text-2xl font-bold">{appointmentsByDoctorData.length > 0 ? appointmentsByDoctorData.reduce((prev, current) => (prev.appointments > current.appointments) ? prev : current).doctor : 'N/A'}</div>
                         <p className="text-xs text-muted-foreground">
                             Mayor número de citas.
                         </p>

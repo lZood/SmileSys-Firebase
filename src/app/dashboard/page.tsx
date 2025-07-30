@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -6,8 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
-import { appointments, patients, treatmentStatsData } from '@/lib/data';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
+
+// Data will be fetched from Supabase
+const treatmentStatsData: any[] = [];
+const appointments: any[] = [];
+const patients: any[] = [];
+
 
 export default function DashboardPage() {
   const [today, setToday] = React.useState(new Date());
@@ -18,6 +24,7 @@ export default function DashboardPage() {
 
   React.useEffect(() => {
     setToday(new Date());
+    // TODO: Fetch all dashboard data from Supabase
   }, []);
 
   return (
@@ -31,7 +38,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{patients.length}</div>
-              <p className="text-xs text-muted-foreground">+2 since last month</p>
+              <p className="text-xs text-muted-foreground">All registered patients</p>
             </CardContent>
           </Card>
           <Card>
@@ -50,8 +57,8 @@ export default function DashboardPage() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">$12,234.56</div>
-              <p className="text-xs text-muted-foreground">+19% from last month</p>
+              <div className="text-2xl font-bold">$0.00</div>
+              <p className="text-xs text-muted-foreground">Based on completed payments</p>
             </CardContent>
           </Card>
            <Card>
@@ -60,7 +67,7 @@ export default function DashboardPage() {
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">2</div>
+              <div className="text-2xl font-bold">0</div>
               <p className="text-xs text-muted-foreground">Items with low stock</p>
             </CardContent>
           </Card>
@@ -101,7 +108,7 @@ export default function DashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {appointments.slice(0, 5).map((appointment) => (
+                  {appointments.length > 0 ? appointments.slice(0, 5).map((appointment) => (
                     <TableRow key={appointment.id}>
                       <TableCell>
                         <div className="font-medium">{appointment.patientName}</div>
@@ -125,7 +132,11 @@ export default function DashboardPage() {
                         </Badge>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )) : (
+                    <TableRow>
+                        <TableCell colSpan={4} className="text-center h-24">No appointments today.</TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>

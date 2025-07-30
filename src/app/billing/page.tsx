@@ -33,10 +33,34 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { payments as initialPayments, patients, Payment, quotes as initialQuotes, Quote, QuoteItem } from '@/lib/data';
 import { DollarSign, Receipt, Hourglass, PlusCircle, MoreHorizontal, FileText, Trash2 } from 'lucide-react';
 import { getPaymentMethodIcon } from '@/components/icons/payment-method-icons';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+
+// Types will be adapted for Supabase
+export type Payment = {
+    id: string;
+    invoiceNumber: string;
+    patientId: string;
+    patientName: string;
+    amount: number;
+    date: string; // YYYY-MM-DD
+    status: 'Paid' | 'Pending' | 'Canceled';
+    method: 'Card' | 'Cash' | 'Transfer';
+    concept: string;
+};
+export type QuoteItem = { description: string; cost: number; };
+export type Quote = {
+    id: string;
+    patientId: string;
+    patientName: string;
+    items: QuoteItem[];
+    total: number;
+    status: 'Draft' | 'Presented' | 'Accepted' | 'Expired';
+    createdAt: string; // YYYY-MM-DD
+    expiresAt: string; // YYYY-MM-DD
+};
+
 
 const getStatusClass = (status: Payment['status'] | Quote['status']) => {
   switch (status) {
@@ -81,12 +105,12 @@ const NewPaymentForm = ({
       return;
     }
 
-    const patient = patients.find(p => p.id === patientId);
-    if (!patient) return;
+    // This part will need to fetch patients from Supabase
+    const patientName = "Paciente de Ejemplo"; // Placeholder
 
     onAddPayment({
       patientId,
-      patientName: patient.name,
+      patientName: patientName,
       amount: parseFloat(amount),
       concept,
       method: method as Payment['method'],
@@ -113,9 +137,7 @@ const NewPaymentForm = ({
                     <SelectValue placeholder="Seleccionar un paciente" />
                 </SelectTrigger>
                 <SelectContent>
-                    {patients.map(p => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
+                    {/* Patients will be fetched from Supabase */}
                 </SelectContent>
             </Select>
           </div>
@@ -180,12 +202,11 @@ const NewQuoteForm = ({
             return;
         }
 
-        const patient = patients.find(p => p.id === patientId);
-        if (!patient) return;
+        const patientName = "Paciente de Ejemplo"; // Placeholder
 
         onAddQuote({
             patientId,
-            patientName: patient.name,
+            patientName: patientName,
             items,
             status: 'Draft',
         });
@@ -205,7 +226,7 @@ const NewQuoteForm = ({
                         <Label htmlFor="patient-quote">Paciente</Label>
                         <Select onValueChange={setPatientId}>
                             <SelectTrigger id="patient-quote"><SelectValue placeholder="Seleccionar un paciente" /></SelectTrigger>
-                            <SelectContent>{patients.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                            <SelectContent>{/* Patients will be fetched from Supabase */}</SelectContent>
                         </Select>
                     </div>
 
@@ -239,10 +260,12 @@ const NewQuoteForm = ({
 
 export default function BillingPage() {
     const { toast } = useToast();
-    const [payments, setPayments] = React.useState<Payment[]>(initialPayments);
-    const [quotes, setQuotes] = React.useState<Quote[]>(initialQuotes);
+    const [payments, setPayments] = React.useState<Payment[]>([]); // Data will be fetched from Supabase
+    const [quotes, setQuotes] = React.useState<Quote[]>([]); // Data will be fetched from Supabase
     const [isNewPaymentModalOpen, setIsNewPaymentModalOpen] = React.useState(false);
     const [isNewQuoteModalOpen, setIsNewQuoteModalOpen] = React.useState(false);
+
+    // TODO: Fetch data from Supabase
 
     // Stats calculation
     const today = new Date();
@@ -253,6 +276,7 @@ export default function BillingPage() {
     const activeQuotes = quotes.filter(q => q.status === 'Presented' || q.status === 'Draft').length;
 
     const handleAddPayment = (newPaymentData: Omit<Payment, 'id' | 'invoiceNumber'>) => {
+        // TODO: Implement Supabase insert
         const newPayment: Payment = {
             id: `PAY${String(payments.length + 1).padStart(3, '0')}`,
             invoiceNumber: `INV-${new Date().getTime()}`,
@@ -266,7 +290,8 @@ export default function BillingPage() {
         const now = new Date();
         const expires = new Date();
         expires.setMonth(expires.getMonth() + 1);
-
+        
+        // TODO: Implement Supabase insert
         const newQuote: Quote = {
             id: `QUO${String(quotes.length + 1).padStart(3, '0')}`,
             ...newQuoteData,
@@ -429,4 +454,3 @@ export default function BillingPage() {
     </div>
   );
 }
-

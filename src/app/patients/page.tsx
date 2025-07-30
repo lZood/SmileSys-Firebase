@@ -33,7 +33,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { patients as initialPatients, Patient } from "@/lib/data";
 import { cn } from '@/lib/utils';
 import { NewPatientForm } from '@/components/new-patient-form';
 import {
@@ -47,6 +46,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useRouter } from 'next/navigation';
 
+// This type will eventually come from Supabase generated types
+export type Patient = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  lastVisit: string;
+  status: 'Active' | 'Inactive' | 'Pending' | 'Archived';
+};
+
+
 type PatientStatus = 'Active' | 'Inactive' | 'Pending' | 'Archived';
 
 const statusStyles: Record<PatientStatus, string> = {
@@ -59,15 +69,12 @@ const statusStyles: Record<PatientStatus, string> = {
 
 export default function PatientsPage() {
     const router = useRouter();
-    const [patients, setPatients] = React.useState<(Patient & { status: PatientStatus })[]>(() => 
-        initialPatients.map((p, i) => ({
-            ...p,
-            status: i % 4 === 0 ? 'Pending' : i % 4 === 1 ? 'Active' : i % 4 === 2 ? 'Inactive' : 'Archived'
-        }))
-    );
+    const [patients, setPatients] = React.useState<Patient[]>([]); // Data will be fetched from Supabase
     const [searchTerm, setSearchTerm] = React.useState('');
     const [isNewPatientModalOpen, setIsNewPatientModalOpen] = React.useState(false);
     const [statusFilter, setStatusFilter] = React.useState<PatientStatus | 'all'>('all');
+
+    // TODO: Fetch patients from Supabase based on clinic_id
 
     const handleStatusFilterChange = (status: PatientStatus | 'all') => {
         setStatusFilter(status === statusFilter ? 'all' : status);
@@ -75,7 +82,7 @@ export default function PatientsPage() {
 
     const filteredPatients = patients.filter(patient => {
         const matchesSearch = patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              patient.email.toLowerCase().includes(searchTerm.toLowerCase());
+                              (patient.email && patient.email.toLowerCase().includes(searchTerm.toLowerCase()));
         const matchesStatus = statusFilter === 'all' || patient.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
@@ -155,7 +162,7 @@ export default function PatientsPage() {
                     {patient.lastVisit}
                   </TableCell>
                    <TableCell>
-                    <Badge variant="outline" className={cn("capitalize", statusStyles[patient.status])}>
+                    <Badge variant="outline" className={cn("capitalize", statusStyles[patient.status as PatientStatus])}>
                       {patient.status.toLowerCase()}
                     </Badge>
                   </TableCell>
@@ -200,7 +207,7 @@ export default function PatientsPage() {
               )) : (
                 <TableRow>
                   <TableCell colSpan={6} className="h-24 text-center">
-                    No se encontraron pacientes.
+                    No se encontraron pacientes. Agrega tu primer paciente para empezar.
                   </TableCell>
                 </TableRow>
               )}

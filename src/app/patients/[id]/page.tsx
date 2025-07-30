@@ -4,7 +4,6 @@
 import * as React from 'react';
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { patients } from "@/lib/data";
 import { notFound } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -14,13 +13,34 @@ import { Odontogram } from "@/components/odontogram";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
 import { ConsentForm } from '@/components/consent-form';
+import { Patient } from '../page'; // Re-using type from the list page for now
 
 export default function PatientDetailPage({ params }: { params: { id: string } }) {
-  const patient = patients.find(p => p.id === params.id.toUpperCase());
+  // TODO: Fetch patient data from Supabase using the ID
+  const [patient, setPatient] = React.useState<Patient | null>(null);
   const [isConsentModalOpen, setIsConsentModalOpen] = React.useState(false);
 
+  React.useEffect(() => {
+    // This is a placeholder. In a real app, you would fetch this from Supabase.
+    // const fetchedPatient = await supabase.from('patients').select('*').eq('id', params.id).single();
+    // setPatient(fetchedPatient.data);
+    if (!patient) {
+        // For now, let's create a mock patient to avoid errors
+        setPatient({
+            id: params.id.toUpperCase(),
+            name: 'Paciente de Ejemplo',
+            email: 'test@example.com',
+            phone: '123-456-7890',
+            lastVisit: new Date().toISOString().split('T')[0],
+            status: 'Active',
+        });
+    }
+  }, [params.id, patient]);
+
   if (!patient) {
-    notFound();
+    // We can show a loading state here
+    return <DashboardLayout><div>Loading patient data...</div></DashboardLayout>;
+    // Or, if fetching fails, call notFound();
   }
 
   return (
@@ -81,7 +101,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
               <CardHeader>
                 <CardTitle>Digital Consents</CardTitle>
                  <CardDescription>Manage informed consent forms.</CardDescription>
-              </CardHeader>
+              </Header>
               <CardContent>
                  <Button className="w-full" onClick={() => setIsConsentModalOpen(true)}>
                     <FileText className="w-4 h-4 mr-2" /> Generate New Consent

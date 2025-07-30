@@ -6,11 +6,25 @@ import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { appointments, Appointment } from "@/lib/data";
 import { cn } from "@/lib/utils";
+
+// This type will eventually come from Supabase generated types
+export type Appointment = {
+  id: string;
+  patientName: string;
+  doctor: string;
+  service: string;
+  time: string;
+  date: string; // YYYY-MM-DD
+  status: 'Scheduled' | 'Completed' | 'Canceled' | 'In-progress';
+};
 
 export default function CalendarPage() {
   const [date, setDate] = React.useState<Date | undefined>(new Date());
+  // Appointments will be fetched from Supabase
+  const [appointments, setAppointments] = React.useState<Appointment[]>([]);
+
+  // TODO: Fetch appointments from Supabase
 
   const appointmentsOnSelectedDay = date
     ? appointments.filter(
@@ -21,7 +35,7 @@ export default function CalendarPage() {
 
   const appointmentDates = React.useMemo(() => 
     appointments.map(app => new Date(app.date)), 
-  []);
+  [appointments]);
 
   return (
     <DashboardLayout>
