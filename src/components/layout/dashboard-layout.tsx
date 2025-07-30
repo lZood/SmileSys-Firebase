@@ -56,6 +56,15 @@ const bottomNavItems = [{ href: '/settings', icon: Settings, label: 'Ajustes' }]
 
 const ThemeSwitcher = ({ inMobileNav = false }: { inMobileNav?: boolean }) => {
     const { theme, setTheme } = useTheme();
+    const [isMounted, setIsMounted] = React.useState(false);
+    
+    React.useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    if (!isMounted) {
+        return null;
+    }
 
     if (inMobileNav) {
         return (
@@ -318,4 +327,3 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   );
 }
 
-    
