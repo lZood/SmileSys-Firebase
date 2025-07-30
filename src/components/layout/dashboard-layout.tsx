@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Bell,
   Calendar,
@@ -38,6 +38,7 @@ import { cn } from '@/lib/utils';
 import { SmileSysLogo } from '../icons/smilesys-logo';
 import { useTheme } from 'next-themes';
 import { Switch } from '../ui/switch';
+import { createClient } from '@/lib/supabase/client';
 
 type DashboardLayoutProps = {
   children: React.ReactNode;
@@ -63,7 +64,7 @@ const ThemeSwitcher = ({ inMobileNav = false }: { inMobileNav?: boolean }) => {
     }, []);
 
     if (!isMounted) {
-        return null;
+        return null; // Don't render on server to avoid hydration mismatch
     }
 
     if (inMobileNav) {
@@ -103,12 +104,19 @@ const ThemeSwitcher = ({ inMobileNav = false }: { inMobileNav?: boolean }) => {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isExpanded, setIsExpanded] = React.useState(true);
 
   const isNavItemActive = (href: string) => {
     return pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
   };
   
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/');
+  };
+
   const SidebarNav = ({ mobile = false }: { mobile?: boolean }) => {
      const navClass = mobile ? 'flex flex-col gap-2 text-lg font-medium' : 'flex flex-col items-start gap-2 px-2 py-4';
 
@@ -198,15 +206,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
            
 
             {mobile ? (
-               <Link href="/" className="flex items-center gap-4 px-2.5 text-red-500 hover:text-red-600">
+               <button onClick={handleSignOut} className="flex items-center gap-4 px-2.5 text-red-500 hover:text-red-600 w-full">
                   <LogOut className="h-5 w-5" />
                   Cerrar Sesión
-               </Link>
+               </button>
             ) : (
                <Tooltip>
                   <TooltipTrigger asChild>
-                     <Link
-                      href="/"
+                     <button
+                      onClick={handleSignOut}
                       className={cn(
                         'flex h-9 w-full items-center justify-start gap-3 rounded-lg text-red-500 hover:text-red-600 transition-colors md:h-8',
                          isExpanded ? 'px-3' : 'w-9 justify-center'
@@ -214,7 +222,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     >
                       <LogOut className="h-5 w-5" />
                       <span className={cn("sr-only", isExpanded && "not-sr-only")}>Cerrar Sesión</span>
-                    </Link>
+                    </button>
                   </TooltipTrigger>
                    <TooltipContent side="right" hidden={isExpanded}>Cerrar Sesión</TooltipContent>
                 </Tooltip>
@@ -308,13 +316,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem asChild>
                 <Link href="/settings">Ajustes</Link>
               </DropdownMenuItem>
               <DropdownMenuItem>Soporte</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <Link href="/">Cerrar Sesión</Link>
+              <DropdownMenuItem onClick={handleSignOut}>
+                Cerrar Sesión
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -326,4 +334,3 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     </div>
   );
 }
-
