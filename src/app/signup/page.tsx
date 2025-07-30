@@ -1,21 +1,73 @@
+
 'use client';
 
-import Link from 'next/link';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ToothIcon } from '@/components/icons/tooth-icon';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { createClient } from '@/lib/supabase/client';
+import { activateInvitedUser } from '../admin/actions';
+import { User } from '@supabase/supabase-js';
 
 export default function SignupPage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const [user, setUser] = useState<User | null>(null);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const supabase = createClient();
 
-  const handleSignup = (event: React.FormEvent) => {
+  useEffect(() => {
+    const checkUser = async () => {
+        const { data, error } = await supabase.auth.getUser();
+        if (error || !data.user) {
+            toast({ variant: 'destructive', title: 'Invalid Invitation', description: 'No user session found. Please use the invitation link from your email.' });
+            router.push('/');
+        } else {
+            setUser(data.user);
+        }
+    };
+    checkUser();
+  }, [router, supabase, toast]);
+
+  const handleSignup = async (event: React.FormEvent) => {
     event.preventDefault();
-    router.push('/dashboard');
+    setIsLoading(true);
+
+    const { error } = await activateInvitedUser({
+        firstName,
+        lastName,
+        password,
+    });
+
+    if (error) {
+        toast({
+            variant: 'destructive',
+            title: 'Error Activating Account',
+            description: error,
+        });
+    } else {
+        toast({
+            title: 'Account Activated!',
+            description: 'You can now sign in with your new credentials.',
+        });
+        // Sign out the temporary session before redirecting to login
+        await supabase.auth.signOut();
+        router.push('/');
+    }
+    
+    setIsLoading(false);
   };
+
+  if (!user) {
+    return <div>Loading...</div>; // Or a proper loading skeleton
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">
@@ -24,46 +76,33 @@ export default function SignupPage() {
           <div className="flex justify-center items-center mb-4">
             <ToothIcon className="h-10 w-10 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-bold font-headline">Create your SmileSys Account</CardTitle>
-          <CardDescription>Join us to streamline your clinic's operations.</CardDescription>
+          <CardTitle className="text-2xl font-bold font-headline">Complete your SmileSys Account</CardTitle>
+          <CardDescription>Welcome! Set your password to get started.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignup} className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="full-name">Full Name</Label>
-              <Input id="full-name" placeholder="John Doe" required />
-            </div>
-            <div className="grid gap-2">
+             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="m@example.com" required />
+              <Input id="email" type="email" value={user.email} disabled />
+            </div>
+             <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                <Label htmlFor="firstName">First Name</Label>
+                <Input id="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                </div>
+                <div className="grid gap-2">
+                <Label htmlFor="lastName">Last Name</Label>
+                <Input id="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+                </div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="role">Role</Label>
-              <Select required>
-                <SelectTrigger id="role">
-                  <SelectValue placeholder="Select your role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="doctor">Doctor</SelectItem>
-                  <SelectItem value="staff">Staff</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="password">Create a Password</Label>
+              <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" required />
-            </div>
-            <Button type="submit" className="w-full">
-              Create Account
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? 'Activating Account...' : 'Activate and Sign In'}
             </Button>
           </form>
-          <div className="mt-4 text-center text-sm">
-            Already have an account?{' '}
-            <Link href="/" className="underline">
-              Sign in
-            </Link>
-          </div>
         </CardContent>
       </Card>
     </div>

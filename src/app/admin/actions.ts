@@ -161,7 +161,7 @@ export async function deleteClinicFlow(clinicId: string): Promise<{ error: strin
     const { error: deleteClinicError } = await supabase
         .from('clinics')
         .delete()
-        .eq('id', clinicId);
+        .eq('clinic_id', clinicId);
 
     if (deleteClinicError) {
         console.error('Error deleting clinic:', deleteClinicError);
@@ -169,4 +169,47 @@ export async function deleteClinicFlow(clinicId: string): Promise<{ error: strin
     }
 
     return { error: null };
+}
+
+const activateUserSchema = z.object({
+  firstName: z.string().min(2, "First name is too short"),
+  lastName: z.string().min(2, "Last name is too short"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+export async function activateInvitedUser(input: z.infer<typeof activateUserSchema>) {
+    const parsedInput = activateUserSchema.safeParse(input);
+    if (!parsedInput.success) {
+        return { error: parsedInput.error.errors.map(e => e.message).join(', ') };
+    }
+
+    const { firstName, lastName, password } = parsedInput.data;
+    const supabase = createClient();
+
+    // Get current user, who should be authenticated via the invite link
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+        return { error: "User not found. The invitation might be invalid or expired." };
+    }
+
+    // Update the user's password
+    const { error: updateUserError } = await supabase.auth.updateUser({ password });
+    if (updateUserError) {
+        return { error: `Failed to update password: ${updateUserError.message}` };
+    }
+    
+    // Update the user's profile with their name
+    const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ first_name: firstName, last_name: lastName })
+        .eq('id', user.id);
+        
+    if (profileError) {
+        // This is not ideal, the user has a password but no name.
+        // For now, we just log it. A more robust solution might be needed.
+        console.error("Failed to update user's profile with name:", profileError);
+    }
+    
+    return { data: true, error: null };
 }

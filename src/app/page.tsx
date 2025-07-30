@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,26 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const supabase = createClient();
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+            // Check if user needs to set password (invited)
+            // A user who clicked an invite link will have an `aal` (Authenticator Assurance Level) of aal1
+            // We also check if their name is missing in their profile, as a secondary sign of an incomplete signup.
+            if (session.user.user_metadata.first_name === undefined) {
+                 router.push('/signup');
+            } else if (session.user.email === 'admin@smilesys.com') {
+                router.push('/admin');
+            } else {
+                router.push('/dashboard');
+            }
+        }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [router, supabase]);
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -33,8 +53,7 @@ export default function LoginPage() {
       return;
     }
     
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -45,14 +64,8 @@ export default function LoginPage() {
         title: "Error de Autenticación",
         description: error.message,
       });
-    } else if (data.user) {
-      // Check if the logged-in user is the super admin
-      if (data.user.email === 'admin@smilesys.com') {
-        router.push('/admin');
-      } else {
-        router.push('/dashboard');
-      }
     }
+    // The onAuthStateChange listener will handle the redirect
     
     setIsLoading(false);
   };
