@@ -23,10 +23,9 @@ export default function LoginPage() {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' && session) {
-            // Check if user needs to set password (invited)
-            // A user who clicked an invite link will have an `aal` (Authenticator Assurance Level) of aal1
-            // We also check if their name is missing in their profile, as a secondary sign of an incomplete signup.
-            if (session.user.user_metadata.first_name === undefined) {
+            // A user who clicked an invite link will have an `aal` of 'aal1'.
+            // A user who signed in with a password will have an `aal` of 'aal2'.
+            if (session.user.aud === 'authenticated' && session.user.aal === 'aal1') {
                  router.push('/signup');
             } else if (session.user.email === 'admin@smilesys.com') {
                 router.push('/admin');
