@@ -127,3 +127,46 @@ export async function getClinicsWithAdmin(): Promise<{ data: ClinicWithAdmin[] |
 
     return { data: clinicsWithAdmins, error: null };
 }
+
+export async function deleteClinicFlow(clinicId: string): Promise<{ error: string | null }> {
+    const supabase = createClient();
+
+    // Step 1: Get all user profiles associated with the clinic
+    const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('clinic_id', clinicId);
+
+    if (profilesError) {
+        console.error('Error fetching profiles for deletion:', profilesError);
+        return { error: 'Could not fetch users to delete.' };
+    }
+
+    // Step 2: Delete each user from Supabase Auth
+    if (profiles && profiles.length > 0) {
+        for (const profile of profiles) {
+            const { error: deleteUserError } = await supabase.auth.admin.deleteUser(profile.id);
+            if (deleteUserError) {
+                // If a user can't be deleted, we stop and report the error.
+                // Note: The profiles table has an ON DELETE CASCADE for auth.users,
+                // so we don't strictly need to delete profiles manually if auth deletion succeeds.
+                console.error(`Error deleting user ${profile.id} from Auth:`, deleteUserError);
+                return { error: `Failed to delete user ${profile.id}: ${deleteUserError.message}` };
+            }
+        }
+    }
+
+    // Step 3: Delete the clinic itself. Associated profiles should be deleted by cascade if not already handled.
+    // Other related data (patients, appointments) would need to be handled here too if not using db-level cascades.
+    const { error: deleteClinicError } = await supabase
+        .from('clinics')
+        .delete()
+        .eq('id', clinicId);
+
+    if (deleteClinicError) {
+        console.error('Error deleting clinic:', deleteClinicError);
+        return { error: 'Failed to delete the clinic.' };
+    }
+
+    return { error: null };
+}
