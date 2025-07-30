@@ -23,15 +23,7 @@ export default function LoginPage() {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' && session) {
-            // An invited user will have a 'role' in their user_metadata from the invite.
-            // A regular user signing in with a password will not.
-            if (session.user.user_metadata?.role) {
-                 router.push('/signup');
-            } else if (session.user.email === 'admin@smilesys.com') {
-                router.push('/admin');
-            } else {
-                router.push('/dashboard');
-            }
+            router.push('/dashboard');
         }
     });
 
@@ -63,6 +55,8 @@ export default function LoginPage() {
         title: "Error de Autenticación",
         description: error.message,
       });
+    } else {
+        router.push('/dashboard');
     }
     // The onAuthStateChange listener will handle the redirect
     
@@ -98,6 +92,12 @@ export default function LoginPage() {
               {isLoading ? "Signing In..." : "Sign In"}
             </Button>
           </form>
+           <div className="mt-4 text-center text-sm">
+            Don't have an account?{' '}
+            <Link href="/signup" className="underline">
+              Sign up
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>
