@@ -159,3 +159,5 @@ export async function getConsentFormsForPatient(patientId: string) {
     }
     return data;
 }
+
+    

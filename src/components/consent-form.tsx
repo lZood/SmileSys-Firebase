@@ -12,7 +12,6 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { useToast } from '@/hooks/use-toast';
 import { uploadConsentForm } from '@/app/patients/actions';
-import { createClient } from '@/lib/supabase/client';
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -165,3 +164,5 @@ export const ConsentForm = ({ patientId, patientName, clinicId, onClose }: Conse
         </Dialog>
     );
 };
+
+    

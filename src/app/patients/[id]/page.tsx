@@ -256,3 +256,5 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
     </DashboardLayout>
   );
 }
+
+    
