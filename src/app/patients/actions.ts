@@ -115,6 +115,22 @@ export async function deletePatient(id: string) {
 
 export async function uploadConsentForm(patientId: string, clinicId: string, file: Blob, fileName: string) {
     const supabase = createClient();
+
+    // Server-side validation: ensure the user belongs to the clinic they are uploading for
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return { error: 'Usuario no autenticado.' };
+    }
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('clinic_id')
+        .eq('id', user.id)
+        .single();
+
+    if (!profile || profile.clinic_id !== clinicId) {
+        return { error: 'No tienes permiso para realizar esta acción en esta clínica.' };
+    }
+    
     const filePath = `${clinicId}/${patientId}/${fileName}`;
 
     const { error: uploadError } = await supabase.storage
