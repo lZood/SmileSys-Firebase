@@ -23,7 +23,7 @@ export default function LoginPage() {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
-        // If user is invited, their user_metadata will have a 'role'
+        // If user is invited, their user_metadata will have a 'role'.
         // This is a good indicator they haven't set their password yet.
         if (session.user?.user_metadata?.role) {
           router.push('/signup');
@@ -107,5 +107,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
-    
