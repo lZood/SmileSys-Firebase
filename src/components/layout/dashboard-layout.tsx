@@ -45,14 +45,14 @@ type DashboardLayoutProps = {
 
 const navItems = [
   { href: '/dashboard', icon: Home, label: 'Dashboard' },
-  { href: '/patients', icon: Users, label: 'Patients' },
-  { href: '/appointments', icon: Calendar, label: 'Appointments' },
-  { href: '/inventory', icon: Package, label: 'Inventory' },
-  { href: '/billing', icon: CreditCard, label: 'Billing' },
-  { href: '/reports', icon: LineChart, label: 'Reports' },
+  { href: '/patients', icon: Users, label: 'Pacientes' },
+  { href: '/appointments', icon: Calendar, label: 'Citas' },
+  { href: '/inventory', icon: Package, label: 'Inventario' },
+  { href: '/billing', icon: CreditCard, label: 'Facturación' },
+  { href: '/reports', icon: LineChart, label: 'Reportes' },
 ];
 
-const bottomNavItems = [{ href: '/settings', icon: Settings, label: 'Settings' }];
+const bottomNavItems = [{ href: '/settings', icon: Settings, label: 'Ajustes' }];
 
 const ThemeSwitcher = ({ inMobileNav = false }: { inMobileNav?: boolean }) => {
     const { theme, setTheme } = useTheme();
@@ -62,12 +62,12 @@ const ThemeSwitcher = ({ inMobileNav = false }: { inMobileNav?: boolean }) => {
             <div className="flex items-center justify-between gap-4 px-2.5 text-muted-foreground hover:text-foreground">
                 <div className="flex items-center gap-4">
                     <Sun className="h-5 w-5" />
-                    <span>Light / Dark</span>
+                    <span>Claro / Oscuro</span>
                 </div>
                 <Switch
                     checked={theme === 'dark'}
                     onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
-                    aria-label="Toggle theme"
+                    aria-label="Cambiar tema"
                 />
             </div>
         )
@@ -81,12 +81,12 @@ const ThemeSwitcher = ({ inMobileNav = false }: { inMobileNav?: boolean }) => {
                      <Switch
                         checked={theme === 'dark'}
                         onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
-                        aria-label="Toggle theme"
+                        aria-label="Cambiar tema"
                     />
                     <Moon className="h-5 w-5" />
                 </div>
             </TooltipTrigger>
-            <TooltipContent side="right">Toggle Theme</TooltipContent>
+            <TooltipContent side="right">Cambiar Tema</TooltipContent>
         </Tooltip>
     );
 };
@@ -150,6 +150,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     return (
       <TooltipProvider>
         <div className={cn(navClass, !mobile && !isExpanded && "items-center")}>
+            <div className="pt-2 w-full">
+                {mobile ? <ThemeSwitcher inMobileNav /> : (isExpanded ? <ThemeSwitcher /> : <Tooltip><TooltipTrigger asChild><ThemeSwitcher /></TooltipTrigger><TooltipContent side="right">Cambiar Tema</TooltipContent></Tooltip>)}
+            </div>
           {bottomNavItems.map((item) => (
             <React.Fragment key={item.href}>
               {mobile ? (
@@ -183,14 +186,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               )}
             </React.Fragment>
           ))}
-           <div className="pt-2 w-full">
-            {mobile ? <ThemeSwitcher inMobileNav /> : (isExpanded ? <ThemeSwitcher /> : <Tooltip><TooltipTrigger asChild><ThemeSwitcher /></TooltipTrigger><TooltipContent side="right">Toggle Theme</TooltipContent></Tooltip>)}
-            </div>
+           
 
             {mobile ? (
                <Link href="/" className="flex items-center gap-4 px-2.5 text-red-500 hover:text-red-600">
                   <LogOut className="h-5 w-5" />
-                  Logout
+                  Cerrar Sesión
                </Link>
             ) : (
                <Tooltip>
@@ -203,10 +204,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                       )}
                     >
                       <LogOut className="h-5 w-5" />
-                      <span className={cn("sr-only", isExpanded && "not-sr-only")}>Logout</span>
+                      <span className={cn("sr-only", isExpanded && "not-sr-only")}>Cerrar Sesión</span>
                     </Link>
                   </TooltipTrigger>
-                   <TooltipContent side="right" hidden={isExpanded}>Logout</TooltipContent>
+                   <TooltipContent side="right" hidden={isExpanded}>Cerrar Sesión</TooltipContent>
                 </Tooltip>
             )}
         </div>
@@ -247,7 +248,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <SheetTrigger asChild>
               <Button size="icon" variant="outline" className="sm:hidden">
                 <PanelLeft className="h-5 w-5" />
-                <span className="sr-only">Toggle Menu</span>
+                <span className="sr-only">Abrir Menú</span>
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="sm:max-w-xs">
@@ -268,7 +269,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search..."
+              placeholder="Buscar..."
               className="w-full rounded-lg bg-background pl-8 md:w-[200px] lg:w-[320px]"
             />
           </div>
@@ -276,14 +277,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
                 <Bell className="h-5 w-5" />
-                 <span className="sr-only">Toggle notifications</span>
+                 <span className="sr-only">Ver notificaciones</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+              <DropdownMenuLabel>Notificaciones</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Appointment reminder sent to J. Doe</DropdownMenuItem>
-              <DropdownMenuItem>Low stock warning for "Gloves"</DropdownMenuItem>
+              <DropdownMenuItem>Recordatorio de cita enviado a J. Doe</DropdownMenuItem>
+              <DropdownMenuItem>Alerta de stock bajo para "Guantes"</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
@@ -296,15 +297,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem>
-                <Link href="/settings">Settings</Link>
+                <Link href="/settings">Ajustes</Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>Support</DropdownMenuItem>
+              <DropdownMenuItem>Soporte</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem>
-                <Link href="/">Logout</Link>
+                <Link href="/">Cerrar Sesión</Link>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -316,3 +317,5 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     </div>
   );
 }
+
+    

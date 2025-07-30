@@ -43,13 +43,13 @@ export default function SignupPage() {
     if (error) {
         toast({
             variant: 'destructive',
-            title: 'Error During Sign Up',
+            title: 'Error durante el registro',
             description: error,
         });
     } else {
         toast({
-            title: 'Registration Successful!',
-            description: 'Please check your email to verify your account before logging in.',
+            title: '¡Registro Exitoso!',
+            description: 'Por favor, revisa tu email para verificar tu cuenta antes de iniciar sesión.',
         });
         // Redirect to a page that tells them to check their email
         // For now, redirecting to login. In a real app, a dedicated page is better.
@@ -66,23 +66,23 @@ export default function SignupPage() {
           <div className="flex justify-center items-center mb-4">
             <ToothIcon className="h-10 w-10 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-bold font-headline">Create your SmileSys Account</CardTitle>
-          <CardDescription>Start by telling us a bit about you and your clinic.</CardDescription>
+          <CardTitle className="text-2xl font-bold font-headline">Crea tu Cuenta en SmileSys</CardTitle>
+          <CardDescription>Empieza contándonos un poco sobre ti y tu clínica.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignup} className="grid gap-4">
              <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                    <Label htmlFor="firstName">First Name</Label>
+                    <Label htmlFor="firstName">Nombre</Label>
                     <Input id="firstName" value={formData.firstName} onChange={handleChange} required />
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="lastName">Last Name</Label>
+                    <Label htmlFor="lastName">Apellido</Label>
                     <Input id="lastName" value={formData.lastName} onChange={handleChange} required />
                 </div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="clinicName">Clinic Name</Label>
+              <Label htmlFor="clinicName">Nombre de la Clínica</Label>
               <Input id="clinicName" value={formData.clinicName} onChange={handleChange} required />
             </div>
             <div className="grid gap-2">
@@ -90,17 +90,17 @@ export default function SignupPage() {
               <Input id="email" type="email" value={formData.email} onChange={handleChange} required />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="password">Create a Password</Label>
+              <Label htmlFor="password">Crea una Contraseña</Label>
               <Input id="password" type="password" required value={formData.password} onChange={handleChange} />
             </div>
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Creating Account...' : 'Continue to Plan Selection'}
+              {isLoading ? 'Creando Cuenta...' : 'Continuar a la Selección de Plan'}
             </Button>
           </form>
             <div className="mt-4 text-center text-sm">
-                Already have an account?{' '}
+                ¿Ya tienes una cuenta?{' '}
                 <Link href="/" className="underline">
-                    Sign in
+                    Iniciar Sesión
                 </Link>
             </div>
         </CardContent>
@@ -108,3 +108,5 @@ export default function SignupPage() {
     </div>
   );
 }
+
+    

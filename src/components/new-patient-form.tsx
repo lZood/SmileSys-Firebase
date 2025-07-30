@@ -162,3 +162,5 @@ export const NewPatientForm = ({ onClose }: { onClose: () => void }) => {
         </Dialog>
     );
 };
+
+    

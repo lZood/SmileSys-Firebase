@@ -70,50 +70,50 @@ export default function DashboardPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Patients</CardTitle>
+              <CardTitle className="text-sm font-medium">Pacientes Totales</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{patients.length}</div>
-              <p className="text-xs text-muted-foreground">All registered patients</p>
+              <p className="text-xs text-muted-foreground">Todos los pacientes registrados</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Appointments Today</CardTitle>
+              <CardTitle className="text-sm font-medium">Citas para Hoy</CardTitle>
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">+{appointmentsToday}</div>
-              <p className="text-xs text-muted-foreground">Scheduled for today</p>
+              <p className="text-xs text-muted-foreground">Programadas para hoy</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Monthly Income</CardTitle>
+              <CardTitle className="text-sm font-medium">Ingresos Mensuales</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">$0.00</div>
-              <p className="text-xs text-muted-foreground">Based on completed payments</p>
+              <p className="text-xs text-muted-foreground">Basado en pagos completados</p>
             </CardContent>
           </Card>
            <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Inventory Alerts</CardTitle>
+              <CardTitle className="text-sm font-medium">Alertas de Inventario</CardTitle>
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">0</div>
-              <p className="text-xs text-muted-foreground">Items with low stock</p>
+              <p className="text-xs text-muted-foreground">Productos con stock bajo</p>
             </CardContent>
           </Card>
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
           <Card className="lg:col-span-4">
             <CardHeader>
-              <CardTitle>Treatment Statistics</CardTitle>
-              <CardDescription>An overview of procedures performed this month.</CardDescription>
+              <CardTitle>Estadísticas de Tratamientos</CardTitle>
+              <CardDescription>Resumen de procedimientos realizados este mes.</CardDescription>
             </CardHeader>
             <CardContent className="pl-2">
               <ResponsiveContainer width="100%" height={350}>
@@ -131,17 +131,17 @@ export default function DashboardPage() {
           </Card>
           <Card className="lg:col-span-3">
             <CardHeader>
-              <CardTitle>Recent Appointments</CardTitle>
-              <CardDescription>A list of today's appointments.</CardDescription>
+              <CardTitle>Citas Recientes</CardTitle>
+              <CardDescription>Una lista de las citas programadas para hoy.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Patient</TableHead>
-                    <TableHead>Service</TableHead>
-                    <TableHead>Time</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Paciente</TableHead>
+                    <TableHead>Servicio</TableHead>
+                    <TableHead>Hora</TableHead>
+                    <TableHead>Estado</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -171,7 +171,7 @@ export default function DashboardPage() {
                     </TableRow>
                   )) : (
                     <TableRow>
-                        <TableCell colSpan={4} className="text-center h-24">No appointments today.</TableCell>
+                        <TableCell colSpan={4} className="text-center h-24">No hay citas para hoy.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -183,3 +183,5 @@ export default function DashboardPage() {
     </DashboardLayout>
   );
 }
+
+    

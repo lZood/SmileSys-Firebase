@@ -289,7 +289,7 @@ export default function InventoryPage() {
                        <TableCell className="hidden md:table-cell">{item.lastOrdered}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={cn(getStatusClass(item.status), 'capitalize')}>
-                          {item.status}
+                          {item.status.replace(/-/g, ' ').toLowerCase()}
                         </Badge>
                       </TableCell>
                     </TableRow>
@@ -302,3 +302,5 @@ export default function InventoryPage() {
     </DashboardLayout>
   );
 }
+
+    

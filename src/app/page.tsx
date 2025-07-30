@@ -22,11 +22,17 @@ export default function LoginPage() {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-            router.push('/dashboard');
+      if (session) {
+        // If user is invited, their user_metadata will have a 'role'
+        // This is a good indicator they haven't set their password yet.
+        if (session.user?.user_metadata?.role) {
+          router.push('/signup');
+        } else if (event === 'SIGNED_IN') {
+          router.push('/dashboard');
         }
+      }
     });
-
+  
     return () => subscription.unsubscribe();
   }, [router, supabase]);
 
@@ -55,8 +61,6 @@ export default function LoginPage() {
         title: "Error de Autenticación",
         description: error.message,
       });
-    } else {
-        router.push('/dashboard');
     }
     // The onAuthStateChange listener will handle the redirect
     
@@ -70,8 +74,8 @@ export default function LoginPage() {
           <div className="flex justify-center items-center mb-4">
             <ToothIcon className="h-10 w-10 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-bold font-headline">Welcome to SmileSys</CardTitle>
-          <CardDescription>Enter your credentials to access your clinic's dashboard.</CardDescription>
+          <CardTitle className="text-2xl font-bold font-headline">Bienvenido a SmileSys</CardTitle>
+          <CardDescription>Ingresa tus credenciales para acceder al panel de tu clínica.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="grid gap-4">
@@ -81,21 +85,21 @@ export default function LoginPage() {
             </div>
             <div className="grid gap-2">
               <div className="flex items-center">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">Contraseña</Label>
                 <Link href="#" className="ml-auto inline-block text-sm underline">
-                  Forgot your password?
+                  ¿Olvidaste tu contraseña?
                 </Link>
               </div>
               <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Signing In..." : "Sign In"}
+              {isLoading ? "Iniciando Sesión..." : "Iniciar Sesión"}
             </Button>
           </form>
            <div className="mt-4 text-center text-sm">
-            Don't have an account?{' '}
+            ¿No tienes una cuenta?{' '}
             <Link href="/signup" className="underline">
-              Sign up
+              Regístrate
             </Link>
           </div>
         </CardContent>
@@ -103,3 +107,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+    

@@ -39,7 +39,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
 
   if (!patient) {
     // We can show a loading state here
-    return <DashboardLayout><div>Loading patient data...</div></DashboardLayout>;
+    return <DashboardLayout><div>Cargando datos del paciente...</div></DashboardLayout>;
     // Or, if fetching fails, call notFound();
   }
 
@@ -78,50 +78,50 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
                   <span className="font-medium text-foreground">{patient.email}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Phone:</span>
+                  <span>Teléfono:</span>
                   <span className="font-medium text-foreground">{patient.phone}</span>
                 </div>
                  <div className="flex justify-between">
-                  <span>Last Visit:</span>
+                  <span>Última Visita:</span>
                   <span className="font-medium text-foreground">{patient.lastVisit}</span>
                 </div>
                  <div className="flex justify-between">
-                  <span>Status:</span>
+                  <span>Estado:</span>
                   <span className="font-medium text-foreground">{patient.status}</span>
                 </div>
               </div>
               <Separator />
                <div className="flex gap-2 pt-4">
-                  <Button variant="outline" className="w-full"><Pencil className="w-4 h-4 mr-2" /> Edit</Button>
-                  <Button variant="destructive" className="w-full"><Trash2 className="w-4 h-4 mr-2" /> Delete</Button>
+                  <Button variant="outline" className="w-full"><Pencil className="w-4 h-4 mr-2" /> Editar</Button>
+                  <Button variant="destructive" className="w-full"><Trash2 className="w-4 h-4 mr-2" /> Eliminar</Button>
               </div>
             </CardContent>
           </Card>
            <Card className="mt-4">
               <CardHeader>
-                <CardTitle>Digital Consents</CardTitle>
-                 <CardDescription>Manage informed consent forms.</CardDescription>
-              </Header>
+                <CardTitle>Consentimientos Digitales</CardTitle>
+                 <CardDescription>Gestionar consentimientos informados.</CardDescription>
+              </CardHeader>
               <CardContent>
                  <Button className="w-full" onClick={() => setIsConsentModalOpen(true)}>
-                    <FileText className="w-4 h-4 mr-2" /> Generate New Consent
+                    <FileText className="w-4 h-4 mr-2" /> Generar Nuevo Consentimiento
                  </Button>
-                 <div className="text-xs text-muted-foreground mt-2 text-center">No consents found.</div>
+                 <div className="text-xs text-muted-foreground mt-2 text-center">No se encontraron consentimientos.</div>
               </CardContent>
             </Card>
         </div>
         <div className="lg:col-span-5 md:col-span-4">
             <Tabs defaultValue="odontogram">
                 <TabsList>
-                    <TabsTrigger value="odontogram">Odontogram</TabsTrigger>
-                    <TabsTrigger value="history">Clinical History</TabsTrigger>
-                    <TabsTrigger value="billing">Billing</TabsTrigger>
+                    <TabsTrigger value="odontogram">Odontograma</TabsTrigger>
+                    <TabsTrigger value="history">Historia Clínica</TabsTrigger>
+                    <TabsTrigger value="billing">Facturación</TabsTrigger>
                 </TabsList>
                 <TabsContent value="odontogram">
                     <Card>
                         <CardHeader>
-                        <CardTitle>Interactive Odontogram</CardTitle>
-                        <CardDescription>Graphical representation of the patient's dentition.</CardDescription>
+                        <CardTitle>Odontograma Interactivo</CardTitle>
+                        <CardDescription>Representación gráfica de la dentición del paciente.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <Odontogram />
@@ -131,22 +131,22 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
                 <TabsContent value="history">
                      <Card>
                         <CardHeader>
-                        <CardTitle>Clinical History</CardTitle>
-                        <CardDescription>Timeline of all treatments and notes.</CardDescription>
+                        <CardTitle>Historia Clínica</CardTitle>
+                        <CardDescription>Cronología de todos los tratamientos y notas.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                           <p className="text-muted-foreground">Clinical history feature coming soon.</p>
+                           <p className="text-muted-foreground">La función de historia clínica estará disponible pronto.</p>
                         </CardContent>
                     </Card>
                 </TabsContent>
                  <TabsContent value="billing">
                      <Card>
                         <CardHeader>
-                        <CardTitle>Billing & Payments</CardTitle>
-                        <CardDescription>Record of all financial transactions.</CardDescription>
+                        <CardTitle>Facturación y Pagos</CardTitle>
+                        <CardDescription>Registro de todas las transacciones financieras.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                           <p className="text-muted-foreground">Billing feature coming soon.</p>
+                           <p className="text-muted-foreground">La función de facturación estará disponible pronto.</p>
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -156,3 +156,5 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
     </DashboardLayout>
   );
 }
+
+    

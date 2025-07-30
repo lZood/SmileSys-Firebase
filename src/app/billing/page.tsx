@@ -61,6 +61,18 @@ export type Quote = {
     expiresAt: string; // YYYY-MM-DD
 };
 
+const getStatusInSpanish = (status: Payment['status'] | Quote['status']) => {
+    const translations = {
+        'Paid': 'Pagado',
+        'Pending': 'Pendiente',
+        'Canceled': 'Cancelado',
+        'Draft': 'Borrador',
+        'Presented': 'Presentado',
+        'Accepted': 'Aceptado',
+        'Expired': 'Expirado',
+    };
+    return translations[status] || status;
+}
 
 const getStatusClass = (status: Payment['status'] | Quote['status']) => {
   switch (status) {
@@ -380,7 +392,7 @@ export default function BillingPage() {
                         <TableCell className="hidden md:table-cell">
                             <div className="flex items-center gap-2">{getPaymentMethodIcon(payment.method)}<span>{payment.method}</span></div>
                         </TableCell>
-                        <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(payment.status))}>{payment.status.toLowerCase()}</Badge></TableCell>
+                        <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(payment.status))}>{getStatusInSpanish(payment.status)}</Badge></TableCell>
                         <TableCell>
                             <DropdownMenu>
                             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4"/></Button></DropdownMenuTrigger>
@@ -429,7 +441,7 @@ export default function BillingPage() {
                         <TableCell>${quote.total.toFixed(2)}</TableCell>
                         <TableCell className="hidden md:table-cell">{quote.createdAt}</TableCell>
                         <TableCell className="hidden md:table-cell">{quote.expiresAt}</TableCell>
-                        <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(quote.status))}>{quote.status.toLowerCase()}</Badge></TableCell>
+                        <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(quote.status))}>{getStatusInSpanish(quote.status)}</Badge></TableCell>
                         <TableCell>
                            <DropdownMenu>
                             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4"/></Button></DropdownMenuTrigger>
@@ -454,3 +466,5 @@ export default function BillingPage() {
     </div>
   );
 }
+
+    

@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLab
 import { Textarea } from "@/components/ui/textarea";
 import { getUserData } from '../user/actions';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AppearanceForm } from './appearance-form';
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
 
@@ -36,8 +37,8 @@ export default function SettingsPage() {
           <DashboardLayout>
             <div className="flex flex-col gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold font-headline">Settings</h1>
-                    <p className="text-muted-foreground">Manage your profile, clinic, and integrations.</p>
+                    <h1 className="text-3xl font-bold font-headline">Ajustes</h1>
+                    <p className="text-muted-foreground">Gestiona tu perfil, clínica e integraciones.</p>
                 </div>
                  <Card>
                     <CardHeader>
@@ -64,34 +65,34 @@ export default function SettingsPage() {
     <DashboardLayout>
       <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-3xl font-bold font-headline">Settings</h1>
+          <h1 className="text-3xl font-bold font-headline">Ajustes</h1>
           <p className="text-muted-foreground">
-            Manage your profile, clinic, and integrations.
+            Gestiona tu perfil, clínica e integraciones.
           </p>
         </div>
         <Tabs defaultValue="profile" className="flex-1">
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="profile">Profile</TabsTrigger>
-            <TabsTrigger value="clinic">Clinic</TabsTrigger>
-            <TabsTrigger value="members">Members</TabsTrigger>
-            <TabsTrigger value="integrations">Integrations</TabsTrigger>
+            <TabsTrigger value="profile">Perfil</TabsTrigger>
+            <TabsTrigger value="clinic">Clínica</TabsTrigger>
+            <TabsTrigger value="members">Miembros</TabsTrigger>
+            <TabsTrigger value="integrations">Integraciones</TabsTrigger>
           </TabsList>
           <TabsContent value="profile">
             <Card>
               <CardHeader>
-                <CardTitle>My Profile</CardTitle>
+                <CardTitle>Mi Perfil</CardTitle>
                 <CardDescription>
-                  Update your personal information.
+                  Actualiza tu información personal.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="firstName">First Name</Label>
+                        <Label htmlFor="firstName">Nombre</Label>
                         <Input id="firstName" defaultValue={profile?.first_name || ''} />
                     </div>
                      <div className="grid gap-2">
-                        <Label htmlFor="lastName">Last Name</Label>
+                        <Label htmlFor="lastName">Apellido</Label>
                         <Input id="lastName" defaultValue={profile?.last_name || ''} />
                     </div>
                 </div>
@@ -99,36 +100,36 @@ export default function SettingsPage() {
                   <Label htmlFor="email">Email</Label>
                   <Input id="email" type="email" defaultValue={user?.email || ''} readOnly />
                 </div>
-                <Button>Save Changes</Button>
+                <Button>Guardar Cambios</Button>
               </CardContent>
             </Card>
           </TabsContent>
           <TabsContent value="clinic">
             <Card>
               <CardHeader>
-                <CardTitle>Clinic Information</CardTitle>
+                <CardTitle>Información de la Clínica</CardTitle>
                 <CardDescription>
-                  Manage your clinic's details for PDF generation (Admin only).
+                  Gestiona los detalles de tu clínica para la generación de PDF (solo Admin).
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                  <div className="grid gap-2">
-                  <Label htmlFor="clinic-name">Clinic Name</Label>
+                  <Label htmlFor="clinic-name">Nombre de la Clínica</Label>
                   <Input id="clinic-name" defaultValue={clinic?.name || ''} />
                 </div>
                  <div className="grid gap-2">
-                  <Label htmlFor="clinic-address">Address</Label>
-                  <Input id="clinic-address" placeholder="123 Dental Ave, Smiletown" />
+                  <Label htmlFor="clinic-address">Dirección</Label>
+                  <Input id="clinic-address" placeholder="Av. Dental 123, Sonrisas" />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="clinic-logo">Clinic Logo URL</Label>
-                  <Input id="clinic-logo" placeholder="https://your-clinic.com/logo.png" />
+                  <Label htmlFor="clinic-logo">URL del Logo de la Clínica</Label>
+                  <Input id="clinic-logo" placeholder="https://tu-clinica.com/logo.png" />
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="terms">Terms & Conditions for Consents</Label>
-                    <Textarea id="terms" placeholder="Enter the terms and conditions that will appear on every consent PDF..." className="min-h-[150px]" />
+                    <Label htmlFor="terms">Términos y Condiciones para Consentimientos</Label>
+                    <Textarea id="terms" placeholder="Introduce los términos y condiciones que aparecerán en cada PDF de consentimiento..." className="min-h-[150px]" />
                 </div>
-                <Button>Save Changes</Button>
+                <Button>Guardar Cambios</Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -137,13 +138,13 @@ export default function SettingsPage() {
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <div>
-                            <CardTitle>Team Members</CardTitle>
-                            <CardDescription>Manage your clinic's staff (Admin only).</CardDescription>
+                            <CardTitle>Miembros del Equipo</CardTitle>
+                            <CardDescription>Gestiona el personal de tu clínica (solo Admin).</CardDescription>
                         </div>
                          <Button size="sm" className="h-8 gap-1">
                             <PlusCircle className="h-3.5 w-3.5" />
                             <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                                Invite Member
+                                Invitar Miembro
                             </span>
                         </Button>
                     </div>
@@ -152,10 +153,10 @@ export default function SettingsPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Name</TableHead>
+                                <TableHead>Nombre</TableHead>
                                 <TableHead>Email</TableHead>
-                                <TableHead>Role</TableHead>
-                                <TableHead><span className="sr-only">Actions</span></TableHead>
+                                <TableHead>Rol</TableHead>
+                                <TableHead><span className="sr-only">Acciones</span></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -168,9 +169,9 @@ export default function SettingsPage() {
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="w-4 h-4"/></Button></DropdownMenuTrigger>
                                             <DropdownMenuContent>
-                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem>Edit Role</DropdownMenuItem>
-                                                <DropdownMenuItem className="text-destructive">Remove</DropdownMenuItem>
+                                                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                <DropdownMenuItem>Editar Rol</DropdownMenuItem>
+                                                <DropdownMenuItem className="text-destructive">Eliminar</DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </TableCell>
@@ -184,9 +185,9 @@ export default function SettingsPage() {
           <TabsContent value="integrations">
             <Card>
               <CardHeader>
-                <CardTitle>Integrations</CardTitle>
+                <CardTitle>Integraciones</CardTitle>
                 <CardDescription>
-                  Connect SmileSys with other services.
+                  Conecta SmileSys con otros servicios.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -194,18 +195,18 @@ export default function SettingsPage() {
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div>
                             <CardTitle className="text-lg">Google Calendar</CardTitle>
-                            <CardDescription>Sync appointments with your personal calendar.</CardDescription>
+                            <CardDescription>Sincroniza citas con tu calendario personal.</CardDescription>
                         </div>
-                        <Button variant="outline">Connect</Button>
+                        <Button variant="outline">Conectar</Button>
                     </CardHeader>
                 </Card>
                  <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div>
-                            <CardTitle className="text-lg">SMS Notifications (Twilio)</CardTitle>
-                            <CardDescription>Send appointment reminders via SMS.</CardDescription>
+                            <CardTitle className="text-lg">Notificaciones por SMS (Twilio)</CardTitle>
+                            <CardDescription>Envía recordatorios de citas por SMS.</CardDescription>
                         </div>
-                        <Button variant="outline">Connect</Button>
+                        <Button variant="outline">Conectar</Button>
                     </CardHeader>
                 </Card>
               </CardContent>
@@ -216,3 +217,5 @@ export default function SettingsPage() {
     </DashboardLayout>
   );
 }
+
+    
