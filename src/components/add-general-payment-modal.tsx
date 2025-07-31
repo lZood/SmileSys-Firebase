@@ -17,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { createGeneralPayment } from '@/app/billing/actions';
 import { getUserData } from '@/app/user/actions';
+import { DatePicker } from './ui/date-picker';
+import { format } from 'date-fns';
 
 type Clinic = NonNullable<Awaited<ReturnType<typeof getUserData>>['clinic']>;
 type BillingPatient = { id: string; first_name: string; last_name: string; };
@@ -42,15 +44,7 @@ export const AddGeneralPaymentModal = ({
     const [paymentMethod, setPaymentMethod] = React.useState<'Card' | 'Cash' | 'Transfer'>();
     const [description, setDescription] = React.useState('');
 
-    // Correctly get local date in YYYY-MM-DD format
-    const getLocalDate = () => {
-        const date = new Date();
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
-    const [paymentDate, setPaymentDate] = React.useState(getLocalDate());
+    const [paymentDate, setPaymentDate] = React.useState<Date | undefined>(new Date());
 
     React.useEffect(() => {
         if (preselectedPatientId) {
@@ -61,7 +55,7 @@ export const AddGeneralPaymentModal = ({
     if (!clinic) return null;
 
     const handleSubmit = async () => {
-        if (!patientId || !amount || !paymentMethod || !description) {
+        if (!patientId || !amount || !paymentMethod || !description || !paymentDate) {
             toast({ variant: 'destructive', title: 'Campos Incompletos', description: 'Por favor, complete todos los campos.' });
             return;
         }
@@ -70,7 +64,7 @@ export const AddGeneralPaymentModal = ({
             patientId,
             clinicId: clinic.id,
             amount: parseFloat(amount),
-            paymentDate,
+            paymentDate: format(paymentDate, 'yyyy-MM-dd'),
             paymentMethod,
             description,
         });
@@ -126,7 +120,7 @@ export const AddGeneralPaymentModal = ({
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="paymentDate">Fecha de Pago</Label>
-                        <Input id="paymentDate" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
+                        <DatePicker date={paymentDate} setDate={setPaymentDate} />
                     </div>
                 </div>
                  <DialogFooter>
@@ -137,5 +131,3 @@ export const AddGeneralPaymentModal = ({
         </Dialog>
     );
 };
-
-    

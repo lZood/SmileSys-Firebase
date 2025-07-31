@@ -40,6 +40,8 @@ import { getTreatmentsForClinic, addPaymentToTreatment, getPaymentsForClinic, ge
 import { getUserData } from '../user/actions';
 import { useRouter } from 'next/navigation';
 import { AddGeneralPaymentModal } from '@/components/add-general-payment-modal';
+import { DatePicker } from '@/components/ui/date-picker';
+import { format } from 'date-fns';
 
 // Types
 type Clinic = NonNullable<Awaited<ReturnType<typeof getUserData>>['clinic']>;
@@ -114,21 +116,12 @@ const AddTreatmentPaymentModal = ({
     const [amount, setAmount] = React.useState('');
     const [paymentMethod, setPaymentMethod] = React.useState<'Card'|'Cash'|'Transfer'>();
     const [notes, setNotes] = React.useState('');
-    
-    // Correctly get local date in YYYY-MM-DD format
-    const getLocalDate = () => {
-        const date = new Date();
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
-    const [paymentDate, setPaymentDate] = React.useState(getLocalDate());
+    const [paymentDate, setPaymentDate] = React.useState<Date | undefined>(new Date());
 
     if (!treatment) return null;
 
     const handleSubmit = async () => {
-        if (!amount || parseFloat(amount) <= 0 || !paymentMethod) {
+        if (!amount || parseFloat(amount) <= 0 || !paymentMethod || !paymentDate) {
             toast({ variant: 'destructive', title: 'Campos Inválidos', description: 'Por favor, introduce un monto y método de pago válidos.' });
             return;
         }
@@ -136,7 +129,7 @@ const AddTreatmentPaymentModal = ({
         const result = await addPaymentToTreatment({
             treatmentId: treatment.id,
             amount: parseFloat(amount),
-            paymentDate,
+            paymentDate: format(paymentDate, 'yyyy-MM-dd'),
             paymentMethod,
             notes
         });
@@ -167,7 +160,7 @@ const AddTreatmentPaymentModal = ({
                      <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
                             <Label htmlFor="paymentDate">Fecha de Pago</Label>
-                            <Input id="paymentDate" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
+                            <DatePicker date={paymentDate} setDate={setPaymentDate} />
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="paymentMethod">Método de Pago</Label>
@@ -443,5 +436,3 @@ export default function BillingPage() {
     </div>
   );
 }
-
-    
