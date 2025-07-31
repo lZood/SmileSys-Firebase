@@ -172,7 +172,12 @@ export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
 
 const updateUserPasswordSchema = z.object({
   newPassword: z.string().min(8, "La nueva contraseña debe tener al menos 8 caracteres."),
+  confirmPassword: z.string(),
+}).refine(data => data.newPassword === data.confirmPassword, {
+  message: "Las contraseñas no coinciden.",
+  path: ["confirmPassword"], // path of error
 });
+
 
 export async function updateUserPassword(data: z.infer<typeof updateUserPasswordSchema>) {
     const supabase = createClient();
@@ -196,5 +201,36 @@ export async function updateUserPassword(data: z.infer<typeof updateUserPassword
         return { error: `No se pudo actualizar la contraseña: ${error.message}` };
     }
 
+    return { error: null };
+}
+
+const userProfileSchema = z.object({
+  firstName: z.string().min(2, "El nombre es muy corto."),
+  lastName: z.string().min(2, "El apellido es muy corto."),
+});
+
+export async function updateUserProfile(data: z.infer<typeof userProfileSchema>) {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return { error: 'Usuario no autenticado.' };
+    }
+
+    const parsedData = userProfileSchema.safeParse(data);
+    if (!parsedData.success) {
+        return { error: parsedData.error.errors.map(e => e.message).join(', ') };
+    }
+
+    const { error } = await supabase
+        .from('profiles')
+        .update({ first_name: data.firstName, last_name: data.lastName })
+        .eq('id', user.id);
+    
+    if (error) {
+        console.error("Error updating user profile:", error);
+        return { error: `No se pudo actualizar el perfil: ${error.message}` };
+    }
+
+    revalidatePath('/settings');
     return { error: null };
 }

@@ -16,10 +16,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { getUserData } from '../user/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { updateClinicInfo, uploadClinicLogo, updateUserPassword } from './actions';
+import { updateClinicInfo, uploadClinicLogo, updateUserPassword, updateUserProfile } from './actions';
 import Image from 'next/image';
 import { InviteMemberForm } from '@/components/invite-member-form';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
 
@@ -121,54 +122,125 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: NonNullable<UserData['cli
     );
 };
 
-const ProfileForm = ({ user, profile }: { user: UserData['user'], profile: UserData['profile'] }) => {
+const ProfileInfoForm = ({ profile }: { profile: NonNullable<UserData['profile']> }) => {
     const { toast } = useToast();
-    const [newPassword, setNewPassword] = React.useState('');
     const [isLoading, setIsLoading] = React.useState(false);
+    const [formData, setFormData] = React.useState({
+        firstName: profile?.first_name || '',
+        lastName: profile?.last_name || '',
+    });
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setFormData(prev => ({ ...prev, [e.target.id]: e.target.value }));
+    };
+    
+    const handleSaveProfile = async () => {
+        setIsLoading(true);
+        const result = await updateUserProfile(formData);
+        setIsLoading(false);
+        if (result.error) {
+            toast({ variant: 'destructive', title: 'Error', description: result.error });
+        } else {
+            toast({ title: 'Perfil Actualizado', description: 'Tus datos han sido guardados.' });
+        }
+    };
+    
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Información Personal</CardTitle>
+                <CardDescription>Actualiza tu nombre y apellido.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="firstName">Nombre</Label>
+                        <Input id="firstName" value={formData.firstName} onChange={handleChange} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="lastName">Apellido</Label>
+                        <Input id="lastName" value={formData.lastName} onChange={handleChange} />
+                    </div>
+                </div>
+                 <div className="grid gap-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input id="email" type="email" defaultValue={profile?.user_email || ''} readOnly className="cursor-not-allowed bg-muted/50" />
+                </div>
+                <Button onClick={handleSaveProfile} disabled={isLoading}>
+                    {isLoading ? 'Guardando...' : 'Guardar Cambios'}
+                </Button>
+            </CardContent>
+        </Card>
+    );
+}
+
+const PasswordForm = () => {
+    const { toast } = useToast();
+    const [isLoading, setIsLoading] = React.useState(false);
+    const [passwords, setPasswords] = React.useState({
+        newPassword: '',
+        confirmPassword: '',
+    });
+    const [error, setError] = React.useState<string | null>(null);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { id, value } = e.target;
+        setPasswords(prev => ({...prev, [id]: value}));
+        if (id === 'confirmPassword' && passwords.newPassword !== value) {
+            setError('Las contraseñas no coinciden.');
+        } else {
+            setError(null);
+        }
+    };
 
     const handlePasswordChange = async () => {
-        if (newPassword.length < 8) {
-            toast({ variant: 'destructive', title: 'Contraseña muy corta', description: 'La contraseña debe tener al menos 8 caracteres.' });
+        if (passwords.newPassword !== passwords.confirmPassword) {
+            setError('Las contraseñas no coinciden.');
             return;
         }
+         if (passwords.newPassword.length < 8) {
+            setError('La contraseña debe tener al menos 8 caracteres.');
+            return;
+        }
+
         setIsLoading(true);
-        const result = await updateUserPassword({ newPassword });
+        setError(null);
+        const result = await updateUserPassword(passwords);
         setIsLoading(false);
 
         if (result.error) {
             toast({ variant: 'destructive', title: 'Error', description: result.error });
         } else {
             toast({ title: 'Contraseña Actualizada', description: 'Tu contraseña ha sido cambiada exitosamente.' });
-            setNewPassword('');
+            setPasswords({ newPassword: '', confirmPassword: '' });
         }
     };
 
+    const canSubmit = passwords.newPassword.length >= 8 && passwords.newPassword === passwords.confirmPassword;
+
     return (
-        <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+        <Card>
+            <CardHeader>
+                <CardTitle>Actualizar Contraseña</CardTitle>
+                <CardDescription>Asegúrate de que tu cuenta utiliza una contraseña larga y aleatoria para mantenerse segura.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
                 <div className="grid gap-2">
-                    <Label htmlFor="firstName">Nombre</Label>
-                    <Input id="firstName" defaultValue={profile?.first_name || ''} />
+                    <Label htmlFor="newPassword">Nueva Contraseña</Label>
+                    <Input id="newPassword" type="password" value={passwords.newPassword} onChange={handleChange} />
                 </div>
-                    <div className="grid gap-2">
-                    <Label htmlFor="lastName">Apellido</Label>
-                    <Input id="lastName" defaultValue={profile?.last_name || ''} />
+                <div className="grid gap-2">
+                    <Label htmlFor="confirmPassword">Confirmar Nueva Contraseña</Label>
+                    <Input id="confirmPassword" type="password" value={passwords.confirmPassword} onChange={handleChange} />
                 </div>
-            </div>
-            <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" defaultValue={user?.email || ''} readOnly className="cursor-not-allowed bg-muted/50" />
-            </div>
-            <div className="grid gap-2">
-                <Label htmlFor="newPassword">Nueva Contraseña</Label>
-                <Input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Dejar en blanco para no cambiar"/>
-            </div>
-            <Button onClick={handlePasswordChange} disabled={isLoading || (newPassword.length > 0 && newPassword.length < 8)}>
-                {isLoading ? 'Guardando...' : 'Guardar Cambios'}
-            </Button>
-        </CardContent>
+                {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+                <Button onClick={handlePasswordChange} disabled={isLoading || !canSubmit}>
+                    {isLoading ? 'Actualizando...' : 'Actualizar Contraseña'}
+                </Button>
+            </CardContent>
+        </Card>
     );
-}
+};
 
 
 export default function SettingsPage() {
@@ -249,15 +321,10 @@ export default function SettingsPage() {
             )}
           </TabsList>
           <TabsContent value="profile">
-            <Card>
-              <CardHeader>
-                <CardTitle>Mi Perfil</CardTitle>
-                <CardDescription>
-                  Actualiza tu información personal y contraseña.
-                </CardDescription>
-              </CardHeader>
-              <ProfileForm user={user} profile={profile} />
-            </Card>
+            <div className="space-y-6">
+                {profile && <ProfileInfoForm profile={{...profile, user_email: user?.email || ''}} />}
+                <PasswordForm />
+            </div>
           </TabsContent>
           {isAdmin && (
             <>
