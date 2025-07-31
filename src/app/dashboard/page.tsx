@@ -10,45 +10,55 @@ import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recha
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { WelcomeTour } from '@/components/welcome-tour';
 import { getUserData } from '../user/actions';
+import { getDashboardData } from './actions';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 // Data will be fetched from Supabase
 const treatmentStatsData: any[] = [];
-const appointments: any[] = [];
-const patients: any[] = [];
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
+type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
 
 export default function DashboardPage() {
-  const [today, setToday] = React.useState(new Date());
   const [isWelcomeTourOpen, setIsWelcomeTourOpen] = React.useState(false);
   const [userData, setUserData] = React.useState<UserData | null>(null);
+  const [dashboardData, setDashboardData] = React.useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
 
-  const appointmentsToday = appointments.filter(
-    (app) => new Date(app.date).toDateString() === today.toDateString()
-  ).length;
-
   React.useEffect(() => {
-    setToday(new Date());
-    
-    getUserData().then(data => {
-        if (data) {
-            setUserData(data);
-        }
-        setIsLoading(false);
-    });
-
     const hasSeenWelcomeTour = localStorage.getItem('hasSeenWelcomeTour');
     if (!hasSeenWelcomeTour) {
       setIsWelcomeTourOpen(true);
     }
+    
+    async function fetchData() {
+        setIsLoading(true);
+        const [user, data] = await Promise.all([
+            getUserData(),
+            getDashboardData()
+        ]);
+        if (user) setUserData(user);
+        if (data) setDashboardData(data as DashboardData);
+        setIsLoading(false);
+    }
+    fetchData();
 
   }, []);
 
   const handleTourClose = () => {
     localStorage.setItem('hasSeenWelcomeTour', 'true');
     setIsWelcomeTourOpen(false);
+  };
+
+  const getAppointmentStatusClass = (status: string) => {
+    switch (status) {
+        case 'Completed': return 'bg-green-100 text-green-800 border-green-200';
+        case 'Scheduled': return 'bg-blue-100 text-blue-800 border-blue-200';
+        case 'Canceled': return 'bg-red-100 text-red-800 border-red-200';
+        case 'In-progress': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+        default: return 'bg-gray-100 text-gray-800';
+    }
   };
 
   return (
@@ -74,7 +84,7 @@ export default function DashboardPage() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{patients.length}</div>
+              {isLoading ? <Skeleton className="h-8 w-12" /> : <div className="text-2xl font-bold">{dashboardData?.totalPatients}</div> }
               <p className="text-xs text-muted-foreground">Todos los pacientes registrados</p>
             </CardContent>
           </Card>
@@ -84,7 +94,7 @@ export default function DashboardPage() {
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">+{appointmentsToday}</div>
+               {isLoading ? <Skeleton className="h-8 w-12" /> : <div className="text-2xl font-bold">+{dashboardData?.appointmentsTodayCount}</div> }
               <p className="text-xs text-muted-foreground">Programadas para hoy</p>
             </CardContent>
           </Card>
@@ -94,7 +104,7 @@ export default function DashboardPage() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">$0.00</div>
+              {isLoading ? <Skeleton className="h-8 w-24" /> : <div className="text-2xl font-bold">${dashboardData?.totalIncomeThisMonth?.toFixed(2) || '0.00'}</div> }
               <p className="text-xs text-muted-foreground">Basado en pagos completados</p>
             </CardContent>
           </Card>
@@ -104,7 +114,7 @@ export default function DashboardPage() {
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">0</div>
+              {isLoading ? <Skeleton className="h-8 w-12" /> : <div className="text-2xl font-bold">0</div> }
               <p className="text-xs text-muted-foreground">Productos con stock bajo</p>
             </CardContent>
           </Card>
@@ -131,8 +141,8 @@ export default function DashboardPage() {
           </Card>
           <Card className="lg:col-span-3">
             <CardHeader>
-              <CardTitle>Citas Recientes</CardTitle>
-              <CardDescription>Una lista de las citas programadas para hoy.</CardDescription>
+              <CardTitle>Citas para Hoy</CardTitle>
+              <CardDescription>Una lista de las citas programadas para el día.</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
@@ -145,31 +155,32 @@ export default function DashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {appointments.length > 0 ? appointments.slice(0, 5).map((appointment) => (
-                    <TableRow key={appointment.id}>
-                      <TableCell>
-                        <div className="font-medium">{appointment.patientName}</div>
-                        <div className="text-sm text-muted-foreground">{appointment.doctor}</div>
-                      </TableCell>
-                      <TableCell>{appointment.service}</TableCell>
-                      <TableCell>{appointment.time}</TableCell>
-                      <TableCell>
-                        <Badge variant={
-                            appointment.status === 'Completed' ? 'default' 
-                          : appointment.status === 'Canceled' ? 'destructive'
-                          : 'secondary'
-                        }
-                        className={
-                            appointment.status === 'Completed' ? 'bg-green-500/20 text-green-700 border-green-500/20' : 
-                            appointment.status === 'Scheduled' ? 'bg-blue-500/20 text-blue-700 border-blue-500/20' : 
-                            'bg-red-500/20 text-red-700 border-red-500/20'
-                        }
-                        >
-                          {appointment.status}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  )) : (
+                  {isLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <TableRow key={`skel-row-${i}`}>
+                        <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                      </TableRow>
+                    ))
+                  ) : dashboardData?.appointmentsToday && dashboardData.appointmentsToday.length > 0 ? (
+                    dashboardData.appointmentsToday.slice(0, 5).map((appointment: any) => (
+                      <TableRow key={appointment.id}>
+                        <TableCell>
+                          <div className="font-medium">{appointment.patientName || `Paciente ${appointment.patient_id.substring(0,4)}`}</div>
+                          <div className="text-sm text-muted-foreground">{appointment.doctor_name}</div>
+                        </TableCell>
+                        <TableCell>{appointment.service_description}</TableCell>
+                        <TableCell>{appointment.appointment_time}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn(getAppointmentStatusClass(appointment.status), 'capitalize')}>
+                            {appointment.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
                     <TableRow>
                         <TableCell colSpan={4} className="text-center h-24">No hay citas para hoy.</TableCell>
                     </TableRow>
@@ -183,5 +194,3 @@ export default function DashboardPage() {
     </DashboardLayout>
   );
 }
-
-    
