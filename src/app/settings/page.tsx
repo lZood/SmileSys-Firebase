@@ -188,11 +188,15 @@ export default function SettingsPage() {
           </p>
         </div>
         <Tabs defaultValue="profile" className="flex-1">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className={cn("grid w-full", isAdmin ? "grid-cols-4" : "grid-cols-1")}>
             <TabsTrigger value="profile">Perfil</TabsTrigger>
-            <TabsTrigger value="clinic">Clínica</TabsTrigger>
-            <TabsTrigger value="members">Miembros</TabsTrigger>
-            <TabsTrigger value="integrations">Integraciones</TabsTrigger>
+            {isAdmin && (
+                <>
+                    <TabsTrigger value="clinic">Clínica</TabsTrigger>
+                    <TabsTrigger value="members">Miembros</TabsTrigger>
+                    <TabsTrigger value="integrations">Integraciones</TabsTrigger>
+                </>
+            )}
           </TabsList>
           <TabsContent value="profile">
             <Card>
@@ -221,98 +225,102 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           </TabsContent>
-          <TabsContent value="clinic">
-            <Card>
-              <CardHeader>
-                <CardTitle>Información de la Clínica</CardTitle>
-                <CardDescription>
-                  Gestiona los detalles de tu clínica para la generación de PDF (solo Admin).
-                </CardDescription>
-              </CardHeader>
-              {clinic && <ClinicInfoForm clinic={clinic} isAdmin={isAdmin} />}
-            </Card>
-          </TabsContent>
-          <TabsContent value="members">
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle>Miembros del Equipo</CardTitle>
-                            <CardDescription>Gestiona el personal de tu clínica (solo Admin).</CardDescription>
-                        </div>
-                         <Button size="sm" className="h-8 gap-1" disabled={!isAdmin} onClick={() => setIsInviteModalOpen(true)}>
-                            <PlusCircle className="h-3.5 w-3.5" />
-                            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                                Invitar Miembro
-                            </span>
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Nombre</TableHead>
-                                <TableHead>Email</TableHead>
-                                <TableHead>Puesto</TableHead>
-                                <TableHead>Rol en App</TableHead>
-                                <TableHead><span className="sr-only">Acciones</span></TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {teamMembers && teamMembers.map(member => (
-                                <TableRow key={member.id}>
-                                    <TableCell className="font-medium">{member.first_name} {member.last_name}</TableCell>
-                                    <TableCell>{member.user_email}</TableCell>
-                                    <TableCell>{member.job_title || 'N/A'}</TableCell>
-                                    <TableCell className="capitalize">{member.role}</TableCell>
-                                    <TableCell>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" disabled={!isAdmin}><MoreHorizontal className="w-4 h-4"/></Button></DropdownMenuTrigger>
-                                            <DropdownMenuContent>
-                                                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                                <DropdownMenuItem>Editar</DropdownMenuItem>
-                                                <DropdownMenuItem className="text-destructive">Eliminar</DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-          </TabsContent>
-          <TabsContent value="integrations">
-            <Card>
-              <CardHeader>
-                <CardTitle>Integraciones</CardTitle>
-                <CardDescription>
-                  Conecta SmileSys con otros servicios.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                        <div>
-                            <CardTitle className="text-lg">Google Calendar</CardTitle>
-                            <CardDescription>Sincroniza citas con tu calendario personal.</CardDescription>
-                        </div>
-                        <Button variant="outline">Conectar</Button>
+          {isAdmin && (
+            <>
+                <TabsContent value="clinic">
+                    <Card>
+                    <CardHeader>
+                        <CardTitle>Información de la Clínica</CardTitle>
+                        <CardDescription>
+                        Gestiona los detalles de tu clínica para la generación de PDF (solo Admin).
+                        </CardDescription>
                     </CardHeader>
-                </Card>
-                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                        <div>
-                            <CardTitle className="text-lg">Notificaciones por SMS (Twilio)</CardTitle>
-                            <CardDescription>Envía recordatorios de citas por SMS.</CardDescription>
-                        </div>
-                        <Button variant="outline">Conectar</Button>
+                    {clinic && <ClinicInfoForm clinic={clinic} isAdmin={isAdmin} />}
+                    </Card>
+                </TabsContent>
+                <TabsContent value="members">
+                    <Card>
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle>Miembros del Equipo</CardTitle>
+                                    <CardDescription>Gestiona el personal de tu clínica (solo Admin).</CardDescription>
+                                </div>
+                                <Button size="sm" className="h-8 gap-1" disabled={!isAdmin} onClick={() => setIsInviteModalOpen(true)}>
+                                    <PlusCircle className="h-3.5 w-3.5" />
+                                    <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                                        Invitar Miembro
+                                    </span>
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Nombre</TableHead>
+                                        <TableHead>Email</TableHead>
+                                        <TableHead>Puesto</TableHead>
+                                        <TableHead>Rol en App</TableHead>
+                                        <TableHead><span className="sr-only">Acciones</span></TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {teamMembers && teamMembers.map(member => (
+                                        <TableRow key={member.id}>
+                                            <TableCell className="font-medium">{member.first_name} {member.last_name}</TableCell>
+                                            <TableCell>{member.user_email}</TableCell>
+                                            <TableCell>{member.job_title || 'N/A'}</TableCell>
+                                            <TableCell className="capitalize">{member.role}</TableCell>
+                                            <TableCell>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" disabled={!isAdmin}><MoreHorizontal className="w-4 h-4"/></Button></DropdownMenuTrigger>
+                                                    <DropdownMenuContent>
+                                                        <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                        <DropdownMenuItem>Editar</DropdownMenuItem>
+                                                        <DropdownMenuItem className="text-destructive">Eliminar</DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                <TabsContent value="integrations">
+                    <Card>
+                    <CardHeader>
+                        <CardTitle>Integraciones</CardTitle>
+                        <CardDescription>
+                        Conecta SmileSys con otros servicios.
+                        </CardDescription>
                     </CardHeader>
-                </Card>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                    <CardContent className="space-y-4">
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-lg">Google Calendar</CardTitle>
+                                    <CardDescription>Sincroniza citas con tu calendario personal.</CardDescription>
+                                </div>
+                                <Button variant="outline">Conectar</Button>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-lg">Notificaciones por SMS (Twilio)</CardTitle>
+                                    <CardDescription>Envía recordatorios de citas por SMS.</CardDescription>
+                                </div>
+                                <Button variant="outline">Conectar</Button>
+                            </CardHeader>
+                        </Card>
+                    </CardContent>
+                    </Card>
+                </TabsContent>
+            </>
+          )}
         </Tabs>
       </div>
     </DashboardLayout>
