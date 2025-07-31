@@ -4,6 +4,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { getPatientById } from '../patients/actions';
 
 const treatmentSchema = z.object({
     patientId: z.string().uuid(),
@@ -272,7 +273,7 @@ export async function getPaymentsForPatient(patientId: string) {
         id: p.id,
         amount: p.amount_paid,
         date: p.payment_date,
-        method: p.payment_method,
+        method: p.method,
         concept: p.treatments?.description || 'Pago de Tratamiento',
         status: 'Paid',
     }));
@@ -369,3 +370,5 @@ export async function deleteTreatment(treatmentId: string) {
     revalidatePath(`/patients/${treatment.patient_id}`);
     return { error: null };
 }
+
+    
