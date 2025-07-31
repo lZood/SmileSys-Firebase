@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -17,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { updateClinicInfo, uploadClinicLogo } from './actions';
 import Image from 'next/image';
+import { AppearanceForm } from './appearance-form';
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
 
@@ -173,10 +175,11 @@ export default function SettingsPage() {
           </p>
         </div>
         <Tabs defaultValue="profile" className="flex-1">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="profile">Perfil</TabsTrigger>
             <TabsTrigger value="clinic">Clínica</TabsTrigger>
             <TabsTrigger value="members">Miembros</TabsTrigger>
+            <TabsTrigger value="appearance">Apariencia</TabsTrigger>
             <TabsTrigger value="integrations">Integraciones</TabsTrigger>
           </TabsList>
           <TabsContent value="profile">
@@ -266,6 +269,9 @@ export default function SettingsPage() {
                 </CardContent>
             </Card>
           </TabsContent>
+           <TabsContent value="appearance">
+              {clinic && <AppearanceForm clinic={clinic} />}
+           </TabsContent>
           <TabsContent value="integrations">
             <Card>
               <CardHeader>
@@ -301,3 +307,5 @@ export default function SettingsPage() {
     </DashboardLayout>
   );
 }
+
+    

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -330,15 +331,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     <Skeleton className="h-8 w-8 rounded-full" />
                 ) : (
                     <Avatar>
-                      {userData?.clinic?.logo_url ? (
-                          <AvatarImage src={userData.clinic.logo_url} alt="Clinic Logo" />
+                      {userData?.profile?.photo_url ? (
+                          <AvatarImage src={userData.profile.photo_url} alt="User Avatar" />
                       ) : (
-                          <AvatarImage src="https://placehold.co/32x32.png" alt="@user" data-ai-hint="person" />
+                         <AvatarFallback>
+                            {userData?.profile?.first_name?.charAt(0)}
+                            {userData?.profile?.last_name?.charAt(0)}
+                          </AvatarFallback>
                       )}
-                      <AvatarFallback>
-                        {userData?.profile?.first_name?.charAt(0)}
-                        {userData?.profile?.last_name?.charAt(0)}
-                      </AvatarFallback>
                     </Avatar>
                 )}
               </Button>
@@ -364,3 +364,5 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     </div>
   );
 }
+
+    

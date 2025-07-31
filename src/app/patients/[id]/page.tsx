@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -8,7 +9,7 @@ import { notFound, useRouter, useSearchParams } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { FileText, Pencil, Trash2, ChevronLeft, Download, MoreHorizontal, HandCoins, PlusCircle, AlertCircle, Calendar, Stethoscope } from "lucide-react";
+import { FileText, Pencil, Trash2, ChevronLeft, Download, MoreHorizontal, HandCoins, PlusCircle, AlertCircle, Calendar, Stethoscope, User } from "lucide-react";
 import { Odontogram, ToothState } from "@/components/odontogram";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
@@ -35,7 +36,7 @@ import { AddGeneralPaymentModal } from '@/components/add-general-payment-modal';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { DatePicker } from '@/components/ui/date-picker';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { ToothIcon } from '@/components/icons/tooth-icon';
 
 
@@ -712,8 +713,10 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
           <Card>
             <CardHeader className="flex flex-col items-center text-center">
               <Avatar className="h-24 w-24 mb-4">
-                <AvatarImage src={`https://placehold.co/100x100.png`} data-ai-hint="person" />
-                <AvatarFallback>{patient.first_name.charAt(0)}{patient.last_name.charAt(0)}</AvatarFallback>
+                <AvatarImage src={undefined} />
+                <AvatarFallback>
+                  <User className="h-12 w-12" />
+                </AvatarFallback>
               </Avatar>
               <CardTitle className="text-2xl">{patientFullName}</CardTitle>
               <CardDescription>ID: {patient.id.substring(0, 8)}</CardDescription>
