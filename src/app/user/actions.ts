@@ -36,12 +36,33 @@ export const getUserData = cache(async () => {
         console.error('Error fetching clinic:', clinicError?.message);
     }
     
-    const { data: teamMembers, error: teamMembersError } = await supabase.rpc('get_team_members_with_email', { p_clinic_id: profile.clinic_id });
+    // Fetch all profiles for the clinic
+    const { data: profilesInClinic, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('clinic_id', profile.clinic_id);
 
-
-    if (teamMembersError) {
-        console.error('Error fetching team members:', teamMembersError.message);
+    if (profilesError) {
+        console.error('Error fetching profiles for clinic:', profilesError.message);
+        return { user, profile, clinic, teamMembers: [] };
     }
+
+    // Fetch all users from auth.users (requires service_role key)
+    const { data: authUsers, error: authUsersError } = await supabase.auth.admin.listUsers();
+    
+    if (authUsersError) {
+        console.error('Error fetching auth users:', authUsersError.message);
+         return { user, profile, clinic, teamMembers: [] };
+    }
+
+    // Join profiles with auth users in code
+    const teamMembers = profilesInClinic.map(p => {
+        const authUser = authUsers.users.find(u => u.id === p.id);
+        return {
+            ...p,
+            user_email: authUser?.email || 'No disponible'
+        };
+    });
     
 
     return {
