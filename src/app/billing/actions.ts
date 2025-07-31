@@ -64,8 +64,8 @@ export async function updateTreatment(data: z.infer<typeof updateTreatmentSchema
     }
 
     const { treatmentId, ...updateData } = parsedData.data;
-    const { patient_id } = await supabase.from('treatments').select('patient_id').eq('id', treatmentId).single().then(r => r.data || {});
-
+    const { data: treatment} = await supabase.from('treatments').select('patient_id').eq('id', treatmentId).single();
+    
     const { error } = await supabase
         .from('treatments')
         .update({
@@ -84,8 +84,8 @@ export async function updateTreatment(data: z.infer<typeof updateTreatmentSchema
     }
 
     revalidatePath('/billing');
-    if (patient_id) {
-        revalidatePath(`/patients/${patient_id}`);
+    if (treatment?.patient_id) {
+        revalidatePath(`/patients/${treatment.patient_id}`);
     }
     return { error: null };
 }
@@ -196,10 +196,10 @@ export async function getPaymentsForClinic() {
     const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).single();
     if (!profile) return { error: 'Profile not found', data: [] };
 
-    const [treatmentPayments, generalPayments] = await Promise.all([
+    const [treatmentPaymentsRes, generalPaymentsRes] = await Promise.all([
         supabase
             .from('treatment_payments')
-            .select('*, treatments(description, patient_id), patients!treatment_payments_patient_id_fkey(id, first_name, last_name)')
+            .select('*, treatments(description, patients(id, first_name, last_name))')
             .eq('clinic_id', profile.clinic_id),
         supabase
             .from('general_payments')
@@ -207,15 +207,19 @@ export async function getPaymentsForClinic() {
             .eq('clinic_id', profile.clinic_id)
     ]);
     
-    if (treatmentPayments.error || generalPayments.error) {
-        console.error("Error fetching payments:", treatmentPayments.error || generalPayments.error);
-        return { error: 'Failed to fetch payments', data: [] };
+    if (treatmentPaymentsRes.error) {
+        console.error("Error fetching treatment payments:", treatmentPaymentsRes.error);
+        return { error: 'Failed to fetch treatment payments', data: [] };
+    }
+    if(generalPaymentsRes.error) {
+        console.error("Error fetching general payments:", generalPaymentsRes.error);
+        return { error: 'Failed to fetch general payments', data: [] };
     }
 
-    const formattedTreatmentPayments = treatmentPayments.data?.map(p => ({
+    const formattedTreatmentPayments = treatmentPaymentsRes.data?.map(p => ({
         id: p.id,
-        patientName: p.patients ? `${p.patients.first_name} ${p.patients.last_name}` : 'Paciente no encontrado',
-        patientId: p.treatments?.patient_id,
+        patientName: p.treatments?.patients ? `${p.treatments.patients.first_name} ${p.treatments.patients.last_name}` : 'Paciente no encontrado',
+        patientId: p.treatments?.patients?.id,
         amount: p.amount_paid,
         date: p.payment_date,
         method: p.payment_method,
@@ -223,7 +227,7 @@ export async function getPaymentsForClinic() {
         status: 'Paid',
     }));
 
-     const formattedGeneralPayments = generalPayments.data?.map(p => ({
+     const formattedGeneralPayments = generalPaymentsRes.data?.map(p => ({
         id: p.id,
         patientName: p.patients ? `${p.patients.first_name} ${p.patients.last_name}` : 'Paciente no encontrado',
         patientId: p.patient_id,
@@ -243,6 +247,10 @@ export async function getPaymentsForClinic() {
 export async function getPaymentsForPatient(patientId: string) {
     const supabase = createClient();
      if (!patientId) return [];
+
+    const { data: patientData, error: patientError } = await getPatientById(patientId);
+    if(patientError || !patientData) return [];
+
 
     const [treatmentPayments, generalPayments] = await Promise.all([
         supabase

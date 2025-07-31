@@ -40,6 +40,7 @@ import { getTreatmentsForClinic, addPaymentToTreatment, getPaymentsForClinic, ge
 import { getUserData } from '../user/actions';
 import { useRouter } from 'next/navigation';
 import { AddGeneralPaymentModal } from '@/components/add-general-payment-modal';
+import { getPatientById } from '../patients/actions';
 
 // Types
 type Clinic = NonNullable<Awaited<ReturnType<typeof getUserData>>['clinic']>;
@@ -47,12 +48,12 @@ type BillingPatient = { id: string; first_name: string; last_name: string };
 
 export type Payment = {
     id: string;
-    patientId: string;
+    patientId?: string;
     patientName: string;
     amount: number;
     date: string; 
     status: 'Paid' | 'Pending' | 'Canceled';
-    method: 'Card' | 'Cash' | 'Transfer';
+    method?: 'Card' | 'Cash' | 'Transfer';
     concept: string;
 };
 export type Quote = {
@@ -211,7 +212,9 @@ export default function BillingPage() {
         ]);
         
         setTreatments(treatmentsData as Treatment[]);
-        setPayments(paymentsData.data as Payment[]);
+        if (paymentsData.data) {
+            setPayments(paymentsData.data as Payment[]);
+        }
         setBillingPatients(patientsData as BillingPatient[]);
         if (userData?.clinic) {
             setClinic(userData.clinic);
@@ -380,7 +383,9 @@ export default function BillingPage() {
                             <TableCell>{payment.concept}</TableCell>
                             <TableCell>${payment.amount.toFixed(2)}</TableCell>
                             <TableCell>
-                                <div className="flex items-center gap-2">{getPaymentMethodIcon(payment.method)}<span>{payment.method}</span></div>
+                                {payment.method && (
+                                    <div className="flex items-center gap-2">{getPaymentMethodIcon(payment.method)}<span>{payment.method}</span></div>
+                                )}
                             </TableCell>
                             <TableCell>{new Date(payment.date).toLocaleDateString()}</TableCell>
                             <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(payment.status))}>{getStatusInSpanish(payment.status)}</Badge></TableCell>

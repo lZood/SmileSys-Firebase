@@ -24,7 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { getPaymentMethodIcon } from '@/components/icons/payment-method-icons';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogFooter, DialogHeader, DialogTitle, DialogDescription, DialogContent } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -199,6 +199,7 @@ const EditTreatmentModal = ({
     }
 
     const handleSubmit = async () => {
+        if (!treatment) return;
         const result = await updateTreatment({
             treatmentId: treatment.id,
             ...formData,
@@ -403,7 +404,7 @@ const PaymentsHistory = ({ payments, onAddPaymentClick }: { payments: Payment[],
                             <TableCell>{payment.concept}</TableCell>
                             <TableCell>
                                 <div className="flex items-center gap-2">
-                                    {getPaymentMethodIcon(payment.method as any)}
+                                    {payment.method && getPaymentMethodIcon(payment.method as any)}
                                     <span>{payment.method}</span>
                                 </div>
                             </TableCell>
@@ -435,9 +436,9 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
   const supabase = createClient();
   const defaultTab = searchParams.get('tab') || 'odontogram';
 
-  const fetchPatientData = React.useCallback(async () => {
+  const fetchPatientData = React.useCallback(async (id: string) => {
     setIsLoading(true);
-    const fetchedPatient = await getPatientById(patientId);
+    const fetchedPatient = await getPatientById(id);
     if (fetchedPatient) {
         setPatient(fetchedPatient);
         const userData = await getUserData();
@@ -448,29 +449,29 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
         notFound();
     }
     setIsLoading(false);
-  }, [patientId]);
+  }, []);
 
-  const fetchFinancialData = React.useCallback(async () => {
+  const fetchFinancialData = React.useCallback(async (id: string) => {
     const [treatmentsData, paymentsData] = await Promise.all([
-        getTreatmentsForPatient(patientId),
-        getPaymentsForPatient(patientId)
+        getTreatmentsForPatient(id),
+        getPaymentsForPatient(id)
     ]);
     setTreatments(treatmentsData as Treatment[]);
     setPayments(paymentsData as Payment[]);
-  }, [patientId]);
+  }, []);
 
-  const fetchConsentForms = React.useCallback(async () => {
+  const fetchConsentForms = React.useCallback(async (id: string) => {
     setConsentFormsLoading(true);
-    const forms = await getConsentFormsForPatient(patientId);
+    const forms = await getConsentFormsForPatient(id);
     setConsentForms(forms as ConsentDocument[]);
     setConsentFormsLoading(false);
-  }, [patientId]);
+  }, []);
 
   const fetchAllData = React.useCallback(() => {
-    fetchPatientData();
-    fetchFinancialData();
-    fetchConsentForms();
-  }, [fetchPatientData, fetchFinancialData, fetchConsentForms]);
+    fetchPatientData(patientId);
+    fetchFinancialData(patientId);
+    fetchConsentForms(patientId);
+  }, [patientId, fetchPatientData, fetchFinancialData, fetchConsentForms]);
 
   React.useEffect(() => {
     fetchAllData();
@@ -479,8 +480,8 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
   const handleConsentModalClose = (wasSubmitted: boolean) => {
       setIsConsentModalOpen(false);
       if (wasSubmitted) {
-          fetchConsentForms();
-          fetchFinancialData(); // Also refetch financial data in case a treatment was added
+          fetchConsentForms(patientId);
+          fetchFinancialData(patientId); // Also refetch financial data in case a treatment was added
       }
   }
 
@@ -547,8 +548,8 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
        <AddGeneralPaymentModal
             isOpen={isGeneralPaymentModalOpen}
             onClose={() => setIsGeneralPaymentModalOpen(false)}
-            onPaymentAdded={fetchFinancialData}
-            patients={[{...patient}]}
+            onPaymentAdded={() => fetchFinancialData(patientId)}
+            patients={[{id: patient.id, first_name: patient.first_name, last_name: patient.last_name}]}
             clinic={clinic}
             preselectedPatientId={patient.id}
         />
@@ -659,7 +660,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
                 </TabsContent>
                  <TabsContent value="billing">
                      <div className="space-y-4">
-                        <TreatmentsList treatments={treatments} onRefetch={fetchFinancialData} />
+                        <TreatmentsList treatments={treatments} onRefetch={() => fetchFinancialData(patientId)} />
                         <PaymentsHistory payments={payments} onAddPaymentClick={() => setIsGeneralPaymentModalOpen(true)} />
                      </div>
                 </TabsContent>
