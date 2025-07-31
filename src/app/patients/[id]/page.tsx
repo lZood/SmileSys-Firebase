@@ -400,7 +400,7 @@ const PaymentsHistory = ({ payments, onAddPaymentClick }: { payments: Payment[],
                 <TableBody>
                     {payments.length > 0 ? payments.map(payment => (
                         <TableRow key={payment.id}>
-                            <TableCell>{new Date(payment.date).toLocaleDateString()}</TableCell>
+                            <TableCell>{new Date(payment.date).toLocaleDateString('es-MX', { timeZone: 'UTC' })}</TableCell>
                             <TableCell>{payment.concept}</TableCell>
                             <TableCell>
                                 <div className="flex items-center gap-2">
@@ -584,7 +584,7 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
                 </div>
                  <div className="flex justify-between">
                   <span>Última Visita:</span>
-                  <span className="font-medium text-foreground">{new Date(patient.created_at).toLocaleDateString()}</span>
+                  <span className="font-medium text-foreground">{new Date(patient.created_at).toLocaleDateString('es-MX', { timeZone: 'UTC' })}</span>
                 </div>
                  <div className="flex justify-between">
                   <span>Estado:</span>
@@ -613,7 +613,7 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
                       ) : consentForms.length > 0 ? (
                           consentForms.map(form => (
                               <div key={form.id} className="flex justify-between items-center p-2 rounded-md bg-muted">
-                                  <span>Consentimiento - {new Date(form.created_at).toLocaleDateString()}</span>
+                                  <span>Consentimiento - {new Date(form.created_at).toLocaleDateString('es-MX', { timeZone: 'UTC' })}</span>
                                    <Button asChild variant="ghost" size="icon">
                                       <a href={getPublicUrl(form.file_path)} target="_blank" rel="noopener noreferrer">
                                         <Download className="h-4 w-4" />
@@ -678,3 +678,5 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
     </DashboardLayout>
   );
 }
+
+    

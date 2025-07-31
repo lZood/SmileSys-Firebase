@@ -40,7 +40,6 @@ import { getTreatmentsForClinic, addPaymentToTreatment, getPaymentsForClinic, ge
 import { getUserData } from '../user/actions';
 import { useRouter } from 'next/navigation';
 import { AddGeneralPaymentModal } from '@/components/add-general-payment-modal';
-import { getPatientById } from '../patients/actions';
 
 // Types
 type Clinic = NonNullable<Awaited<ReturnType<typeof getUserData>>['clinic']>;
@@ -387,7 +386,7 @@ export default function BillingPage() {
                                     <div className="flex items-center gap-2">{getPaymentMethodIcon(payment.method)}<span>{payment.method}</span></div>
                                 )}
                             </TableCell>
-                            <TableCell>{new Date(payment.date).toLocaleDateString()}</TableCell>
+                            <TableCell>{new Date(payment.date).toLocaleDateString('es-MX', { timeZone: 'UTC' })}</TableCell>
                             <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(payment.status))}>{getStatusInSpanish(payment.status)}</Badge></TableCell>
                         </TableRow>
                     ))
@@ -435,3 +434,5 @@ export default function BillingPage() {
     </div>
   );
 }
+
+    
