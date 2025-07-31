@@ -33,16 +33,19 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { DollarSign, Receipt, Hourglass, PlusCircle, MoreHorizontal, FileText, Trash2, TrendingUp, HandCoins } from 'lucide-react';
+import { DollarSign, Receipt, PlusCircle, FileText, TrendingUp, HandCoins } from 'lucide-react';
 import { getPaymentMethodIcon } from '@/components/icons/payment-method-icons';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
-import { getTreatmentsForClinic, addPaymentToTreatment } from './actions';
+import { getTreatmentsForClinic, addPaymentToTreatment, getPaymentsForClinic, getPatientsForBilling, createGeneralPayment } from './actions';
+import { getUserData } from '../user/actions';
+import { useRouter } from 'next/navigation';
 
 // Types
+type Clinic = NonNullable<Awaited<ReturnType<typeof getUserData>>['clinic']>;
+type BillingPatient = { id: string; first_name: string; last_name: string };
+
 export type Payment = {
     id: string;
-    invoiceNumber: string;
     patientId: string;
     patientName: string;
     amount: number;
@@ -51,12 +54,10 @@ export type Payment = {
     method: 'Card' | 'Cash' | 'Transfer';
     concept: string;
 };
-export type QuoteItem = { description: string; cost: number; };
 export type Quote = {
     id: string;
     patientId: string;
     patientName: string;
-    items: QuoteItem[];
     total: number;
     status: 'Draft' | 'Presented' | 'Accepted' | 'Expired';
     createdAt: string; 
@@ -68,7 +69,7 @@ export type Treatment = {
     total_cost: number;
     payment_type: 'monthly' | 'one_time';
     status: 'active' | 'completed' | 'cancelled';
-    patients: { first_name: string, last_name: string };
+    patients: { id: string, first_name: string, last_name: string };
     total_paid: number;
 };
 
@@ -111,13 +112,14 @@ const AddTreatmentPaymentModal = ({
     const { toast } = useToast();
     const [amount, setAmount] = React.useState('');
     const [paymentDate, setPaymentDate] = React.useState(new Date().toISOString().split('T')[0]);
+    const [paymentMethod, setPaymentMethod] = React.useState<'Card'|'Cash'|'Transfer'>();
     const [notes, setNotes] = React.useState('');
     
     if (!treatment) return null;
 
     const handleSubmit = async () => {
-        if (!amount || parseFloat(amount) <= 0) {
-            toast({ variant: 'destructive', title: 'Monto Inválido', description: 'Por favor, introduce un monto de pago válido.' });
+        if (!amount || parseFloat(amount) <= 0 || !paymentMethod) {
+            toast({ variant: 'destructive', title: 'Campos Inválidos', description: 'Por favor, introduce un monto y método de pago válidos.' });
             return;
         }
 
@@ -125,6 +127,7 @@ const AddTreatmentPaymentModal = ({
             treatmentId: treatment.id,
             amount: parseFloat(amount),
             paymentDate,
+            paymentMethod,
             notes
         });
 
@@ -151,9 +154,22 @@ const AddTreatmentPaymentModal = ({
                         <Label htmlFor="amount">Monto a Pagar ($)</Label>
                         <Input id="amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={String(treatment.total_cost - treatment.total_paid)} />
                     </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="paymentDate">Fecha de Pago</Label>
-                        <Input id="paymentDate" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="paymentDate">Fecha de Pago</Label>
+                            <Input id="paymentDate" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="paymentMethod">Método de Pago</Label>
+                            <Select onValueChange={(value: 'Card'|'Cash'|'Transfer') => setPaymentMethod(value)}>
+                                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Cash">Efectivo</SelectItem>
+                                    <SelectItem value="Card">Tarjeta</SelectItem>
+                                    <SelectItem value="Transfer">Transferencia</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                      <div className="grid gap-2">
                         <Label htmlFor="notes">Notas (Opcional)</Label>
@@ -169,39 +185,165 @@ const AddTreatmentPaymentModal = ({
     );
 };
 
+const AddGeneralPaymentModal = ({
+    isOpen,
+    onClose,
+    onPaymentAdded,
+    patients,
+    clinic,
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    onPaymentAdded: () => void;
+    patients: BillingPatient[];
+    clinic: Clinic | null;
+}) => {
+    const { toast } = useToast();
+    const [patientId, setPatientId] = React.useState<string | undefined>();
+    const [amount, setAmount] = React.useState('');
+    const [paymentDate, setPaymentDate] = React.useState(new Date().toISOString().split('T')[0]);
+    const [paymentMethod, setPaymentMethod] = React.useState<'Card' | 'Cash' | 'Transfer'>();
+    const [description, setDescription] = React.useState('');
+
+    if (!clinic) return null;
+
+    const handleSubmit = async () => {
+        if (!patientId || !amount || !paymentMethod || !description) {
+            toast({ variant: 'destructive', title: 'Campos Incompletos', description: 'Por favor, complete todos los campos.' });
+            return;
+        }
+
+        const result = await createGeneralPayment({
+            patientId,
+            clinicId: clinic.id,
+            amount: parseFloat(amount),
+            paymentDate,
+            paymentMethod,
+            description,
+        });
+        
+        if (result.error) {
+            toast({ variant: 'destructive', title: 'Error', description: result.error });
+        } else {
+            toast({ title: 'Pago Registrado', description: 'El pago general se ha guardado.' });
+            onPaymentAdded();
+            onClose();
+        }
+    };
+    
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Registrar Pago General</DialogTitle>
+                    <DialogDescription>Registra un pago que no esté asociado a un plan de tratamiento.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="patientId">Paciente</Label>
+                        <Select onValueChange={setPatientId}>
+                            <SelectTrigger><SelectValue placeholder="Seleccionar paciente..." /></SelectTrigger>
+                            <SelectContent>
+                                {patients.map(p => (
+                                    <SelectItem key={p.id} value={p.id}>{p.first_name} {p.last_name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="description">Concepto</Label>
+                        <Input id="description" value={description} onChange={e => setDescription(e.target.value)} placeholder="Ej. Limpieza dental" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="amount">Monto ($)</Label>
+                            <Input id="amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} />
+                        </div>
+                         <div className="grid gap-2">
+                            <Label htmlFor="paymentMethod">Método de Pago</Label>
+                            <Select onValueChange={(value: 'Card'|'Cash'|'Transfer') => setPaymentMethod(value)}>
+                                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Cash">Efectivo</SelectItem>
+                                    <SelectItem value="Card">Tarjeta</SelectItem>
+                                    <SelectItem value="Transfer">Transferencia</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="paymentDate">Fecha de Pago</Label>
+                        <Input id="paymentDate" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
+                    </div>
+                </div>
+                 <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                    <Button onClick={handleSubmit}>Guardar Pago</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
 
 export default function BillingPage() {
-    const { toast } = useToast();
+    const router = useRouter();
     const [payments, setPayments] = React.useState<Payment[]>([]);
-    const [quotes, setQuotes] = React.useState<Quote[]>([]);
+    const [quotes] = React.useState<Quote[]>([]);
     const [treatments, setTreatments] = React.useState<Treatment[]>([]);
-    const [isLoadingTreatments, setIsLoadingTreatments] = React.useState(true);
+    const [clinic, setClinic] = React.useState<Clinic | null>(null);
+    const [billingPatients, setBillingPatients] = React.useState<BillingPatient[]>([]);
+
+    const [isLoading, setIsLoading] = React.useState(true);
     const [selectedTreatment, setSelectedTreatment] = React.useState<Treatment | null>(null);
-    const [isPaymentModalOpen, setIsPaymentModalOpen] = React.useState(false);
+    const [isTreatmentPaymentModalOpen, setIsTreatmentPaymentModalOpen] = React.useState(false);
+    const [isGeneralPaymentModalOpen, setIsGeneralPaymentModalOpen] = React.useState(false);
+
     
-    const fetchTreatments = React.useCallback(async () => {
-        setIsLoadingTreatments(true);
-        const data = await getTreatmentsForClinic();
-        setTreatments(data as Treatment[]);
-        setIsLoadingTreatments(false);
+    const fetchData = React.useCallback(async () => {
+        setIsLoading(true);
+        const [treatmentsData, paymentsData, patientsData, userData] = await Promise.all([
+            getTreatmentsForClinic(),
+            getPaymentsForClinic(),
+            getPatientsForBilling(),
+            getUserData()
+        ]);
+        
+        setTreatments(treatmentsData as Treatment[]);
+        setPayments(paymentsData.data as Payment[]);
+        setBillingPatients(patientsData as BillingPatient[]);
+        if (userData?.clinic) {
+            setClinic(userData.clinic);
+        }
+
+        setIsLoading(false);
     }, []);
 
     React.useEffect(() => {
-        fetchTreatments();
-    }, [fetchTreatments]);
+        fetchData();
+    }, [fetchData]);
 
     const handleRegisterPaymentClick = (treatment: Treatment) => {
         setSelectedTreatment(treatment);
-        setIsPaymentModalOpen(true);
+        setIsTreatmentPaymentModalOpen(true);
     };
+
+    const totalIncomeThisMonth = payments.filter(p => new Date(p.date).getMonth() === new Date().getMonth()).reduce((sum, p) => sum + p.amount, 0);
 
   return (
     <div className="space-y-6">
         <AddTreatmentPaymentModal 
             treatment={selectedTreatment}
-            isOpen={isPaymentModalOpen}
-            onClose={() => setIsPaymentModalOpen(false)}
-            onPaymentAdded={fetchTreatments}
+            isOpen={isTreatmentPaymentModalOpen}
+            onClose={() => setIsTreatmentPaymentModalOpen(false)}
+            onPaymentAdded={fetchData}
+        />
+        <AddGeneralPaymentModal
+            isOpen={isGeneralPaymentModalOpen}
+            onClose={() => setIsGeneralPaymentModalOpen(false)}
+            onPaymentAdded={fetchData}
+            patients={billingPatients}
+            clinic={clinic}
         />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -211,7 +353,7 @@ export default function BillingPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$0.00</div>
+            <div className="text-2xl font-bold">${totalIncomeThisMonth.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">Ingresos de pagos completados este mes.</p>
           </CardContent>
         </Card>
@@ -261,14 +403,16 @@ export default function BillingPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {isLoadingTreatments ? (
+                            {isLoading ? (
                                 <TableRow><TableCell colSpan={5} className="h-24 text-center">Cargando tratamientos...</TableCell></TableRow>
                             ) : treatments.length > 0 ? (
                                 treatments.map((treatment) => {
                                     const progress = treatment.total_cost > 0 ? (treatment.total_paid / treatment.total_cost) * 100 : 0;
                                     return (
                                     <TableRow key={treatment.id}>
-                                        <TableCell className="font-medium">{treatment.patients.first_name} {treatment.patients.last_name}</TableCell>
+                                        <TableCell className="font-medium hover:underline cursor-pointer" onClick={() => router.push(`/patients/${treatment.patients.id}`)}>
+                                            {treatment.patients.first_name} {treatment.patients.last_name}
+                                        </TableCell>
                                         <TableCell>{treatment.description}</TableCell>
                                         <TableCell>
                                             <div className="flex flex-col gap-1">
@@ -298,9 +442,12 @@ export default function BillingPage() {
                 <CardHeader>
                 <div className="flex items-center justify-between">
                     <div>
-                    <CardTitle>Pagos</CardTitle>
+                    <CardTitle>Historial de Pagos</CardTitle>
                     <CardDescription>Un registro de todas las transacciones financieras.</CardDescription>
                     </div>
+                    <Button size="sm" className="h-9 gap-2" onClick={() => setIsGeneralPaymentModalOpen(true)}>
+                        <PlusCircle className="h-4 w-4" /> Registrar Pago General
+                    </Button>
                 </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -308,34 +455,32 @@ export default function BillingPage() {
                     <TableHeader>
                     <TableRow>
                         <TableHead>Paciente</TableHead>
-                        <TableHead className="hidden sm:table-cell">Nº Factura</TableHead>
+                        <TableHead>Concepto</TableHead>
                         <TableHead>Monto</TableHead>
-                        <TableHead className="hidden md:table-cell">Método</TableHead>
+                        <TableHead>Método</TableHead>
+                        <TableHead>Fecha</TableHead>
                         <TableHead>Estado</TableHead>
-                        <TableHead><span className="sr-only">Acciones</span></TableHead>
                     </TableRow>
                     </TableHeader>
                     <TableBody>
-                    {payments.map((payment) => (
+                    {isLoading ? (
+                        <TableRow><TableCell colSpan={6} className="h-24 text-center">Cargando pagos...</TableCell></TableRow>
+                    ) : payments.length > 0 ? (
+                        payments.map((payment) => (
                         <TableRow key={payment.id}>
-                        <TableCell className="font-medium">{payment.patientName}</TableCell>
-                        <TableCell className="hidden sm:table-cell">{payment.invoiceNumber}</TableCell>
-                        <TableCell>${payment.amount.toFixed(2)}</TableCell>
-                        <TableCell className="hidden md:table-cell">
-                            <div className="flex items-center gap-2">{getPaymentMethodIcon(payment.method)}<span>{payment.method}</span></div>
-                        </TableCell>
-                        <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(payment.status))}>{getStatusInSpanish(payment.status)}</Badge></TableCell>
-                        <TableCell>
-                            <DropdownMenu>
-                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4"/></Button></DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                                <DropdownMenuItem>Ver Detalles</DropdownMenuItem>
-                                <DropdownMenuItem>Marcar como Pagado</DropdownMenuItem>
-                            </DropdownMenuContent>
-                            </DropdownMenu>
-                        </TableCell>
+                            <TableCell className="font-medium hover:underline cursor-pointer" onClick={() => router.push(`/patients/${payment.patientId}`)}>{payment.patientName}</TableCell>
+                            <TableCell>{payment.concept}</TableCell>
+                            <TableCell>${payment.amount.toFixed(2)}</TableCell>
+                            <TableCell>
+                                <div className="flex items-center gap-2">{getPaymentMethodIcon(payment.method)}<span>{payment.method}</span></div>
+                            </TableCell>
+                            <TableCell>{new Date(payment.date).toLocaleDateString()}</TableCell>
+                            <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(payment.status))}>{getStatusInSpanish(payment.status)}</Badge></TableCell>
                         </TableRow>
-                    ))}
+                    ))
+                    ) : (
+                        <TableRow><TableCell colSpan={6} className="h-24 text-center">No hay pagos registrados.</TableCell></TableRow>
+                    )}
                     </TableBody>
                 </Table>
                 </CardContent>
@@ -360,32 +505,14 @@ export default function BillingPage() {
                         <TableHead className="hidden md:table-cell">Creado</TableHead>
                         <TableHead className="hidden md:table-cell">Vence</TableHead>
                         <TableHead>Estado</TableHead>
-                        <TableHead><span className="sr-only">Acciones</span></TableHead>
                     </TableRow>
                     </TableHeader>
                     <TableBody>
-                    {quotes.map((quote) => (
-                        <TableRow key={quote.id}>
-                        <TableCell className="font-medium">{quote.patientName}</TableCell>
-                        <TableCell>${quote.total.toFixed(2)}</TableCell>
-                        <TableCell className="hidden md:table-cell">{quote.createdAt}</TableCell>
-                        <TableCell className="hidden md:table-cell">{quote.expiresAt}</TableCell>
-                        <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(quote.status))}>{getStatusInSpanish(quote.status)}</Badge></TableCell>
-                        <TableCell>
-                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4"/></Button></DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                <DropdownMenuItem>Ver/Editar</DropdownMenuItem>
-                                <DropdownMenuItem>Marcar como Presentado</DropdownMenuItem>
-                                <DropdownMenuItem>Marcar como Aceptado</DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-destructive">Eliminar</DropdownMenuItem>
-                            </DropdownMenuContent>
-                            </DropdownMenu>
-                        </TableCell>
+                         <TableRow>
+                            <TableCell colSpan={5} className="h-24 text-center">
+                                No se encontraron presupuestos.
+                            </TableCell>
                         </TableRow>
-                    ))}
                     </TableBody>
                 </Table>
                 </CardContent>

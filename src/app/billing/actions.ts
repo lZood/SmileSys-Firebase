@@ -62,7 +62,7 @@ export async function getTreatmentsForClinic() {
         .from('treatments')
         .select(`
             *,
-            patients (first_name, last_name),
+            patients (id, first_name, last_name),
             treatment_payments (amount_paid)
         `)
         .eq('clinic_id', profile.clinic_id)
@@ -85,31 +85,30 @@ const paymentSchema = z.object({
     treatmentId: z.string().uuid(),
     amount: z.number().positive("El monto debe ser positivo."),
     paymentDate: z.string().refine((date) => !isNaN(Date.parse(date)), "Fecha inválida."),
+    paymentMethod: z.enum(['Cash', 'Card', 'Transfer']),
     notes: z.string().optional()
 });
 
 export async function addPaymentToTreatment(data: z.infer<typeof paymentSchema>) {
     const supabase = createClient();
     
-    // Validar datos de entrada
     const parsedData = paymentSchema.safeParse(data);
     if(!parsedData.success) {
         return { error: `Datos inválidos: ${parsedData.error.errors.map(e => e.message).join(', ')}` };
     }
-    const { treatmentId, amount, paymentDate, notes } = parsedData.data;
+    const { treatmentId, amount, paymentDate, paymentMethod, notes } = parsedData.data;
 
-    // Obtener clinic_id del tratamiento para la política de seguridad
     const { data: treatment } = await supabase.from('treatments').select('clinic_id').eq('id', treatmentId).single();
     if (!treatment) {
         return { error: 'Tratamiento no encontrado.' };
     }
 
-    // Insertar el pago
     const { error } = await supabase.from('treatment_payments').insert({
         treatment_id: treatmentId,
-        clinic_id: treatment.clinic_id, // Usar el clinic_id del tratamiento
+        clinic_id: treatment.clinic_id,
         amount_paid: amount,
         payment_date: paymentDate,
+        payment_method: paymentMethod,
         notes: notes
     });
 
@@ -120,4 +119,106 @@ export async function addPaymentToTreatment(data: z.infer<typeof paymentSchema>)
 
     revalidatePath('/billing');
     return { error: null };
+}
+
+export async function getPaymentsForClinic() {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'Not authenticated', data: [] };
+
+    const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).single();
+    if (!profile) return { error: 'Profile not found', data: [] };
+
+    const [treatmentPayments, generalPayments] = await Promise.all([
+        supabase
+            .from('treatment_payments')
+            .select('*, treatments(description), patients(id, first_name, last_name)')
+            .eq('clinic_id', profile.clinic_id),
+        supabase
+            .from('general_payments')
+            .select('*, patients(id, first_name, last_name)')
+            .eq('clinic_id', profile.clinic_id)
+    ]);
+    
+    if (treatmentPayments.error || generalPayments.error) {
+        console.error("Error fetching payments:", treatmentPayments.error || generalPayments.error);
+        return { error: 'Failed to fetch payments', data: [] };
+    }
+
+    const formattedTreatmentPayments = treatmentPayments.data.map(p => ({
+        id: p.id,
+        patientName: p.patients ? `${p.patients.first_name} ${p.patients.last_name}` : 'Paciente no encontrado',
+        patientId: p.patients?.id,
+        amount: p.amount_paid,
+        date: p.payment_date,
+        method: p.payment_method,
+        concept: p.treatments?.description || 'Pago de Tratamiento',
+        status: 'Paid',
+    }));
+
+     const formattedGeneralPayments = generalPayments.data.map(p => ({
+        id: p.id,
+        patientName: p.patients ? `${p.patients.first_name} ${p.patients.last_name}` : 'Paciente no encontrado',
+        patientId: p.patients?.id,
+        amount: p.amount,
+        date: p.payment_date,
+        method: p.payment_method,
+        concept: p.description || 'Pago General',
+        status: 'Paid',
+    }));
+
+    const allPayments = [...formattedTreatmentPayments, ...formattedGeneralPayments];
+    allPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return { error: null, data: allPayments };
+}
+
+const generalPaymentSchema = z.object({
+  patientId: z.string().uuid("Seleccione un paciente."),
+  amount: z.number().positive("El monto debe ser positivo."),
+  paymentDate: z.string().refine((date) => !isNaN(Date.parse(date)), "Fecha inválida."),
+  paymentMethod: z.enum(['Cash', 'Card', 'Transfer'], { required_error: "Seleccione un método de pago." }),
+  description: z.string().min(1, "La descripción es requerida."),
+  clinicId: z.string().uuid(),
+});
+
+export async function createGeneralPayment(data: z.infer<typeof generalPaymentSchema>) {
+    const supabase = createClient();
+    const parsedData = generalPaymentSchema.safeParse(data);
+
+    if (!parsedData.success) {
+        return { error: parsedData.error.errors.map(e => e.message).join(', ') };
+    }
+    
+    const { error } = await supabase.from('general_payments').insert(parsedData.data);
+    
+    if (error) {
+        console.error("Error creating general payment:", error);
+        return { error: 'Error al registrar el pago.' };
+    }
+    
+    revalidatePath('/billing');
+    return { error: null };
+}
+
+export async function getPatientsForBilling() {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).single();
+    if (!profile) return [];
+
+    const { data, error } = await supabase
+        .from('patients')
+        .select('id, first_name, last_name')
+        .eq('clinic_id', profile.clinic_id)
+        .order('last_name', { ascending: true });
+
+    if (error) {
+        console.error("Error fetching patients for billing:", error);
+        return [];
+    }
+
+    return data;
 }
