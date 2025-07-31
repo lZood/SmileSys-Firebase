@@ -89,3 +89,37 @@ export async function uploadClinicLogo(file: File, clinicId: string) {
 
     return { publicUrl, error: null };
 }
+
+
+export async function updateTheme(clinicId: string, theme: any) {
+    const supabase = createClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return { error: 'No autorizado' };
+    }
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('clinic_id, role')
+        .eq('id', user.id)
+        .single();
+    
+    if (!profile || profile.clinic_id !== clinicId || profile.role !== 'admin') {
+        return { error: 'No tienes permisos para actualizar el tema.' };
+    }
+
+    const { error } = await supabase
+        .from('clinics')
+        .update({ theme: theme })
+        .eq('id', clinicId);
+
+    if (error) {
+        console.error('Error updating theme:', error);
+        return { error: 'No se pudo actualizar el tema.' };
+    }
+
+    revalidatePath('/settings', 'layout');
+    
+    return { error: null };
+}
