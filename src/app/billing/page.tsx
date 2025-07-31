@@ -39,6 +39,7 @@ import { Progress } from '@/components/ui/progress';
 import { getTreatmentsForClinic, addPaymentToTreatment, getPaymentsForClinic, getPatientsForBilling, createGeneralPayment } from './actions';
 import { getUserData } from '../user/actions';
 import { useRouter } from 'next/navigation';
+import { AddGeneralPaymentModal } from '@/components/add-general-payment-modal';
 
 // Types
 type Clinic = NonNullable<Awaited<ReturnType<typeof getUserData>>['clinic']>;
@@ -185,106 +186,6 @@ const AddTreatmentPaymentModal = ({
     );
 };
 
-const AddGeneralPaymentModal = ({
-    isOpen,
-    onClose,
-    onPaymentAdded,
-    patients,
-    clinic,
-}: {
-    isOpen: boolean;
-    onClose: () => void;
-    onPaymentAdded: () => void;
-    patients: BillingPatient[];
-    clinic: Clinic | null;
-}) => {
-    const { toast } = useToast();
-    const [patientId, setPatientId] = React.useState<string | undefined>();
-    const [amount, setAmount] = React.useState('');
-    const [paymentDate, setPaymentDate] = React.useState(new Date().toISOString().split('T')[0]);
-    const [paymentMethod, setPaymentMethod] = React.useState<'Card' | 'Cash' | 'Transfer'>();
-    const [description, setDescription] = React.useState('');
-
-    if (!clinic) return null;
-
-    const handleSubmit = async () => {
-        if (!patientId || !amount || !paymentMethod || !description) {
-            toast({ variant: 'destructive', title: 'Campos Incompletos', description: 'Por favor, complete todos los campos.' });
-            return;
-        }
-
-        const result = await createGeneralPayment({
-            patientId,
-            clinicId: clinic.id,
-            amount: parseFloat(amount),
-            paymentDate,
-            paymentMethod,
-            description,
-        });
-        
-        if (result.error) {
-            toast({ variant: 'destructive', title: 'Error', description: result.error });
-        } else {
-            toast({ title: 'Pago Registrado', description: 'El pago general se ha guardado.' });
-            onPaymentAdded();
-            onClose();
-        }
-    };
-    
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Registrar Pago General</DialogTitle>
-                    <DialogDescription>Registra un pago que no esté asociado a un plan de tratamiento.</DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="patientId">Paciente</Label>
-                        <Select onValueChange={setPatientId}>
-                            <SelectTrigger><SelectValue placeholder="Seleccionar paciente..." /></SelectTrigger>
-                            <SelectContent>
-                                {patients.map(p => (
-                                    <SelectItem key={p.id} value={p.id}>{p.first_name} {p.last_name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="description">Concepto</Label>
-                        <Input id="description" value={description} onChange={e => setDescription(e.target.value)} placeholder="Ej. Limpieza dental" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="amount">Monto ($)</Label>
-                            <Input id="amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} />
-                        </div>
-                         <div className="grid gap-2">
-                            <Label htmlFor="paymentMethod">Método de Pago</Label>
-                            <Select onValueChange={(value: 'Card'|'Cash'|'Transfer') => setPaymentMethod(value)}>
-                                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Cash">Efectivo</SelectItem>
-                                    <SelectItem value="Card">Tarjeta</SelectItem>
-                                    <SelectItem value="Transfer">Transferencia</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="paymentDate">Fecha de Pago</Label>
-                        <Input id="paymentDate" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
-                    </div>
-                </div>
-                 <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>Cancelar</Button>
-                    <Button onClick={handleSubmit}>Guardar Pago</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-};
-
 
 export default function BillingPage() {
     const router = useRouter();
@@ -328,7 +229,14 @@ export default function BillingPage() {
         setIsTreatmentPaymentModalOpen(true);
     };
 
-    const totalIncomeThisMonth = payments.filter(p => new Date(p.date).getMonth() === new Date().getMonth()).reduce((sum, p) => sum + p.amount, 0);
+    const totalIncomeThisMonth = payments
+        .filter(p => {
+            const paymentDate = new Date(p.date);
+            const today = new Date();
+            // Compare year and month to be precise
+            return paymentDate.getFullYear() === today.getFullYear() && paymentDate.getMonth() === today.getMonth();
+        })
+        .reduce((sum, p) => sum + p.amount, 0);
 
   return (
     <div className="space-y-6">

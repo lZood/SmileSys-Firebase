@@ -8,7 +8,7 @@ import { notFound, useSearchParams } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { FileText, Pencil, Trash2, ChevronLeft, Download, MoreHorizontal, HandCoins } from "lucide-react";
+import { FileText, Pencil, Trash2, ChevronLeft, Download, MoreHorizontal, HandCoins, PlusCircle } from "lucide-react";
 import { Odontogram } from "@/components/odontogram";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
@@ -17,7 +17,7 @@ import { getPatientById, getConsentFormsForPatient } from '../actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createClient } from '@/lib/supabase/client';
 import { getUserData } from '@/app/user/actions';
-import { getTreatmentsForPatient, getPaymentsForPatient, addPaymentToTreatment, deleteTreatment } from '@/app/billing/actions';
+import { getTreatmentsForPatient, getPaymentsForPatient, addPaymentToTreatment, deleteTreatment, updateTreatment } from '@/app/billing/actions';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -30,9 +30,12 @@ import { Dialog, DialogFooter, DialogHeader, DialogTitle, DialogDescription, Dia
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AddGeneralPaymentModal } from '@/components/add-general-payment-modal';
+import { Textarea } from '@/components/ui/textarea';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 
-type Patient = Awaited<ReturnType<typeof getPatientById>>;
+type Patient = NonNullable<Awaited<ReturnType<typeof getPatientById>>>;
 type Clinic = NonNullable<Awaited<ReturnType<typeof getUserData>>['clinic']>;
 type ConsentDocument = {
     id: string;
@@ -150,20 +153,144 @@ const AddPaymentModal = ({
     );
 }
 
+const EditTreatmentModal = ({
+    treatment,
+    isOpen,
+    onClose,
+    onTreatmentUpdated,
+}: {
+    treatment: Treatment | null;
+    isOpen: boolean;
+    onClose: () => void;
+    onTreatmentUpdated: () => void;
+}) => {
+    const { toast } = useToast();
+    const [formData, setFormData] = React.useState({
+        description: '',
+        totalCost: 0,
+        paymentType: 'one_time' as 'one_time' | 'monthly',
+        durationMonths: 0,
+        monthlyPayment: 0,
+        status: 'active' as 'active' | 'completed' | 'cancelled',
+    });
+
+    React.useEffect(() => {
+        if (treatment) {
+            setFormData({
+                description: treatment.description,
+                totalCost: treatment.total_cost,
+                paymentType: treatment.payment_type,
+                durationMonths: treatment.duration_months || 0,
+                monthlyPayment: treatment.monthly_payment || 0,
+                status: treatment.status,
+            });
+        }
+    }, [treatment]);
+
+    if (!treatment) return null;
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { id, value, type } = e.target;
+        setFormData(prev => ({...prev, [id]: type === 'number' ? parseFloat(value) || 0 : value }));
+    }
+
+    const handleSelectChange = (id: string, value: string) => {
+         setFormData(prev => ({ ...prev, [id]: value }));
+    }
+
+    const handleSubmit = async () => {
+        const result = await updateTreatment({
+            treatmentId: treatment.id,
+            ...formData,
+        });
+
+        if (result.error) {
+            toast({ variant: 'destructive', title: 'Error', description: result.error });
+        } else {
+            toast({ title: 'Tratamiento Actualizado', description: 'Los cambios han sido guardados.'});
+            onTreatmentUpdated();
+            onClose();
+        }
+    };
+
+    return (
+         <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Editar Plan de Tratamiento</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                     <div className="grid gap-2">
+                        <Label htmlFor="description">Descripción</Label>
+                        <Textarea id="description" value={formData.description} onChange={handleChange} />
+                    </div>
+                     <div className="grid grid-cols-2 gap-4">
+                         <div className="grid gap-2">
+                             <Label htmlFor="totalCost">Costo Total ($)</Label>
+                             <Input id="totalCost" type="number" value={formData.totalCost} onChange={handleChange} />
+                         </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="status">Estado</Label>
+                            <Select value={formData.status} onValueChange={(v) => handleSelectChange('status', v)}>
+                                <SelectTrigger><SelectValue/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="active">Activo</SelectItem>
+                                    <SelectItem value="completed">Completado</SelectItem>
+                                    <SelectItem value="cancelled">Cancelado</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                     <div className="grid gap-2">
+                        <Label>Tipo de Pago</Label>
+                        <RadioGroup value={formData.paymentType} onValueChange={(v: any) => handleSelectChange('paymentType', v)}>
+                            <div className="flex items-center space-x-2"><RadioGroupItem value="one_time" id="r1" /><Label htmlFor="r1">Pago Único</Label></div>
+                            <div className="flex items-center space-x-2"><RadioGroupItem value="monthly" id="r2" /><Label htmlFor="r2">Plan Mensual</Label></div>
+                        </RadioGroup>
+                    </div>
+                    {formData.paymentType === 'monthly' && (
+                         <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="durationMonths">Duración (meses)</Label>
+                                <Input id="durationMonths" type="number" value={formData.durationMonths} onChange={handleChange} />
+                            </div>
+                             <div className="grid gap-2">
+                                <Label htmlFor="monthlyPayment">Pago Mensual ($)</Label>
+                                <Input id="monthlyPayment" type="number" value={formData.monthlyPayment} onChange={handleChange} />
+                            </div>
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                    <Button onClick={handleSubmit}>Guardar Cambios</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+
 const TreatmentsList = ({ treatments, onRefetch }: { treatments: Treatment[], onRefetch: () => void }) => {
     const { toast } = useToast();
     const [selectedTreatment, setSelectedTreatment] = React.useState<Treatment | null>(null);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = React.useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
 
     const handleRegisterPaymentClick = (treatment: Treatment) => {
         setSelectedTreatment(treatment);
         setIsPaymentModalOpen(true);
     };
 
+    const handleEditClick = (treatment: Treatment) => {
+        setSelectedTreatment(treatment);
+        setIsEditModalOpen(true);
+    }
+
     const handleDelete = async (treatmentId: string) => {
         const { error } = await deleteTreatment(treatmentId);
         if (error) {
-            toast({ variant: 'destructive', title: 'Error', description: error.error });
+            toast({ variant: 'destructive', title: 'Error', description: error });
         } else {
             toast({ title: 'Tratamiento Eliminado', description: 'El plan de tratamiento ha sido eliminado.' });
             onRefetch();
@@ -173,6 +300,8 @@ const TreatmentsList = ({ treatments, onRefetch }: { treatments: Treatment[], on
     return (
         <Card>
             <AddPaymentModal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} treatment={selectedTreatment} onPaymentAdded={() => { onRefetch(); setIsPaymentModalOpen(false); }}/>
+            <EditTreatmentModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} treatment={selectedTreatment} onTreatmentUpdated={() => { onRefetch(); setIsEditModalOpen(false); }}/>
+
             <CardHeader>
                 <CardTitle>Planes de Tratamiento</CardTitle>
                 <CardDescription>Tratamientos activos y completados para este paciente.</CardDescription>
@@ -209,7 +338,7 @@ const TreatmentsList = ({ treatments, onRefetch }: { treatments: Treatment[], on
                                                 <DropdownMenuContent>
                                                     <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                                                     <DropdownMenuItem onClick={() => handleRegisterPaymentClick(treatment)}><HandCoins className="mr-2 h-4 w-4" />Registrar Pago</DropdownMenuItem>
-                                                    <DropdownMenuItem disabled><Pencil className="mr-2 h-4 w-4" />Editar</DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleEditClick(treatment)}><Pencil className="mr-2 h-4 w-4" />Editar</DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <AlertDialogTrigger asChild>
                                                         <DropdownMenuItem className="text-red-600"><Trash2 className="mr-2 h-4 w-4" />Eliminar</DropdownMenuItem>
@@ -244,11 +373,18 @@ const TreatmentsList = ({ treatments, onRefetch }: { treatments: Treatment[], on
     );
 };
 
-const PaymentsHistory = ({ payments }: { payments: Payment[] }) => (
+const PaymentsHistory = ({ payments, onAddPaymentClick }: { payments: Payment[], onAddPaymentClick: () => void }) => (
     <Card>
         <CardHeader>
-            <CardTitle>Historial de Pagos</CardTitle>
-            <CardDescription>Todos los pagos registrados para este paciente.</CardDescription>
+            <div className="flex justify-between items-center">
+                <div>
+                    <CardTitle>Historial de Pagos</CardTitle>
+                    <CardDescription>Todos los pagos registrados para este paciente.</CardDescription>
+                </div>
+                 <Button size="sm" className="h-9 gap-2" onClick={onAddPaymentClick}>
+                    <PlusCircle className="h-4 w-4" /> Añadir Pago General
+                </Button>
+            </div>
         </CardHeader>
         <CardContent>
             <Table>
@@ -294,6 +430,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
   const [payments, setPayments] = React.useState<Payment[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isConsentModalOpen, setIsConsentModalOpen] = React.useState(false);
+  const [isGeneralPaymentModalOpen, setIsGeneralPaymentModalOpen] = React.useState(false);
   const [consentFormsLoading, setConsentFormsLoading] = React.useState(true);
   const supabase = createClient();
   const defaultTab = searchParams.get('tab') || 'odontogram';
@@ -329,11 +466,15 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
     setConsentFormsLoading(false);
   }, [patientId]);
 
-  React.useEffect(() => {
+  const fetchAllData = React.useCallback(() => {
     fetchPatientData();
     fetchFinancialData();
     fetchConsentForms();
   }, [fetchPatientData, fetchFinancialData, fetchConsentForms]);
+
+  React.useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
   
   const handleConsentModalClose = (wasSubmitted: boolean) => {
       setIsConsentModalOpen(false);
@@ -403,6 +544,14 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
             onClose={handleConsentModalClose}
           />
         )}
+       <AddGeneralPaymentModal
+            isOpen={isGeneralPaymentModalOpen}
+            onClose={() => setIsGeneralPaymentModalOpen(false)}
+            onPaymentAdded={fetchFinancialData}
+            patients={[{...patient}]}
+            clinic={clinic}
+            preselectedPatientId={patient.id}
+        />
       <div className="mb-4">
         <Button asChild variant="outline" size="sm">
             <Link href="/patients">
@@ -511,7 +660,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
                  <TabsContent value="billing">
                      <div className="space-y-4">
                         <TreatmentsList treatments={treatments} onRefetch={fetchFinancialData} />
-                        <PaymentsHistory payments={payments} />
+                        <PaymentsHistory payments={payments} onAddPaymentClick={() => setIsGeneralPaymentModalOpen(true)} />
                      </div>
                 </TabsContent>
             </Tabs>

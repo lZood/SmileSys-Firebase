@@ -45,6 +45,51 @@ export async function createTreatment(data: z.infer<typeof treatmentSchema>) {
     return { error: null };
 }
 
+const updateTreatmentSchema = z.object({
+    treatmentId: z.string().uuid(),
+    description: z.string().min(1, "La descripción es requerida."),
+    totalCost: z.number().positive("El costo total debe ser positivo."),
+    paymentType: z.enum(['monthly', 'one_time']),
+    durationMonths: z.number().optional().nullable(),
+    monthlyPayment: z.number().optional().nullable(),
+    status: z.enum(['active', 'completed', 'cancelled']),
+});
+
+export async function updateTreatment(data: z.infer<typeof updateTreatmentSchema>) {
+    const supabase = createClient();
+    const parsedData = updateTreatmentSchema.safeParse(data);
+
+    if (!parsedData.success) {
+        return { error: parsedData.error.errors.map(e => e.message).join(', ') };
+    }
+
+    const { treatmentId, ...updateData } = parsedData.data;
+    const { patient_id } = await supabase.from('treatments').select('patient_id').eq('id', treatmentId).single().then(r => r.data || {});
+
+    const { error } = await supabase
+        .from('treatments')
+        .update({
+            description: updateData.description,
+            total_cost: updateData.totalCost,
+            payment_type: updateData.paymentType,
+            duration_months: updateData.durationMonths,
+            monthly_payment: updateData.monthlyPayment,
+            status: updateData.status,
+        })
+        .eq('id', treatmentId);
+    
+    if (error) {
+        console.error("Error updating treatment:", error);
+        return { error: 'Error al actualizar el tratamiento.' };
+    }
+
+    revalidatePath('/billing');
+    if (patient_id) {
+        revalidatePath(`/patients/${patient_id}`);
+    }
+    return { error: null };
+}
+
 export async function getTreatmentsForClinic() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -154,7 +199,7 @@ export async function getPaymentsForClinic() {
     const [treatmentPayments, generalPayments] = await Promise.all([
         supabase
             .from('treatment_payments')
-            .select('*, treatments(description, patient_id), patients!treatment_payments_treatment_id_fkey(id, first_name, last_name)')
+            .select('*, treatments(description, patient_id), patients!treatment_payments_patient_id_fkey(id, first_name, last_name)')
             .eq('clinic_id', profile.clinic_id),
         supabase
             .from('general_payments')
@@ -181,7 +226,7 @@ export async function getPaymentsForClinic() {
      const formattedGeneralPayments = generalPayments.data?.map(p => ({
         id: p.id,
         patientName: p.patients ? `${p.patients.first_name} ${p.patients.last_name}` : 'Paciente no encontrado',
-        patientId: p.patients?.id,
+        patientId: p.patient_id,
         amount: p.amount,
         date: p.payment_date,
         method: p.payment_method,
@@ -197,12 +242,13 @@ export async function getPaymentsForClinic() {
 
 export async function getPaymentsForPatient(patientId: string) {
     const supabase = createClient();
+     if (!patientId) return [];
 
     const [treatmentPayments, generalPayments] = await Promise.all([
         supabase
             .from('treatment_payments')
             .select('*, treatments(description)')
-            .eq('treatments.patient_id', patientId),
+            .eq('patient_id', patientId),
         supabase
             .from('general_payments')
             .select('*')
@@ -256,7 +302,14 @@ export async function createGeneralPayment(data: z.infer<typeof generalPaymentSc
         return { error: parsedData.error.errors.map(e => e.message).join(', ') };
     }
     
-    const { error } = await supabase.from('general_payments').insert(parsedData.data);
+    const { error } = await supabase.from('general_payments').insert({
+        patient_id: data.patientId,
+        clinic_id: data.clinicId,
+        amount: data.amount,
+        payment_date: data.paymentDate,
+        payment_method: data.paymentMethod,
+        description: data.description,
+    });
     
     if (error) {
         console.error("Error creating general payment:", error);
