@@ -680,10 +680,9 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
 }
 
 export default function PatientDetailPage({ params }: { params: { id: string } }) {
-  const patientId = params.id;
   return (
     <DashboardLayout>
-      <PatientDetailView patientId={patientId} />
+      <PatientDetailView patientId={params.id} />
     </DashboardLayout>
   );
 }
