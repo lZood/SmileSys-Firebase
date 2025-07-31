@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -248,7 +247,7 @@ export default function AppointmentsCalendarPage() {
         ]);
         setPatients(patientsData as Patient[]);
         if (userData?.teamMembers) {
-            const doctorMembers = userData.teamMembers.filter(m => m.role === 'doctor' || m.role === 'admin');
+            const doctorMembers = userData.teamMembers.filter(m => m.roles.includes('doctor'));
             setDoctors(doctorMembers as Doctor[]);
         }
     }

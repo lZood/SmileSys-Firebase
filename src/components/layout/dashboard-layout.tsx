@@ -123,8 +123,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     });
   }, []);
 
-  const userRole = userData?.profile?.role;
-  const navItems = allNavItems.filter(item => userRole && item.roles.includes(userRole));
+  const userRoles = userData?.profile?.roles || [];
+  const navItems = allNavItems.filter(item => 
+      userRoles.some(userRole => item.roles.includes(userRole))
+  );
 
   const isNavItemActive = (href: string) => {
     return pathname === href || (href !== '/dashboard' && pathname.startsWith(href));

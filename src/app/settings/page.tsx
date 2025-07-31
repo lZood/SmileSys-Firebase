@@ -186,11 +186,7 @@ const PasswordForm = () => {
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { id, value } = e.target;
         setPasswords(prev => ({...prev, [id]: value}));
-        if (id === 'confirmPassword' && passwords.newPassword !== value) {
-            setError('Las contraseñas no coinciden.');
-        } else {
-            setError(null);
-        }
+        setError(null);
     };
 
     const handlePasswordChange = async () => {
@@ -297,7 +293,7 @@ export default function SettingsPage() {
   }
 
   const { user, profile, clinic, teamMembers } = userData || {};
-  const isAdmin = profile?.role === 'admin';
+  const isAdmin = profile?.roles?.includes('admin');
 
   return (
     <DashboardLayout>
@@ -372,7 +368,7 @@ export default function SettingsPage() {
                                             <TableCell className="font-medium">{member.first_name} {member.last_name}</TableCell>
                                             <TableCell>{member.user_email}</TableCell>
                                             <TableCell>{member.job_title || 'N/A'}</TableCell>
-                                            <TableCell className="capitalize">{member.role}</TableCell>
+                                            <TableCell className="capitalize">{member.roles.join(', ')}</TableCell>
                                             <TableCell>
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" disabled={!isAdmin}><MoreHorizontal className="w-4 h-4"/></Button></DropdownMenuTrigger>

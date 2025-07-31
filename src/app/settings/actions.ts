@@ -26,11 +26,11 @@ export async function updateClinicInfo(data: z.infer<typeof clinicInfoSchema>) {
 
     const { data: profile } = await supabase
         .from('profiles')
-        .select('clinic_id, role')
+        .select('clinic_id, roles')
         .eq('id', user.id)
         .single();
     
-    if (!profile || profile.clinic_id !== data.clinicId || profile.role !== 'admin') {
+    if (!profile || profile.clinic_id !== data.clinicId || !profile.roles.includes('admin')) {
         return { error: 'No autorizado: No tienes permiso para actualizar esta clínica.' };
     }
 
@@ -66,8 +66,8 @@ export async function uploadClinicLogo(file: File, clinicId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'No autorizado: Usuario no autenticado.' };
 
-    const { data: profile } = await supabase.from('profiles').select('clinic_id, role').eq('id', user.id).single();
-    if (!profile || profile.clinic_id !== clinicId || profile.role !== 'admin') {
+    const { data: profile } = await supabase.from('profiles').select('clinic_id, roles').eq('id', user.id).single();
+    if (!profile || profile.clinic_id !== clinicId || !profile.roles.includes('admin')) {
         return { error: 'No autorizado: No tienes permiso para realizar esta acción.' };
     }
 
@@ -113,11 +113,11 @@ export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
 
     const { data: adminProfile } = await supabase
         .from('profiles')
-        .select('clinic_id, role')
+        .select('clinic_id, roles')
         .eq('id', adminUser.id)
         .single();
     
-    if (!adminProfile || adminProfile.clinic_id !== data.clinicId || adminProfile.role !== 'admin') {
+    if (!adminProfile || adminProfile.clinic_id !== data.clinicId || !adminProfile.roles.includes('admin')) {
         return { error: 'No tienes permiso para invitar miembros a esta clínica.' };
     }
 
@@ -128,6 +128,16 @@ export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
     }
     const { clinicId, firstName, lastName, jobTitle, email, password, role } = parsedData.data;
 
+    let roles: string[] = [];
+    if (role === 'admin') {
+        roles = ['admin', 'doctor'];
+    } else if (role === 'doctor') {
+        roles = ['doctor'];
+    } else {
+        roles = ['staff'];
+    }
+
+
     // 3. Create the new user in Supabase Auth
     const { data: newUser, error: authError } = await supabase.auth.admin.createUser({
         email,
@@ -135,7 +145,7 @@ export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
         email_confirm: true, // Auto-confirm the email
         user_metadata: {
             full_name: `${firstName} ${lastName}`,
-            role: role
+            roles: roles,
         }
     });
 
@@ -155,7 +165,7 @@ export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
             clinic_id: clinicId,
             first_name: firstName,
             last_name: lastName,
-            role: role,
+            roles: roles,
             job_title: jobTitle,
         });
 
