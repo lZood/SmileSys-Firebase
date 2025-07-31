@@ -181,7 +181,7 @@ export default function PatientsPage() {
                     {patient.phone || 'N/A'}
                   </TableCell>
                   <TableCell className="hidden lg:table-cell">
-                    {new Date(patient.created_at).toLocaleDateString('es-MX', { timeZone: 'UTC' })}
+                    {new Date(`${patient.created_at}T00:00:00Z`).toLocaleDateString('es-MX', { timeZone: 'UTC' })}
                   </TableCell>
                    <TableCell>
                     <Badge variant="outline" className={cn("capitalize", statusStyles[patient.status as keyof typeof statusStyles])}>

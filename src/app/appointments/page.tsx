@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -15,6 +16,7 @@ import {
   isSameDay,
   isAfter,
   isBefore,
+  utcToZonedTime,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -224,6 +226,11 @@ const AppointmentDetailsModal = ({
     );
 }
 
+// Helper to convert a 'YYYY-MM-DD' string to a Date object in UTC
+const dateStringToUtcDate = (dateString: string) => {
+    return new Date(`${dateString}T00:00:00.000Z`);
+}
+
 export default function AppointmentsCalendarPage() {
   const [currentDate, setCurrentDate] = React.useState<Date | null>(null);
   const [appointments, setAppointments] = React.useState<Appointment[]>([]); 
@@ -262,14 +269,14 @@ export default function AppointmentsCalendarPage() {
   
   // Stats Calculation
   const today = new Date();
-  const pendingToday = appointments.filter(app => isToday(new Date(app.date)) && (app.status === 'Scheduled' || app.status === 'In-progress')).length;
+  const pendingToday = appointments.filter(app => isSameDay(dateStringToUtcDate(app.date), today) && (app.status === 'Scheduled' || app.status === 'In-progress')).length;
   const startOfNextDay = add(new Date(today).setHours(0,0,0,0), { days: 1 });
   const endOfWeekDate = endOfWeek(today, { weekStartsOn: 1 });
   const appointmentsThisWeek = appointments.filter(app => {
-      const appDate = new Date(app.date);
+      const appDate = dateStringToUtcDate(app.date);
       return isAfter(appDate, startOfNextDay) && isBefore(appDate, endOfWeekDate);
   }).length;
-  const appointmentsThisMonth = appointments.filter(app => isSameMonth(new Date(app.date), currentDate)).length;
+  const appointmentsThisMonth = appointments.filter(app => isSameMonth(dateStringToUtcDate(app.date), currentDate)).length;
 
 
   const firstDayOfMonth = startOfMonth(currentDate);
@@ -323,7 +330,7 @@ export default function AppointmentsCalendarPage() {
 
   const getAppointmentsForDay = (day: Date) => {
     return appointments.filter((appointment) =>
-      isSameDay(new Date(appointment.date), day)
+      isSameDay(dateStringToUtcDate(appointment.date), day)
     ).sort((a, b) => new Date(`1970-01-01T${a.time}`).getTime() - new Date(`1970-01-01T${b.time}`).getTime());
   };
 
