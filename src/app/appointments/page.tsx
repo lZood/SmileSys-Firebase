@@ -180,6 +180,8 @@ const AppointmentDetailsModal = ({
     onEdit: (app: Appointment) => void,
     onDelete: (id: string) => void
 }) => {
+    const isPast = isBefore(startOfDay(date), startOfDay(new Date()));
+
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-lg">
@@ -200,30 +202,32 @@ const AppointmentDetailsModal = ({
                                     <p className="font-semibold">{app.time} - {app.patientName}</p>
                                     <p className="text-sm text-muted-foreground">{app.service} con {app.doctor}</p>
                                 </div>
-                                <div className="flex gap-2">
-                                     <Button variant="ghost" size="icon" onClick={() => onEdit(app)}>
-                                        <Edit className="w-4 h-4" />
-                                    </Button>
-                                    <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600">
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
-                                                <AlertDialogDescription>
-                                                    Esta acción no se puede deshacer. La cita se eliminará permanentemente.
-                                                </AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                <AlertDialogAction onClick={() => onDelete(app.id)}>Eliminar</AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
-                                </div>
+                                {!isPast && (
+                                    <div className="flex gap-2">
+                                        <Button variant="ghost" size="icon" onClick={() => onEdit(app)}>
+                                            <Edit className="w-4 h-4" />
+                                        </Button>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600">
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Esta acción no se puede deshacer. La cita se eliminará permanentemente.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => onDelete(app.id)}>Eliminar</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -233,7 +237,9 @@ const AppointmentDetailsModal = ({
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>Cerrar</Button>
-                    <Button onClick={onAdd}><Plus className="h-4 w-4 mr-2" /> Agregar Nueva Cita</Button>
+                    {!isPast && (
+                        <Button onClick={onAdd}><Plus className="h-4 w-4 mr-2" /> Agregar Nueva Cita</Button>
+                    )}
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -449,11 +455,11 @@ export default function AppointmentsCalendarPage() {
               return (
                 <div
                   key={day.toString()}
-                  onClick={() => !isPastDay && handleDayClick(day)}
+                  onClick={() => handleDayClick(day)}
                   className={cn(
-                    'relative h-28 sm:h-36 p-2 border-b border-r border-border flex flex-col',
+                    'relative h-28 sm:h-36 p-2 border-b border-r border-border flex flex-col cursor-pointer hover:bg-muted transition-colors',
                     !isSameMonth(day, currentDate) && 'bg-muted/50 text-muted-foreground',
-                    isPastDay ? 'bg-muted/50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted transition-colors',
+                    isPastDay && 'bg-muted/50'
                   )}
                 >
                   <time
