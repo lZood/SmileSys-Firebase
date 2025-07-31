@@ -79,9 +79,18 @@ const AddPaymentModal = ({
 }) => {
     const { toast } = useToast();
     const [amount, setAmount] = React.useState('');
-    const [paymentDate, setPaymentDate] = React.useState(new Date().toISOString().split('T')[0]);
     const [paymentMethod, setPaymentMethod] = React.useState<'Card' | 'Cash' | 'Transfer'>();
     const [notes, setNotes] = React.useState('');
+    
+    // Correctly get local date in YYYY-MM-DD format
+    const getLocalDate = () => {
+        const date = new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+    const [paymentDate, setPaymentDate] = React.useState(getLocalDate());
 
     if (!treatment) return null;
     
@@ -678,3 +687,5 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
     </DashboardLayout>
   );
 }
+
+    
