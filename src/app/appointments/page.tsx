@@ -32,6 +32,9 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { getPatients } from '../patients/actions';
+import { getUserData } from '../user/actions';
+import { Combobox } from '@/components/ui/combobox';
 
 // Types will be adapted for Supabase
 export type Appointment = {
@@ -44,41 +47,56 @@ export type Appointment = {
   status: 'Scheduled' | 'Completed' | 'Canceled' | 'In-progress';
 };
 
+type Patient = { id: string; first_name: string; last_name: string };
+type Doctor = { id: string; first_name: string; last_name: string };
+
 const AppointmentForm = ({ 
   isOpen, 
   onClose, 
   selectedDate, 
   onSubmit,
-  existingAppointment
+  existingAppointment,
+  patients,
+  doctors
 }: { 
   isOpen: boolean, 
   onClose: () => void, 
   selectedDate: Date, 
   onSubmit: (newAppointment: Omit<Appointment, 'id' | 'status'>) => void,
-  existingAppointment?: Appointment | null
+  existingAppointment?: Appointment | null,
+  patients: Patient[],
+  doctors: Doctor[],
 }) => {
     const { toast } = useToast();
-    const [patientName, setPatientName] = React.useState('');
+    const [patientId, setPatientId] = React.useState('');
+    const [doctorId, setDoctorId] = React.useState('');
     const [time, setTime] = React.useState('10:00');
     const [service, setService] = React.useState('');
-    const [doctor, setDoctor] = React.useState('');
+
+    const patientOptions = patients.map(p => ({ label: `${p.first_name} ${p.last_name}`, value: p.id }));
+    const doctorOptions = doctors.map(d => ({ label: `Dr. ${d.first_name} ${d.last_name}`, value: d.id }));
 
     React.useEffect(() => {
         if(existingAppointment) {
-            setPatientName(existingAppointment.patientName);
+            // This part would need more logic to find the patient/doctor ID from the name
+            // For now, it will reset on edit.
+            setPatientId('');
+            setDoctorId('');
             setTime(existingAppointment.time);
             setService(existingAppointment.service);
-            setDoctor(existingAppointment.doctor);
         } else {
-             setPatientName('');
+             setPatientId('');
+             setDoctorId('');
              setTime('10:00');
              setService('');
-             setDoctor('');
         }
     }, [existingAppointment]);
 
     const handleSubmit = () => {
-        if (!patientName || !time || !service || !doctor) {
+        const patient = patients.find(p => p.id === patientId);
+        const doctor = doctors.find(d => d.id === doctorId);
+
+        if (!patient || !time || !service || !doctor) {
             toast({
                 variant: "destructive",
                 title: "Campos Incompletos",
@@ -87,8 +105,8 @@ const AppointmentForm = ({
             return;
         }
         onSubmit({
-            patientName,
-            doctor,
+            patientName: `${patient.first_name} ${patient.last_name}`,
+            doctor: `Dr. ${doctor.first_name} ${doctor.last_name}`,
             service,
             time,
             date: format(selectedDate, 'yyyy-MM-dd'),
@@ -108,16 +126,13 @@ const AppointmentForm = ({
                 <div className="grid gap-4 py-4">
                      <div className="grid gap-2">
                         <Label htmlFor="patient-name">Nombre del Paciente</Label>
-                        <Input 
-                            id="patient-name"
-                            placeholder="Seleccionar paciente o escribir invitado"
-                            value={patientName}
-                            onChange={(e) => setPatientName(e.target.value)}
-                            list="patients-list"
+                        <Combobox 
+                            options={patientOptions}
+                            value={patientId}
+                            onChange={setPatientId}
+                            placeholder="Seleccionar paciente..."
+                            emptyMessage="No se encontraron pacientes."
                         />
-                         <datalist id="patients-list">
-                            {/* Patients list will be fetched from Supabase */}
-                        </datalist>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
@@ -131,7 +146,13 @@ const AppointmentForm = ({
                     </div>
                      <div className="grid gap-2">
                         <Label htmlFor="doctor">Doctor</Label>
-                        <Input id="doctor" value={doctor} onChange={e => setDoctor(e.target.value)} placeholder="Dr. Adams" />
+                         <Combobox 
+                            options={doctorOptions}
+                            value={doctorId}
+                            onChange={setDoctorId}
+                            placeholder="Seleccionar doctor..."
+                            emptyMessage="No se encontraron doctores."
+                        />
                     </div>
                 </div>
                 <DialogFooter>
@@ -206,17 +227,32 @@ const AppointmentDetailsModal = ({
 
 export default function AppointmentsCalendarPage() {
   const [currentDate, setCurrentDate] = React.useState<Date | null>(null);
-  const [appointments, setAppointments] = React.useState<Appointment[]>([]); // Data will be fetched from Supabase
+  const [appointments, setAppointments] = React.useState<Appointment[]>([]); 
   const [isFormModalOpen, setIsFormModalOpen] = React.useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = React.useState(false);
   const [selectedDate, setSelectedDate] = React.useState<Date | null>(null);
   const [selectedAppointment, setSelectedAppointment] = React.useState<Appointment | null>(null);
+  const [patients, setPatients] = React.useState<Patient[]>([]);
+  const [doctors, setDoctors] = React.useState<Doctor[]>([]);
   
   React.useEffect(() => {
     // Set dates on client-side to avoid hydration mismatch
     const now = new Date();
     setCurrentDate(now);
     setSelectedDate(now);
+
+    async function fetchData() {
+        const [patientsData, userData] = await Promise.all([
+            getPatients(),
+            getUserData()
+        ]);
+        setPatients(patientsData as Patient[]);
+        if (userData?.teamMembers) {
+            const doctorMembers = userData.teamMembers.filter(m => m.role === 'doctor' || m.role === 'admin');
+            setDoctors(doctorMembers as Doctor[]);
+        }
+    }
+    fetchData();
     // TODO: Fetch appointments from Supabase for the current month
   }, []);
 
@@ -334,6 +370,8 @@ export default function AppointmentsCalendarPage() {
                     selectedDate={selectedDate}
                     onSubmit={handleAddAppointment}
                     existingAppointment={selectedAppointment}
+                    patients={patients}
+                    doctors={doctors}
                 />
             )}
              {isDetailsModalOpen && (
@@ -410,5 +448,3 @@ export default function AppointmentsCalendarPage() {
     </div>
   );
 }
-
-    
