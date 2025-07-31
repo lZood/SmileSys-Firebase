@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { getUserData } from '../user/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { updateClinicInfo, uploadClinicLogo } from './actions';
+import { updateClinicInfo, uploadClinicLogo, updateUserPassword } from './actions';
 import Image from 'next/image';
 import { InviteMemberForm } from '@/components/invite-member-form';
 import { cn } from '@/lib/utils';
@@ -121,6 +121,55 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: NonNullable<UserData['cli
     );
 };
 
+const ProfileForm = ({ user, profile }: { user: UserData['user'], profile: UserData['profile'] }) => {
+    const { toast } = useToast();
+    const [newPassword, setNewPassword] = React.useState('');
+    const [isLoading, setIsLoading] = React.useState(false);
+
+    const handlePasswordChange = async () => {
+        if (newPassword.length < 8) {
+            toast({ variant: 'destructive', title: 'Contraseña muy corta', description: 'La contraseña debe tener al menos 8 caracteres.' });
+            return;
+        }
+        setIsLoading(true);
+        const result = await updateUserPassword({ newPassword });
+        setIsLoading(false);
+
+        if (result.error) {
+            toast({ variant: 'destructive', title: 'Error', description: result.error });
+        } else {
+            toast({ title: 'Contraseña Actualizada', description: 'Tu contraseña ha sido cambiada exitosamente.' });
+            setNewPassword('');
+        }
+    };
+
+    return (
+        <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                    <Label htmlFor="firstName">Nombre</Label>
+                    <Input id="firstName" defaultValue={profile?.first_name || ''} />
+                </div>
+                    <div className="grid gap-2">
+                    <Label htmlFor="lastName">Apellido</Label>
+                    <Input id="lastName" defaultValue={profile?.last_name || ''} />
+                </div>
+            </div>
+            <div className="grid gap-2">
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" type="email" defaultValue={user?.email || ''} readOnly className="cursor-not-allowed bg-muted/50" />
+            </div>
+            <div className="grid gap-2">
+                <Label htmlFor="newPassword">Nueva Contraseña</Label>
+                <Input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Dejar en blanco para no cambiar"/>
+            </div>
+            <Button onClick={handlePasswordChange} disabled={isLoading || (newPassword.length > 0 && newPassword.length < 8)}>
+                {isLoading ? 'Guardando...' : 'Guardar Cambios'}
+            </Button>
+        </CardContent>
+    );
+}
+
 
 export default function SettingsPage() {
   const [userData, setUserData] = React.useState<UserData | null>(null);
@@ -204,26 +253,10 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle>Mi Perfil</CardTitle>
                 <CardDescription>
-                  Actualiza tu información personal.
+                  Actualiza tu información personal y contraseña.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="firstName">Nombre</Label>
-                        <Input id="firstName" defaultValue={profile?.first_name || ''} />
-                    </div>
-                     <div className="grid gap-2">
-                        <Label htmlFor="lastName">Apellido</Label>
-                        <Input id="lastName" defaultValue={profile?.last_name || ''} />
-                    </div>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" defaultValue={user?.email || ''} readOnly />
-                </div>
-                <Button>Guardar Cambios</Button>
-              </CardContent>
+              <ProfileForm user={user} profile={profile} />
             </Card>
           </TabsContent>
           {isAdmin && (

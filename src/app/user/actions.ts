@@ -36,39 +36,18 @@ export const getUserData = cache(async () => {
         console.error('Error fetching clinic:', clinicError?.message);
     }
     
-    // This query now correctly joins profiles with the auth.users table to get the email.
-    const { data: teamMembersData, error: teamMembersError } = await supabase
-        .from('profiles')
-        .select(`
-            id,
-            first_name,
-            last_name,
-            role,
-            job_title,
-            users (
-                email
-            )
-        `)
-        .eq('clinic_id', profile.clinic_id);
+    const { data: teamMembers, error: teamMembersError } = await supabase.rpc('get_team_members_with_email', { p_clinic_id: profile.clinic_id });
+
 
     if (teamMembersError) {
         console.error('Error fetching team members:', teamMembersError.message);
     }
     
-    // Flatten the structure to make it easier to use in the client components.
-    const teamMembers = teamMembersData?.map((member: any) => ({
-        id: member.id,
-        first_name: member.first_name,
-        last_name: member.last_name,
-        role: member.role,
-        job_title: member.job_title,
-        user_email: member.users?.email || 'No email found',
-    })) || [];
 
     return {
       user,
       profile,
       clinic,
-      teamMembers,
+      teamMembers: teamMembers || [],
     };
 });

@@ -50,16 +50,16 @@ type DashboardLayoutProps = {
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
 
-const navItems = [
-  { href: '/dashboard', icon: Home, label: 'Dashboard' },
-  { href: '/patients', icon: Users, label: 'Pacientes' },
-  { href: '/appointments', icon: Calendar, label: 'Citas' },
-  { href: '/inventory', icon: Package, label: 'Inventario' },
-  { href: '/billing', icon: CreditCard, label: 'Facturación' },
-  { href: '/reports', icon: LineChart, label: 'Reportes' },
+const allNavItems = [
+  { href: '/dashboard', icon: Home, label: 'Dashboard', roles: ['admin', 'doctor', 'staff'] },
+  { href: '/patients', icon: Users, label: 'Pacientes', roles: ['admin', 'doctor', 'staff'] },
+  { href: '/appointments', icon: Calendar, label: 'Citas', roles: ['admin', 'doctor', 'staff'] },
+  { href: '/inventory', icon: Package, label: 'Inventario', roles: ['admin', 'doctor'] },
+  { href: '/billing', icon: CreditCard, label: 'Facturación', roles: ['admin', 'doctor'] },
+  { href: '/reports', icon: LineChart, label: 'Reportes', roles: ['admin'] },
 ];
 
-const bottomNavItems = [{ href: '/settings', icon: Settings, label: 'Ajustes' }];
+const bottomNavItems = [{ href: '/settings', icon: Settings, label: 'Ajustes', roles: ['admin', 'doctor', 'staff'] }];
 
 const ThemeSwitcher = ({ inMobileNav = false }: { inMobileNav?: boolean }) => {
     const { theme, setTheme } = useTheme();
@@ -122,6 +122,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       setIsLoading(false);
     });
   }, []);
+
+  const userRole = userData?.profile?.role;
+  const navItems = allNavItems.filter(item => userRole && item.roles.includes(userRole));
 
   const isNavItemActive = (href: string) => {
     return pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
@@ -364,5 +367,3 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     </div>
   );
 }
-
-    

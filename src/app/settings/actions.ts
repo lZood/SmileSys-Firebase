@@ -169,3 +169,32 @@ export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
     revalidatePath('/settings');
     return { error: null };
 }
+
+const updateUserPasswordSchema = z.object({
+  newPassword: z.string().min(8, "La nueva contraseña debe tener al menos 8 caracteres."),
+});
+
+export async function updateUserPassword(data: z.infer<typeof updateUserPasswordSchema>) {
+    const supabase = createClient();
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return { error: 'Usuario no autenticado.' };
+    }
+
+    const parsedData = updateUserPasswordSchema.safeParse(data);
+    if (!parsedData.success) {
+        return { error: parsedData.error.errors.map(e => e.message).join(', ') };
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: parsedData.data.newPassword
+    });
+
+    if (error) {
+        console.error("Error updating user password:", error);
+        return { error: `No se pudo actualizar la contraseña: ${error.message}` };
+    }
+
+    return { error: null };
+}
