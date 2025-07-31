@@ -24,7 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { getPaymentMethodIcon } from '@/components/icons/payment-method-icons';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogFooter, DialogHeader, DialogTitle, DialogDescription, DialogContent } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -421,8 +421,7 @@ const PaymentsHistory = ({ payments, onAddPaymentClick }: { payments: Payment[],
     </Card>
 );
 
-export default function PatientDetailPage({ params }: { params: { id: string } }) {
-  const patientId = params.id;
+const PatientDetailView = ({ patientId }: { patientId: string }) => {
   const searchParams = useSearchParams();
   const [patient, setPatient] = React.useState<Patient | null>(null);
   const [clinic, setClinic] = React.useState<Clinic | null>(null);
@@ -492,40 +491,40 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
 
   if (isLoading) {
     return (
-      <DashboardLayout>
-        <div className="mb-4">
-          <Skeleton className="h-8 w-48" />
-        </div>
-        <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-7">
-          <div className="lg:col-span-2 md:col-span-4 space-y-4">
-            <Card>
-              <CardHeader className="flex flex-col items-center text-center">
-                <Skeleton className="h-24 w-24 rounded-full" />
-                <Skeleton className="h-8 w-40 mt-4" />
-                <Skeleton className="h-4 w-32 mt-2" />
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Skeleton className="h-px w-full" />
-                <Skeleton className="h-20 w-full" />
-                <Skeleton className="h-px w-full" />
-                <Skeleton className="h-10 w-full" />
-              </CardContent>
-            </Card>
-            <Card>
-               <CardHeader>
-                <Skeleton className="h-6 w-40"/>
-                <Skeleton className="h-4 w-48"/>
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-10 w-full" />
-              </CardContent>
-            </Card>
-          </div>
-          <div className="lg:col-span-5 md:col-span-4">
-            <Skeleton className="h-[500px] w-full" />
-          </div>
-        </div>
-      </DashboardLayout>
+        <div className="space-y-4">
+            <div className="mb-4">
+                <Skeleton className="h-8 w-48" />
+            </div>
+            <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-7">
+                <div className="lg:col-span-2 md:col-span-4 space-y-4">
+                    <Card>
+                    <CardHeader className="flex flex-col items-center text-center">
+                        <Skeleton className="h-24 w-24 rounded-full" />
+                        <Skeleton className="h-8 w-40 mt-4" />
+                        <Skeleton className="h-4 w-32 mt-2" />
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <Skeleton className="h-px w-full" />
+                        <Skeleton className="h-20 w-full" />
+                        <Skeleton className="h-px w-full" />
+                        <Skeleton className="h-10 w-full" />
+                    </CardContent>
+                    </Card>
+                    <Card>
+                    <CardHeader>
+                        <Skeleton className="h-6 w-40"/>
+                        <Skeleton className="h-4 w-48"/>
+                    </CardHeader>
+                    <CardContent>
+                        <Skeleton className="h-10 w-full" />
+                    </CardContent>
+                    </Card>
+                </div>
+                <div className="lg:col-span-5 md:col-span-4">
+                    <Skeleton className="h-[500px] w-full" />
+                </div>
+            </div>
+      </div>
     );
   }
 
@@ -536,7 +535,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
   const patientFullName = `${patient.first_name} ${patient.last_name}`;
 
   return (
-    <DashboardLayout>
+    <div className="space-y-4">
        {isConsentModalOpen && (
           <ConsentForm 
             patientId={patient.id}
@@ -667,8 +666,15 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
             </Tabs>
         </div>
       </div>
-    </DashboardLayout>
+    </div>
   );
 }
 
-    
+export default function PatientDetailPage({ params }: { params: { id: string } }) {
+  const patientId = params.id;
+  return (
+    <DashboardLayout>
+      <PatientDetailView patientId={patientId} />
+    </DashboardLayout>
+  );
+}
