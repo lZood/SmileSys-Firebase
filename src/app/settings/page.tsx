@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { updateClinicInfo, uploadClinicLogo } from './actions';
 import Image from 'next/image';
 import { InviteMemberForm } from '@/components/invite-member-form';
+import { cn } from '@/lib/utils';
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
 
