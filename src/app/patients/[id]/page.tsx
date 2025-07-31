@@ -8,7 +8,7 @@ import { notFound, useRouter, useSearchParams } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { FileText, Pencil, Trash2, ChevronLeft, Download, MoreHorizontal, HandCoins, PlusCircle, AlertCircle, Calendar, Stethoscope, Tooth } from "lucide-react";
+import { FileText, Pencil, Trash2, ChevronLeft, Download, MoreHorizontal, HandCoins, PlusCircle, AlertCircle, Calendar, Stethoscope } from "lucide-react";
 import { Odontogram, ToothState } from "@/components/odontogram";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
@@ -35,7 +35,8 @@ import { AddGeneralPaymentModal } from '@/components/add-general-payment-modal';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { DatePicker } from '@/components/ui/date-picker';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
+import { ToothIcon } from '@/components/icons/tooth-icon';
 
 
 type Patient = NonNullable<Awaited<ReturnType<typeof getPatientById>>>;
@@ -577,7 +578,7 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
             type: 'dental_update',
             title: 'Actualización de Odontograma',
             description: u.notes || 'Se modificó el estado dental del paciente.',
-            icon: Tooth
+            icon: ToothIcon
         });
     });
     
@@ -839,3 +840,5 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
     </DashboardLayout>
   );
 }
+
+    
