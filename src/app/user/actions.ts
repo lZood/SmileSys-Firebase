@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { createClient } from "@/lib/supabase/server";
@@ -43,6 +44,7 @@ export const getUserData = cache(async () => {
             first_name,
             last_name,
             role,
+            job_title,
             users (
                 email
             )
@@ -59,6 +61,7 @@ export const getUserData = cache(async () => {
         first_name: member.first_name,
         last_name: member.last_name,
         role: member.role,
+        job_title: member.job_title,
         user_email: member.users?.email || 'No email found',
     })) || [];
 

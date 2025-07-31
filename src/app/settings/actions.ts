@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { createClient } from "@/lib/supabase/server";
@@ -91,35 +92,80 @@ export async function uploadClinicLogo(file: File, clinicId: string) {
 }
 
 
-export async function updateTheme(clinicId: string, theme: any) {
-    const supabase = createClient();
+const inviteMemberSchema = z.object({
+  clinicId: z.string().uuid(),
+  firstName: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
+  lastName: z.string().min(2, "El apellido debe tener al menos 2 caracteres."),
+  jobTitle: z.string().min(2, "El puesto es requerido."),
+  email: z.string().email("Email inválido."),
+  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres."),
+  role: z.enum(['admin', 'doctor', 'staff']),
+});
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-        return { error: 'No autorizado' };
+export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
+    const supabase = createClient();
+    
+    // 1. Validate permissions of the inviting user
+    const { data: { user: adminUser } } = await supabase.auth.getUser();
+    if (!adminUser) {
+        return { error: 'No autorizado.' };
     }
 
-    const { data: profile } = await supabase
+    const { data: adminProfile } = await supabase
         .from('profiles')
         .select('clinic_id, role')
-        .eq('id', user.id)
+        .eq('id', adminUser.id)
         .single();
     
-    if (!profile || profile.clinic_id !== clinicId || profile.role !== 'admin') {
-        return { error: 'No tienes permisos para actualizar el tema.' };
+    if (!adminProfile || adminProfile.clinic_id !== data.clinicId || adminProfile.role !== 'admin') {
+        return { error: 'No tienes permiso para invitar miembros a esta clínica.' };
     }
 
-    const { error } = await supabase
-        .from('clinics')
-        .update({ theme: theme })
-        .eq('id', clinicId);
+    // 2. Validate input data
+    const parsedData = inviteMemberSchema.safeParse(data);
+    if (!parsedData.success) {
+        return { error: `Datos inválidos: ${parsedData.error.errors.map(e => e.message).join(', ')}` };
+    }
+    const { clinicId, firstName, lastName, jobTitle, email, password, role } = parsedData.data;
 
-    if (error) {
-        console.error('Error updating theme:', error);
-        return { error: 'No se pudo actualizar el tema.' };
+    // 3. Create the new user in Supabase Auth
+    const { data: newUser, error: authError } = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true, // Auto-confirm the email
+        user_metadata: {
+            full_name: `${firstName} ${lastName}`,
+            role: role
+        }
+    });
+
+    if (authError) {
+        console.error("Error creating user in Auth:", authError);
+        return { error: `No se pudo crear el usuario: ${authError.message}` };
+    }
+     if (!newUser.user) {
+        return { error: "No se pudo obtener el objeto de usuario después de la creación." };
     }
 
-    revalidatePath('/settings', 'layout');
-    
+    // 4. Create the user's profile in the 'profiles' table
+    const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+            id: newUser.user.id,
+            clinic_id: clinicId,
+            first_name: firstName,
+            last_name: lastName,
+            role: role,
+            job_title: jobTitle,
+        });
+
+    if (profileError) {
+        console.error("Error creating user profile:", profileError);
+        // Rollback: delete the user from Auth if profile creation fails
+        await supabase.auth.admin.deleteUser(newUser.user.id);
+        return { error: `No se pudo crear el perfil del usuario: ${profileError.message}` };
+    }
+
+    revalidatePath('/settings');
     return { error: null };
 }

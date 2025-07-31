@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { updateClinicInfo, uploadClinicLogo } from './actions';
 import Image from 'next/image';
-import { AppearanceForm } from './appearance-form';
+import { InviteMemberForm } from '@/components/invite-member-form';
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
 
@@ -124,16 +124,28 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: NonNullable<UserData['cli
 export default function SettingsPage() {
   const [userData, setUserData] = React.useState<UserData | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isInviteModalOpen, setIsInviteModalOpen] = React.useState(false);
 
-  React.useEffect(() => {
+  const fetchUserData = React.useCallback(async () => {
     setIsLoading(true);
-    getUserData().then(data => {
-      if (data) {
+    const data = await getUserData();
+     if (data) {
         setUserData(data);
       }
       setIsLoading(false);
-    });
-  }, []);
+  }, [])
+
+  React.useEffect(() => {
+    fetchUserData();
+  }, [fetchUserData]);
+  
+  const handleInviteModalClose = (wasSubmitted: boolean) => {
+    setIsInviteModalOpen(false);
+    if(wasSubmitted) {
+        fetchUserData(); // Refetch data if a new member was added
+    }
+  }
+
 
   if (isLoading) {
       return (
@@ -167,6 +179,7 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout>
+       {isInviteModalOpen && clinic && <InviteMemberForm clinicId={clinic.id} onClose={handleInviteModalClose}/>}
       <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-3xl font-bold font-headline">Ajustes</h1>
@@ -175,11 +188,10 @@ export default function SettingsPage() {
           </p>
         </div>
         <Tabs defaultValue="profile" className="flex-1">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="profile">Perfil</TabsTrigger>
             <TabsTrigger value="clinic">Clínica</TabsTrigger>
             <TabsTrigger value="members">Miembros</TabsTrigger>
-            <TabsTrigger value="appearance">Apariencia</TabsTrigger>
             <TabsTrigger value="integrations">Integraciones</TabsTrigger>
           </TabsList>
           <TabsContent value="profile">
@@ -228,7 +240,7 @@ export default function SettingsPage() {
                             <CardTitle>Miembros del Equipo</CardTitle>
                             <CardDescription>Gestiona el personal de tu clínica (solo Admin).</CardDescription>
                         </div>
-                         <Button size="sm" className="h-8 gap-1" disabled={!isAdmin}>
+                         <Button size="sm" className="h-8 gap-1" disabled={!isAdmin} onClick={() => setIsInviteModalOpen(true)}>
                             <PlusCircle className="h-3.5 w-3.5" />
                             <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
                                 Invitar Miembro
@@ -242,7 +254,8 @@ export default function SettingsPage() {
                             <TableRow>
                                 <TableHead>Nombre</TableHead>
                                 <TableHead>Email</TableHead>
-                                <TableHead>Rol</TableHead>
+                                <TableHead>Puesto</TableHead>
+                                <TableHead>Rol en App</TableHead>
                                 <TableHead><span className="sr-only">Acciones</span></TableHead>
                             </TableRow>
                         </TableHeader>
@@ -251,13 +264,14 @@ export default function SettingsPage() {
                                 <TableRow key={member.id}>
                                     <TableCell className="font-medium">{member.first_name} {member.last_name}</TableCell>
                                     <TableCell>{member.user_email}</TableCell>
+                                    <TableCell>{member.job_title || 'N/A'}</TableCell>
                                     <TableCell className="capitalize">{member.role}</TableCell>
                                     <TableCell>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" disabled={!isAdmin}><MoreHorizontal className="w-4 h-4"/></Button></DropdownMenuTrigger>
                                             <DropdownMenuContent>
                                                 <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                                <DropdownMenuItem>Editar Rol</DropdownMenuItem>
+                                                <DropdownMenuItem>Editar</DropdownMenuItem>
                                                 <DropdownMenuItem className="text-destructive">Eliminar</DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
@@ -269,9 +283,6 @@ export default function SettingsPage() {
                 </CardContent>
             </Card>
           </TabsContent>
-           <TabsContent value="appearance">
-              {clinic && <AppearanceForm clinic={clinic} />}
-           </TabsContent>
           <TabsContent value="integrations">
             <Card>
               <CardHeader>
@@ -307,5 +318,3 @@ export default function SettingsPage() {
     </DashboardLayout>
   );
 }
-
-    
