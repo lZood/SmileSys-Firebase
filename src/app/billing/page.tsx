@@ -236,7 +236,7 @@ export default function BillingPage() {
             const paymentDate = new Date(p.date);
             const today = new Date();
             // Compare year and month to be precise
-            return paymentDate.getFullYear() === today.getFullYear() && paymentDate.getMonth() === today.getMonth();
+            return paymentDate.getUTCFullYear() === today.getFullYear() && paymentDate.getUTCMonth() === today.getMonth();
         })
         .reduce((sum, p) => sum + p.amount, 0);
 
@@ -434,5 +434,3 @@ export default function BillingPage() {
     </div>
   );
 }
-
-    
