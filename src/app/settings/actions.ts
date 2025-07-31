@@ -18,7 +18,6 @@ const clinicInfoSchema = z.object({
 export async function updateClinicInfo(data: z.infer<typeof clinicInfoSchema>) {
     const supabase = createClient();
     
-    // 1. Validate user permissions
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
         return { error: 'No autorizado: Usuario no autenticado.' };
@@ -34,7 +33,6 @@ export async function updateClinicInfo(data: z.infer<typeof clinicInfoSchema>) {
         return { error: 'No autorizado: No tienes permiso para actualizar esta clínica.' };
     }
 
-    // 2. Validate input data
     const parsedData = clinicInfoSchema.safeParse(data);
     if (!parsedData.success) {
         return { error: `Datos inválidos: ${parsedData.error.errors.map(e => e.message).join(', ')}` };
@@ -42,7 +40,6 @@ export async function updateClinicInfo(data: z.infer<typeof clinicInfoSchema>) {
 
     const { clinicId, ...updateData } = parsedData.data;
 
-    // 3. Perform the update
     const { error } = await supabase
         .from('clinics')
         .update(updateData)
@@ -54,7 +51,7 @@ export async function updateClinicInfo(data: z.infer<typeof clinicInfoSchema>) {
     }
     
     revalidatePath('/settings');
-    revalidatePath('/patients/[id]', 'layout'); // To refresh clinic data for consent forms and layout
+    revalidatePath('/patients/[id]', 'layout'); 
     return { error: null };
 }
 
@@ -62,7 +59,6 @@ export async function updateClinicInfo(data: z.infer<typeof clinicInfoSchema>) {
 export async function uploadClinicLogo(file: File, clinicId: string) {
     const supabase = createClient();
 
-    // Validate user permissions
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'No autorizado: Usuario no autenticado.' };
 
@@ -76,7 +72,7 @@ export async function uploadClinicLogo(file: File, clinicId: string) {
     const { error: uploadError } = await supabase.storage
         .from('clinic-logos')
         .upload(filePath, file, {
-            upsert: true, // Overwrite if file with same name exists
+            upsert: true,
         });
 
     if (uploadError) {
@@ -99,13 +95,12 @@ const inviteMemberSchema = z.object({
   jobTitle: z.string().min(2, "El puesto es requerido."),
   email: z.string().email("Email inválido."),
   password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres."),
-  role: z.enum(['admin', 'doctor', 'staff']),
+  roles: z.array(z.string()).min(1, "Debes seleccionar al menos un rol."),
 });
 
 export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
     const supabase = createClient();
     
-    // 1. Validate permissions of the inviting user
     const { data: { user: adminUser } } = await supabase.auth.getUser();
     if (!adminUser) {
         return { error: 'No autorizado.' };
@@ -121,28 +116,16 @@ export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
         return { error: 'No tienes permiso para invitar miembros a esta clínica.' };
     }
 
-    // 2. Validate input data
     const parsedData = inviteMemberSchema.safeParse(data);
     if (!parsedData.success) {
         return { error: `Datos inválidos: ${parsedData.error.errors.map(e => e.message).join(', ')}` };
     }
-    const { clinicId, firstName, lastName, jobTitle, email, password, role } = parsedData.data;
+    const { clinicId, firstName, lastName, jobTitle, email, password, roles } = parsedData.data;
 
-    let roles: string[] = [];
-    if (role === 'admin') {
-        roles = ['admin', 'doctor'];
-    } else if (role === 'doctor') {
-        roles = ['doctor'];
-    } else {
-        roles = ['staff'];
-    }
-
-
-    // 3. Create the new user in Supabase Auth
     const { data: newUser, error: authError } = await supabase.auth.admin.createUser({
         email,
         password,
-        email_confirm: true, // Auto-confirm the email
+        email_confirm: true,
         user_metadata: {
             full_name: `${firstName} ${lastName}`,
             roles: roles,
@@ -157,7 +140,6 @@ export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
         return { error: "No se pudo obtener el objeto de usuario después de la creación." };
     }
 
-    // 4. Create the user's profile in the 'profiles' table
     const { error: profileError } = await supabase
         .from('profiles')
         .insert({
@@ -171,7 +153,6 @@ export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
 
     if (profileError) {
         console.error("Error creating user profile:", profileError);
-        // Rollback: delete the user from Auth if profile creation fails
         await supabase.auth.admin.deleteUser(newUser.user.id);
         return { error: `No se pudo crear el perfil del usuario: ${profileError.message}` };
     }
@@ -185,7 +166,7 @@ const updateUserPasswordSchema = z.object({
   confirmPassword: z.string(),
 }).refine(data => data.newPassword === data.confirmPassword, {
   message: "Las contraseñas no coinciden.",
-  path: ["confirmPassword"], // path of error
+  path: ["confirmPassword"],
 });
 
 
@@ -239,6 +220,69 @@ export async function updateUserProfile(data: z.infer<typeof userProfileSchema>)
     if (error) {
         console.error("Error updating user profile:", error);
         return { error: `No se pudo actualizar el perfil: ${error.message}` };
+    }
+
+    revalidatePath('/settings');
+    return { error: null };
+}
+
+
+const updateMemberRolesSchema = z.object({
+    memberId: z.string().uuid(),
+    roles: z.array(z.string()).min(1, "El miembro debe tener al menos un rol."),
+});
+
+export async function updateMemberRoles(data: z.infer<typeof updateMemberRolesSchema>) {
+    const supabase = createClient();
+    
+    const parsedData = updateMemberRolesSchema.safeParse(data);
+    if (!parsedData.success) {
+        return { error: parsedData.error.errors.map(e => e.message).join(', ') };
+    }
+    const { memberId, roles } = parsedData.data;
+
+    // 1. Update roles in profiles table
+    const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ roles })
+        .eq('id', memberId);
+    
+    if (profileError) {
+        return { error: `Error al actualizar roles en perfil: ${profileError.message}` };
+    }
+
+    // 2. Update roles in auth.users user_metadata
+    const { error: authError } = await supabase.auth.admin.updateUserById(
+        memberId,
+        { user_metadata: { roles: roles } }
+    );
+    if (authError) {
+        return { error: `Error al actualizar metadata de usuario: ${authError.message}` };
+    }
+    
+    revalidatePath('/settings');
+    return { error: null };
+}
+
+export async function deleteMember(memberId: string) {
+    const supabase = createClient();
+
+    // 1. Delete from profiles table (will be handled by CASCADE, but good to be explicit or have policies)
+    const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', memberId);
+
+    if (profileError) {
+        return { error: `Error al eliminar el perfil: ${profileError.message}` };
+    }
+
+    // 2. Delete from auth.users
+    const { error: authError } = await supabase.auth.admin.deleteUser(memberId);
+    if (authError) {
+        // This is problematic as the profile might be gone but auth user remains.
+        // A transaction would be ideal here if possible.
+        return { error: `Error al eliminar el usuario de autenticación: ${authError.message}` };
     }
 
     revalidatePath('/settings');

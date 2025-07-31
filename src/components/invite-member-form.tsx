@@ -14,9 +14,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { inviteMember } from '@/app/settings/actions';
+import { Checkbox } from './ui/checkbox';
 
 export const InviteMemberForm = ({ clinicId, onClose }: { clinicId: string; onClose: (wasSubmitted: boolean) => void }) => {
     const { toast } = useToast();
@@ -27,15 +27,20 @@ export const InviteMemberForm = ({ clinicId, onClose }: { clinicId: string; onCl
         jobTitle: '',
         email: '',
         password: '',
-        role: '' as 'admin' | 'doctor' | 'staff',
+        roles: [] as string[],
     });
+    
+    const allRoles = ['admin', 'doctor', 'staff'];
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({ ...formData, [e.target.id]: e.target.value });
     };
     
-    const handleSelectChange = (value: 'admin' | 'doctor' | 'staff') => {
-        setFormData({ ...formData, role: value });
+    const handleRoleChange = (role: string, checked: boolean) => {
+        setFormData(prev => ({
+            ...prev,
+            roles: checked ? [...prev.roles, role] : prev.roles.filter(r => r !== role)
+        }));
     };
 
     const handleSubmit = async () => {
@@ -91,17 +96,19 @@ export const InviteMemberForm = ({ clinicId, onClose }: { clinicId: string; onCl
                         <Input id="password" type="password" value={formData.password} onChange={handleChange} />
                     </div>
                      <div className="grid gap-2">
-                        <Label htmlFor="role">Rol en la Aplicación</Label>
-                        <Select onValueChange={handleSelectChange} value={formData.role}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Seleccionar rol..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="staff">Staff (Acceso Básico)</SelectItem>
-                                <SelectItem value="doctor">Doctor (Gestión de Pacientes/Citas)</SelectItem>
-                                <SelectItem value="admin">Admin (Acceso Total)</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <Label>Roles en la Aplicación</Label>
+                        <div className="flex flex-col space-y-2">
+                            {allRoles.map(role => (
+                                <div key={role} className="flex items-center space-x-2">
+                                    <Checkbox 
+                                        id={`role-${role}`}
+                                        checked={formData.roles.includes(role)}
+                                        onCheckedChange={(checked) => handleRoleChange(role, !!checked)}
+                                    />
+                                    <Label htmlFor={`role-${role}`} className="capitalize font-normal">{role}</Label>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
                 <DialogFooter>

@@ -10,19 +10,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, PlusCircle } from "lucide-react";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { MoreHorizontal, PlusCircle, Trash2, Edit } from "lucide-react";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { getUserData } from '../user/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { updateClinicInfo, uploadClinicLogo, updateUserPassword, updateUserProfile } from './actions';
+import { updateClinicInfo, uploadClinicLogo, updateUserPassword, updateUserProfile, updateMemberRoles, deleteMember } from './actions';
 import Image from 'next/image';
 import { InviteMemberForm } from '@/components/invite-member-form';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
+type TeamMember = NonNullable<UserData>['teamMembers'][0];
 
 const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: NonNullable<UserData['clinic']>, isAdmin: boolean }) => {
     const { toast } = useToast();
@@ -149,7 +154,7 @@ const ProfileInfoForm = ({ profile }: { profile: NonNullable<UserData['profile']
         <Card>
             <CardHeader>
                 <CardTitle>Información Personal</CardTitle>
-                <CardDescription>Actualiza tu nombre y apellido.</CardDescription>
+                <CardDescription>Actualiza tu nombre y apellido. Tu email no se puede cambiar.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -238,11 +243,83 @@ const PasswordForm = () => {
     );
 };
 
+const EditRolesModal = ({
+    member,
+    isOpen,
+    onClose,
+    onRolesUpdated
+}: {
+    member: TeamMember | null;
+    isOpen: boolean;
+    onClose: () => void;
+    onRolesUpdated: () => void;
+}) => {
+    const { toast } = useToast();
+    const [isLoading, setIsLoading] = React.useState(false);
+    const [roles, setRoles] = React.useState<string[]>([]);
+    const allRoles = ['admin', 'doctor', 'staff'];
+
+    React.useEffect(() => {
+        if (member) {
+            setRoles(member.roles || []);
+        }
+    }, [member]);
+    
+    if (!member) return null;
+
+    const handleRoleChange = (role: string, checked: boolean) => {
+        setRoles(prev => 
+            checked ? [...prev, role] : prev.filter(r => r !== role)
+        );
+    };
+
+    const handleSave = async () => {
+        setIsLoading(true);
+        const result = await updateMemberRoles({ memberId: member.id, roles });
+        setIsLoading(false);
+        if (result.error) {
+            toast({ variant: 'destructive', title: 'Error', description: result.error });
+        } else {
+            toast({ title: 'Roles Actualizados', description: `Los roles de ${member.first_name} han sido actualizados.` });
+            onRolesUpdated();
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Editar Roles de {member.first_name} {member.last_name}</DialogTitle>
+                    <DialogDescription>Selecciona los roles que este miembro debe tener.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    {allRoles.map(role => (
+                        <div key={role} className="flex items-center space-x-2">
+                            <Checkbox 
+                                id={`role-${role}`} 
+                                checked={roles.includes(role)} 
+                                onCheckedChange={(checked) => handleRoleChange(role, !!checked)}
+                            />
+                            <Label htmlFor={`role-${role}`} className="capitalize font-normal">{role}</Label>
+                        </div>
+                    ))}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                    <Button onClick={handleSave} disabled={isLoading}>{isLoading ? 'Guardando...' : 'Guardar Cambios'}</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
 
 export default function SettingsPage() {
   const [userData, setUserData] = React.useState<UserData | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isInviteModalOpen, setIsInviteModalOpen] = React.useState(false);
+  const [isEditRolesModalOpen, setIsEditRolesModalOpen] = React.useState(false);
+  const [selectedMember, setSelectedMember] = React.useState<TeamMember | null>(null);
+  const { toast } = useToast();
 
   const fetchUserData = React.useCallback(async () => {
     setIsLoading(true);
@@ -257,13 +334,28 @@ export default function SettingsPage() {
     fetchUserData();
   }, [fetchUserData]);
   
-  const handleInviteModalClose = (wasSubmitted: boolean) => {
+  const handleModalClose = (wasSubmitted: boolean) => {
     setIsInviteModalOpen(false);
+    setIsEditRolesModalOpen(false);
     if(wasSubmitted) {
-        fetchUserData(); // Refetch data if a new member was added
+        fetchUserData();
     }
   }
 
+  const handleEditClick = (member: TeamMember) => {
+      setSelectedMember(member);
+      setIsEditRolesModalOpen(true);
+  };
+
+  const handleDeleteMember = async (memberId: string) => {
+      const { error } = await deleteMember(memberId);
+      if (error) {
+          toast({ variant: 'destructive', title: 'Error al eliminar', description: error });
+      } else {
+          toast({ title: 'Miembro Eliminado', description: 'El usuario ha sido eliminado exitosamente.' });
+          fetchUserData();
+      }
+  }
 
   if (isLoading) {
       return (
@@ -297,7 +389,14 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout>
-       {isInviteModalOpen && clinic && <InviteMemberForm clinicId={clinic.id} onClose={handleInviteModalClose}/>}
+       {isInviteModalOpen && clinic && <InviteMemberForm clinicId={clinic.id} onClose={(s) => handleModalClose(s)}/>}
+       <EditRolesModal 
+            member={selectedMember} 
+            isOpen={isEditRolesModalOpen} 
+            onClose={() => handleModalClose(false)} 
+            onRolesUpdated={() => handleModalClose(true)} 
+        />
+
       <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-3xl font-bold font-headline">Ajustes</h1>
@@ -358,7 +457,7 @@ export default function SettingsPage() {
                                         <TableHead>Nombre</TableHead>
                                         <TableHead>Email</TableHead>
                                         <TableHead>Puesto</TableHead>
-                                        <TableHead>Rol en App</TableHead>
+                                        <TableHead>Roles en App</TableHead>
                                         <TableHead><span className="sr-only">Acciones</span></TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -368,16 +467,33 @@ export default function SettingsPage() {
                                             <TableCell className="font-medium">{member.first_name} {member.last_name}</TableCell>
                                             <TableCell>{member.user_email}</TableCell>
                                             <TableCell>{member.job_title || 'N/A'}</TableCell>
-                                            <TableCell className="capitalize">{member.roles.join(', ')}</TableCell>
+                                            <TableCell className="capitalize">{member.roles?.join(', ') || 'N/A'}</TableCell>
                                             <TableCell>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" disabled={!isAdmin}><MoreHorizontal className="w-4 h-4"/></Button></DropdownMenuTrigger>
-                                                    <DropdownMenuContent>
-                                                        <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                                        <DropdownMenuItem>Editar</DropdownMenuItem>
-                                                        <DropdownMenuItem className="text-destructive">Eliminar</DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
+                                                <AlertDialog>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" disabled={!isAdmin || member.id === user?.id}><MoreHorizontal className="w-4 h-4"/></Button></DropdownMenuTrigger>
+                                                        <DropdownMenuContent>
+                                                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem onClick={() => handleEditClick(member)}><Edit className="mr-2 h-4 w-4" />Editar Roles</DropdownMenuItem>
+                                                            <AlertDialogTrigger asChild>
+                                                                <DropdownMenuItem className="text-destructive"><Trash2 className="mr-2 h-4 w-4" />Eliminar</DropdownMenuItem>
+                                                            </AlertDialogTrigger>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                Esta acción no se puede deshacer. Se eliminará permanentemente la cuenta de {member.first_name} y todos sus datos asociados.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => handleDeleteMember(member.id)}>Eliminar</AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
                                             </TableCell>
                                         </TableRow>
                                     ))}
