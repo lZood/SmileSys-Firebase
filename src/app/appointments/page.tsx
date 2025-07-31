@@ -16,7 +16,7 @@ import {
   isSameDay,
   isAfter,
   isBefore,
-  utcToZonedTime,
+  startOfDay,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -36,8 +36,12 @@ import { useToast } from '@/hooks/use-toast';
 import { getPatients } from '../patients/actions';
 import { getUserData } from '../user/actions';
 import { Combobox } from '@/components/ui/combobox';
+import { createAppointment, getAppointments, deleteAppointment, updateAppointment } from './actions';
+import { Skeleton } from '@/components/ui/skeleton';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
-// Types will be adapted for Supabase
+
+// Types
 export type Appointment = {
   id: string;
   patientName: string;
@@ -46,6 +50,8 @@ export type Appointment = {
   time: string;
   date: string; // YYYY-MM-DD
   status: 'Scheduled' | 'Completed' | 'Canceled' | 'In-progress';
+  patientId: string;
+  doctorId: string;
 };
 
 type Patient = { id: string; first_name: string; last_name: string };
@@ -63,41 +69,23 @@ const AppointmentForm = ({
   isOpen: boolean, 
   onClose: () => void, 
   selectedDate: Date, 
-  onSubmit: (newAppointment: Omit<Appointment, 'id' | 'status'>) => void,
+  onSubmit: (data: any) => Promise<void>,
   existingAppointment?: Appointment | null,
   patients: Patient[],
   doctors: Doctor[],
 }) => {
     const { toast } = useToast();
-    const [patientId, setPatientId] = React.useState('');
-    const [doctorId, setDoctorId] = React.useState('');
-    const [time, setTime] = React.useState('10:00');
-    const [service, setService] = React.useState('');
+    const [isLoading, setIsLoading] = React.useState(false);
+    const [patientId, setPatientId] = React.useState(existingAppointment?.patientId || '');
+    const [doctorId, setDoctorId] = React.useState(existingAppointment?.doctorId || '');
+    const [time, setTime] = React.useState(existingAppointment?.time || '10:00');
+    const [service, setService] = React.useState(existingAppointment?.service || '');
 
     const patientOptions = patients.map(p => ({ label: `${p.first_name} ${p.last_name}`, value: p.id }));
     const doctorOptions = doctors.map(d => ({ label: `Dr. ${d.first_name} ${d.last_name}`, value: d.id }));
 
-    React.useEffect(() => {
-        if(existingAppointment) {
-            // This part would need more logic to find the patient/doctor ID from the name
-            // For now, it will reset on edit.
-            setPatientId('');
-            setDoctorId('');
-            setTime(existingAppointment.time);
-            setService(existingAppointment.service);
-        } else {
-             setPatientId('');
-             setDoctorId('');
-             setTime('10:00');
-             setService('');
-        }
-    }, [existingAppointment]);
-
-    const handleSubmit = () => {
-        const patient = patients.find(p => p.id === patientId);
-        const doctor = doctors.find(d => d.id === doctorId);
-
-        if (!patient || !time || !service || !doctor) {
+    const handleSubmit = async () => {
+        if (!patientId || !doctorId || !time || !service) {
             toast({
                 variant: "destructive",
                 title: "Campos Incompletos",
@@ -105,14 +93,22 @@ const AppointmentForm = ({
             });
             return;
         }
-        onSubmit({
-            patientName: `${patient.first_name} ${patient.last_name}`,
-            doctor: `Dr. ${doctor.first_name} ${doctor.last_name}`,
-            service,
-            time,
-            date: format(selectedDate, 'yyyy-MM-dd'),
-        });
-        onClose();
+        setIsLoading(true);
+        
+        const dateString = format(selectedDate, 'yyyy-MM-dd');
+        
+        const data = {
+            id: existingAppointment?.id,
+            patient_id: patientId,
+            doctor_id: doctorId,
+            service_description: service,
+            appointment_date: dateString,
+            appointment_time: time,
+            status: existingAppointment?.status || 'Scheduled',
+        };
+
+        await onSubmit(data);
+        setIsLoading(false);
     };
 
     return (
@@ -157,8 +153,10 @@ const AppointmentForm = ({
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>Cancelar</Button>
-                    <Button onClick={handleSubmit}>Guardar Cita</Button>
+                    <Button variant="outline" onClick={onClose} disabled={isLoading}>Cancelar</Button>
+                    <Button onClick={handleSubmit} disabled={isLoading}>
+                        {isLoading ? (existingAppointment ? 'Guardando...' : 'Creando...') : (existingAppointment ? 'Guardar Cambios' : 'Crear Cita')}
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -206,9 +204,25 @@ const AppointmentDetailsModal = ({
                                      <Button variant="ghost" size="icon" onClick={() => onEdit(app)}>
                                         <Edit className="w-4 h-4" />
                                     </Button>
-                                    <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600" onClick={() => onDelete(app.id)}>
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600">
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>¿Confirmar eliminación?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Esta acción no se puede deshacer. La cita se eliminará permanentemente.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                <AlertDialogAction onClick={() => onDelete(app.id)}>Eliminar</AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
                                 </div>
                             </div>
                         ))}
@@ -226,28 +240,34 @@ const AppointmentDetailsModal = ({
     );
 }
 
-// Helper to convert a 'YYYY-MM-DD' string to a Date object in UTC
+// Helper para convertir fechas. Asegura que la fecha se interprete como UTC.
 const dateStringToUtcDate = (dateString: string) => {
-    return new Date(`${dateString}T00:00:00.000Z`);
+    return new Date(dateString + 'T00:00:00.000Z');
 }
 
 export default function AppointmentsCalendarPage() {
-  const [currentDate, setCurrentDate] = React.useState<Date | null>(null);
+  const [currentDate, setCurrentDate] = React.useState(new Date());
   const [appointments, setAppointments] = React.useState<Appointment[]>([]); 
+  const [isLoading, setIsLoading] = React.useState(true);
   const [isFormModalOpen, setIsFormModalOpen] = React.useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = React.useState(false);
-  const [selectedDate, setSelectedDate] = React.useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = React.useState(new Date());
   const [selectedAppointment, setSelectedAppointment] = React.useState<Appointment | null>(null);
   const [patients, setPatients] = React.useState<Patient[]>([]);
   const [doctors, setDoctors] = React.useState<Doctor[]>([]);
+  const { toast } = useToast();
+
+  const fetchMonthAppointments = React.useCallback(async (date: Date) => {
+    setIsLoading(true);
+    const start = format(startOfMonth(date), 'yyyy-MM-dd');
+    const end = format(endOfMonth(date), 'yyyy-MM-dd');
+    const appointmentsData = await getAppointments(start, end);
+    setAppointments(appointmentsData as Appointment[]);
+    setIsLoading(false);
+  }, []);
   
   React.useEffect(() => {
-    // Set dates on client-side to avoid hydration mismatch
-    const now = new Date();
-    setCurrentDate(now);
-    setSelectedDate(now);
-
-    async function fetchData() {
+    async function fetchInitialData() {
         const [patientsData, userData] = await Promise.all([
             getPatients(),
             getUserData()
@@ -258,26 +278,22 @@ export default function AppointmentsCalendarPage() {
             setDoctors(doctorMembers as Doctor[]);
         }
     }
-    fetchData();
-    // TODO: Fetch appointments from Supabase for the current month
+    fetchInitialData();
   }, []);
 
-  if (!currentDate || !selectedDate) {
-    // Render a loading state or nothing until the date is set client-side
-    return null;
-  }
+  React.useEffect(() => {
+      fetchMonthAppointments(currentDate);
+  }, [currentDate, fetchMonthAppointments]);
   
-  // Stats Calculation
-  const today = new Date();
+  const today = startOfDay(new Date());
   const pendingToday = appointments.filter(app => isSameDay(dateStringToUtcDate(app.date), today) && (app.status === 'Scheduled' || app.status === 'In-progress')).length;
-  const startOfNextDay = add(new Date(today).setHours(0,0,0,0), { days: 1 });
+  const startOfNextDay = add(today, { days: 1 });
   const endOfWeekDate = endOfWeek(today, { weekStartsOn: 1 });
   const appointmentsThisWeek = appointments.filter(app => {
       const appDate = dateStringToUtcDate(app.date);
       return isAfter(appDate, startOfNextDay) && isBefore(appDate, endOfWeekDate);
   }).length;
   const appointmentsThisMonth = appointments.filter(app => isSameMonth(dateStringToUtcDate(app.date), currentDate)).length;
-
 
   const firstDayOfMonth = startOfMonth(currentDate);
   const lastDayOfMonth = endOfMonth(currentDate);
@@ -287,28 +303,47 @@ export default function AppointmentsCalendarPage() {
     end: endOfWeek(lastDayOfMonth, { weekStartsOn: 1 }),
   });
 
-  const goToPreviousMonth = () => {
-    setCurrentDate(add(currentDate, { months: -1 }));
-  };
-
-  const goToNextMonth = () => {
-    setCurrentDate(add(currentDate, { months: 1 }));
-  };
+  const goToPreviousMonth = () => setCurrentDate(add(currentDate, { months: -1 }));
+  const goToNextMonth = () => setCurrentDate(add(currentDate, { months: 1 }));
 
   const handleDayClick = (day: Date) => {
     setSelectedDate(day);
     setIsDetailsModalOpen(true);
   };
   
-  const handleAddAppointment = (newAppointmentData: Omit<Appointment, 'id' | 'status'>) => {
-        // TODO: Implement Supabase insert
-        const newAppointment: Appointment = {
-            id: `APP${String(appointments.length + 1).padStart(3, '0')}`,
-            ...newAppointmentData,
-            status: 'Scheduled'
-        };
-        setAppointments(prev => [...prev, newAppointment]);
+  const handleCreateAppointment = async (data: any) => {
+    const result = await createAppointment(data);
+    if (result.error) {
+        toast({ variant: 'destructive', title: 'Error', description: result.error });
+    } else {
+        toast({ title: 'Cita Creada', description: 'La nueva cita ha sido agendada.' });
+        setIsFormModalOpen(false);
+        fetchMonthAppointments(currentDate);
+    }
   };
+
+  const handleUpdateAppointment = async (data: any) => {
+    const result = await updateAppointment(data);
+    if (result.error) {
+        toast({ variant: 'destructive', title: 'Error', description: result.error });
+    } else {
+        toast({ title: 'Cita Actualizada', description: 'La cita ha sido modificada.' });
+        setIsFormModalOpen(false);
+        setSelectedAppointment(null);
+        fetchMonthAppointments(currentDate);
+    }
+  }
+
+  const handleDeleteAppointment = async (id: string) => {
+      const { error } = await deleteAppointment(id);
+      if (error) {
+        toast({ variant: 'destructive', title: 'Error', description: error });
+      } else {
+        toast({ title: 'Cita Eliminada', description: 'La cita ha sido eliminada.'});
+        setIsDetailsModalOpen(false); // Cierra el modal de detalles
+        fetchMonthAppointments(currentDate);
+      }
+  }
 
   const openAddForm = () => {
       setSelectedAppointment(null);
@@ -321,17 +356,11 @@ export default function AppointmentsCalendarPage() {
       setIsDetailsModalOpen(false);
       setIsFormModalOpen(true);
   }
-  
-  const handleDeleteAppointment = (id: string) => {
-      // TODO: Implement Supabase delete
-      setAppointments(prev => prev.filter(app => app.id !== id));
-  }
-
 
   const getAppointmentsForDay = (day: Date) => {
     return appointments.filter((appointment) =>
       isSameDay(dateStringToUtcDate(appointment.date), day)
-    ).sort((a, b) => new Date(`1970-01-01T${a.time}`).getTime() - new Date(`1970-01-01T${b.time}`).getTime());
+    ).sort((a, b) => a.time.localeCompare(b.time));
   };
 
   return (
@@ -343,7 +372,7 @@ export default function AppointmentsCalendarPage() {
                     <ListTodo className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{pendingToday}</div>
+                    {isLoading ? <Skeleton className="h-7 w-12" /> : <div className="text-2xl font-bold">{pendingToday}</div>}
                     <p className="text-xs text-muted-foreground">Citas programadas o en progreso.</p>
                 </CardContent>
             </Card>
@@ -353,7 +382,7 @@ export default function AppointmentsCalendarPage() {
                     <CalendarClock className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{appointmentsThisWeek}</div>
+                    {isLoading ? <Skeleton className="h-7 w-12" /> : <div className="text-2xl font-bold">{appointmentsThisWeek}</div>}
                     <p className="text-xs text-muted-foreground">Citas para el resto de la semana.</p>
                 </CardContent>
             </Card>
@@ -363,7 +392,7 @@ export default function AppointmentsCalendarPage() {
                     <CalendarDays className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{appointmentsThisMonth}</div>
+                    {isLoading ? <Skeleton className="h-7 w-12" /> : <div className="text-2xl font-bold">{appointmentsThisMonth}</div>}
                      <p className="text-xs text-muted-foreground">En {format(currentDate, 'MMMM', { locale: es })}.</p>
                 </CardContent>
             </Card>
@@ -374,7 +403,7 @@ export default function AppointmentsCalendarPage() {
                     isOpen={isFormModalOpen}
                     onClose={() => setIsFormModalOpen(false)}
                     selectedDate={selectedDate}
-                    onSubmit={handleAddAppointment}
+                    onSubmit={selectedAppointment ? handleUpdateAppointment : handleCreateAppointment}
                     existingAppointment={selectedAppointment}
                     patients={patients}
                     doctors={doctors}
@@ -413,37 +442,46 @@ export default function AppointmentsCalendarPage() {
             ))}
             {daysInMonth.map((day) => {
               const appointmentsForDay = getAppointmentsForDay(day);
-              const maxVisible = 3;
+              const maxVisible = 2;
               const hiddenCount = appointmentsForDay.length - maxVisible;
+              const isPastDay = isBefore(day, today);
 
               return (
                 <div
                   key={day.toString()}
-                  onClick={() => handleDayClick(day)}
+                  onClick={() => !isPastDay && handleDayClick(day)}
                   className={cn(
-                    'relative h-28 sm:h-36 p-2 border-b border-r border-border flex flex-col cursor-pointer hover:bg-muted transition-colors',
+                    'relative h-28 sm:h-36 p-2 border-b border-r border-border flex flex-col',
                     !isSameMonth(day, currentDate) && 'bg-muted/50 text-muted-foreground',
+                    isPastDay ? 'bg-muted/50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted transition-colors',
                   )}
                 >
                   <time
                     dateTime={format(day, 'yyyy-MM-dd')}
                     className={cn(
                       'text-xs font-semibold',
-                      isToday(day) && 'flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground'
+                      isToday(day) && 'flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground',
+                      isPastDay && 'text-muted-foreground/50'
                     )}
                   >
                     {format(day, 'd')}
                   </time>
                   <div className="mt-1 flex-grow overflow-y-auto text-xs space-y-1">
-                    {appointmentsForDay.slice(0, maxVisible).map(app => (
-                      <div key={app.id} className="p-1 bg-primary/10 rounded-md text-primary-dark font-medium truncate">
-                        {app.time} - {app.patientName}
-                      </div>
-                    ))}
-                    {hiddenCount > 0 && (
-                      <div className="text-muted-foreground font-medium pt-1">
-                        +{hiddenCount} más
-                      </div>
+                    {isLoading ? (
+                        <Skeleton className="h-4 w-full rounded-md" />
+                    ) : (
+                        <>
+                            {appointmentsForDay.slice(0, maxVisible).map(app => (
+                            <div key={app.id} className="p-1 bg-primary/10 rounded-md text-primary-dark font-medium truncate">
+                                {app.time} - {app.patientName}
+                            </div>
+                            ))}
+                            {hiddenCount > 0 && (
+                            <div className="text-muted-foreground font-medium pt-1">
+                                +{hiddenCount} más
+                            </div>
+                            )}
+                        </>
                     )}
                   </div>
                 </div>
