@@ -4,6 +4,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { format } from 'date-fns';
 
 const appointmentSchema = z.object({
   patient_id: z.string().uuid("Seleccione un paciente."),
@@ -28,12 +29,11 @@ export async function createAppointment(data: z.infer<typeof appointmentSchema>)
         return { error: `Datos inválidos: ${parsedData.error.errors.map(e => e.message).join(', ')}` };
     }
 
-    // Validar que la fecha no sea en el pasado
-    const appointmentDate = new Date(parsedData.data.appointment_date + 'T00:00:00.000Z');
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0); // Comparar solo la fecha, ignorando la hora
+    // Validar que la fecha no sea en el pasado, comparando solo las fechas en string YYYY-MM-DD
+    const appointmentDateString = parsedData.data.appointment_date;
+    const todayString = format(new Date(), 'yyyy-MM-dd');
 
-    if (appointmentDate < today) {
+    if (appointmentDateString < todayString) {
         return { error: "No se pueden crear citas en fechas pasadas." };
     }
 
