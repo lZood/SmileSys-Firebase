@@ -247,13 +247,15 @@ export async function getPaymentsForClinic() {
 
 export async function getPaymentsForPatient(patientId: string) {
     const supabase = createClient();
-     if (!patientId) return [];
+    if (!patientId) return [];
 
-    const { data: patientData, error: patientError } = await getPatientById(patientId);
-    if(patientError || !patientData) return [];
+    const { data: patient, error: patientError } = await supabase.from('patients').select('id').eq('id', patientId).single();
+    if (patientError || !patient) {
+        console.error("Error fetching patient for payments:", patientError);
+        return [];
+    }
 
-
-    const [treatmentPayments, generalPayments] = await Promise.all([
+    const [treatmentPaymentsRes, generalPaymentsRes] = await Promise.all([
         supabase
             .from('treatment_payments')
             .select('*, treatments(description)')
@@ -264,21 +266,23 @@ export async function getPaymentsForPatient(patientId: string) {
             .eq('patient_id', patientId)
     ]);
 
-    if (treatmentPayments.error || generalPayments.error) {
-        console.error("Error fetching patient payments:", treatmentPayments.error || generalPayments.error);
-        return [];
+    if (treatmentPaymentsRes.error) {
+        console.error("Error fetching patient treatment payments:", treatmentPaymentsRes.error);
+    }
+    if (generalPaymentsRes.error) {
+        console.error("Error fetching patient general payments:", generalPaymentsRes.error);
     }
     
-    const formattedTreatmentPayments = treatmentPayments.data?.map(p => ({
+    const formattedTreatmentPayments = (treatmentPaymentsRes.data || []).map(p => ({
         id: p.id,
         amount: p.amount_paid,
         date: p.payment_date,
-        method: p.method,
+        method: p.payment_method,
         concept: p.treatments?.description || 'Pago de Tratamiento',
         status: 'Paid',
     }));
 
-    const formattedGeneralPayments = generalPayments.data?.map(p => ({
+    const formattedGeneralPayments = (generalPaymentsRes.data || []).map(p => ({
         id: p.id,
         amount: p.amount,
         date: p.payment_date,
@@ -287,7 +291,7 @@ export async function getPaymentsForPatient(patientId: string) {
         status: 'Paid',
     }));
 
-    const allPayments = [...(formattedTreatmentPayments || []), ...(formattedGeneralPayments || [])];
+    const allPayments = [...formattedTreatmentPayments, ...formattedGeneralPayments];
     allPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     return allPayments;
@@ -370,5 +374,3 @@ export async function deleteTreatment(treatmentId: string) {
     revalidatePath(`/patients/${treatment.patient_id}`);
     return { error: null };
 }
-
-    
