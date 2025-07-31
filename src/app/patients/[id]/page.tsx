@@ -4,11 +4,11 @@
 import * as React from 'react';
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { notFound } from "next/navigation";
+import { notFound, useSearchParams } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { FileText, Pencil, Trash2, ChevronLeft, Download } from "lucide-react";
+import { FileText, Pencil, Trash2, ChevronLeft, Download, MoreHorizontal, HandCoins } from "lucide-react";
 import { Odontogram } from "@/components/odontogram";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
@@ -17,40 +17,309 @@ import { getPatientById, getConsentFormsForPatient } from '../actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createClient } from '@/lib/supabase/client';
 import { getUserData } from '@/app/user/actions';
+import { getTreatmentsForPatient, getPaymentsForPatient, addPaymentToTreatment, deleteTreatment } from '@/app/billing/actions';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+import { getPaymentMethodIcon } from '@/components/icons/payment-method-icons';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogFooter, DialogHeader, DialogTitle, DialogDescription, DialogContent } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 
 type Patient = Awaited<ReturnType<typeof getPatientById>>;
-type Clinic = Awaited<ReturnType<typeof getUserData>>['clinic'];
-
+type Clinic = NonNullable<Awaited<ReturnType<typeof getUserData>>['clinic']>;
 type ConsentDocument = {
     id: string;
     file_path: string;
     created_at: string;
 };
+type Treatment = Awaited<ReturnType<typeof getTreatmentsForPatient>>[0];
+type Payment = Awaited<ReturnType<typeof getPaymentsForPatient>>[0];
+
+const getStatusInSpanish = (status: any) => {
+    const translations: Record<string, string> = {
+        'Paid': 'Pagado', 'Pending': 'Pendiente', 'Canceled': 'Cancelado',
+        'active': 'Activo', 'completed': 'Completado', 'cancelled': 'Cancelado'
+    };
+    return translations[status] || status;
+}
+
+const getStatusClass = (status: any) => {
+  switch (status) {
+    case 'Paid': case 'completed':
+      return 'bg-green-100 text-green-800 border-green-200';
+    case 'Pending': case 'active':
+      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    case 'Canceled': case 'cancelled':
+      return 'bg-red-100 text-red-800 border-red-200';
+    default:
+      return 'bg-gray-100 text-gray-800';
+  }
+};
+
+const AddPaymentModal = ({
+    treatment,
+    isOpen,
+    onClose,
+    onPaymentAdded
+} : {
+    treatment: Treatment | null;
+    isOpen: boolean;
+    onClose: () => void;
+    onPaymentAdded: () => void;
+}) => {
+    const { toast } = useToast();
+    const [amount, setAmount] = React.useState('');
+    const [paymentDate, setPaymentDate] = React.useState(new Date().toISOString().split('T')[0]);
+    const [paymentMethod, setPaymentMethod] = React.useState<'Card' | 'Cash' | 'Transfer'>();
+    const [notes, setNotes] = React.useState('');
+
+    if (!treatment) return null;
+    
+    const handleSubmit = async () => {
+        if (!amount || parseFloat(amount) <= 0 || !paymentMethod) {
+            toast({ variant: 'destructive', title: 'Campos Inválidos', description: 'Por favor, introduce un monto y método de pago válidos.' });
+            return;
+        }
+
+        const result = await addPaymentToTreatment({
+            treatmentId: treatment.id,
+            amount: parseFloat(amount),
+            paymentDate,
+            paymentMethod,
+            notes
+        });
+
+        if (result.error) {
+            toast({ variant: 'destructive', title: 'Error', description: result.error });
+        } else {
+            toast({ title: 'Pago Registrado', description: 'El pago ha sido añadido al tratamiento.' });
+            onPaymentAdded();
+            onClose();
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Registrar Pago para Tratamiento</DialogTitle>
+                    <DialogDescription>
+                        Paciente: {treatment.patients.first_name} {treatment.patients.last_name}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="amount">Monto a Pagar ($)</Label>
+                        <Input id="amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={String(treatment.total_cost - treatment.total_paid)} />
+                    </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="paymentDate">Fecha de Pago</Label>
+                            <Input id="paymentDate" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="paymentMethod">Método de Pago</Label>
+                            <Select onValueChange={(value: 'Card'|'Cash'|'Transfer') => setPaymentMethod(value)}>
+                                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Cash">Efectivo</SelectItem>
+                                    <SelectItem value="Card">Tarjeta</SelectItem>
+                                    <SelectItem value="Transfer">Transferencia</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                     <div className="grid gap-2">
+                        <Label htmlFor="notes">Notas (Opcional)</Label>
+                        <Input id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ej. Pago de la 3ra mensualidad" />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                    <Button onClick={handleSubmit}>Guardar Pago</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+const TreatmentsList = ({ treatments, onRefetch }: { treatments: Treatment[], onRefetch: () => void }) => {
+    const { toast } = useToast();
+    const [selectedTreatment, setSelectedTreatment] = React.useState<Treatment | null>(null);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = React.useState(false);
+
+    const handleRegisterPaymentClick = (treatment: Treatment) => {
+        setSelectedTreatment(treatment);
+        setIsPaymentModalOpen(true);
+    };
+
+    const handleDelete = async (treatmentId: string) => {
+        const { error } = await deleteTreatment(treatmentId);
+        if (error) {
+            toast({ variant: 'destructive', title: 'Error', description: error.error });
+        } else {
+            toast({ title: 'Tratamiento Eliminado', description: 'El plan de tratamiento ha sido eliminado.' });
+            onRefetch();
+        }
+    };
+    
+    return (
+        <Card>
+            <AddPaymentModal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} treatment={selectedTreatment} onPaymentAdded={() => { onRefetch(); setIsPaymentModalOpen(false); }}/>
+            <CardHeader>
+                <CardTitle>Planes de Tratamiento</CardTitle>
+                <CardDescription>Tratamientos activos y completados para este paciente.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Descripción</TableHead>
+                            <TableHead>Progreso de Pago</TableHead>
+                            <TableHead>Estado</TableHead>
+                            <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {treatments.length > 0 ? treatments.map(treatment => {
+                            const progress = treatment.total_cost > 0 ? (treatment.total_paid / treatment.total_cost) * 100 : 0;
+                            return (
+                                <TableRow key={treatment.id}>
+                                    <TableCell className="font-medium">{treatment.description}</TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-sm">${treatment.total_paid.toFixed(2)} / ${treatment.total_cost.toFixed(2)}</span>
+                                            <Progress value={progress} className="h-2" />
+                                        </div>
+                                    </TableCell>
+                                    <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(treatment.status))}>{getStatusInSpanish(treatment.status)}</Badge></TableCell>
+                                    <TableCell className="text-right">
+                                        <AlertDialog>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon"><MoreHorizontal className="w-4 h-4" /></Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent>
+                                                    <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                    <DropdownMenuItem onClick={() => handleRegisterPaymentClick(treatment)}><HandCoins className="mr-2 h-4 w-4" />Registrar Pago</DropdownMenuItem>
+                                                    <DropdownMenuItem disabled><Pencil className="mr-2 h-4 w-4" />Editar</DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <AlertDialogTrigger asChild>
+                                                        <DropdownMenuItem className="text-red-600"><Trash2 className="mr-2 h-4 w-4" />Eliminar</DropdownMenuItem>
+                                                    </AlertDialogTrigger>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Esta acción no se puede deshacer. Se eliminará el plan de tratamiento y todos sus pagos asociados.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => handleDelete(treatment.id)}>Eliminar</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        }) : (
+                            <TableRow>
+                                <TableCell colSpan={4} className="h-24 text-center">No hay tratamientos registrados para este paciente.</TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+    );
+};
+
+const PaymentsHistory = ({ payments }: { payments: Payment[] }) => (
+    <Card>
+        <CardHeader>
+            <CardTitle>Historial de Pagos</CardTitle>
+            <CardDescription>Todos los pagos registrados para este paciente.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Fecha</TableHead>
+                        <TableHead>Concepto</TableHead>
+                        <TableHead>Método</TableHead>
+                        <TableHead className="text-right">Monto</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {payments.length > 0 ? payments.map(payment => (
+                        <TableRow key={payment.id}>
+                            <TableCell>{new Date(payment.date).toLocaleDateString()}</TableCell>
+                            <TableCell>{payment.concept}</TableCell>
+                            <TableCell>
+                                <div className="flex items-center gap-2">
+                                    {getPaymentMethodIcon(payment.method as any)}
+                                    <span>{payment.method}</span>
+                                </div>
+                            </TableCell>
+                            <TableCell className="text-right font-medium">${payment.amount.toFixed(2)}</TableCell>
+                        </TableRow>
+                    )) : (
+                        <TableRow>
+                            <TableCell colSpan={4} className="h-24 text-center">No hay pagos registrados para este paciente.</TableCell>
+                        </TableRow>
+                    )}
+                </TableBody>
+            </Table>
+        </CardContent>
+    </Card>
+);
 
 export default function PatientDetailPage({ params }: { params: { id: string } }) {
   const patientId = params.id;
+  const searchParams = useSearchParams();
   const [patient, setPatient] = React.useState<Patient | null>(null);
   const [clinic, setClinic] = React.useState<Clinic | null>(null);
   const [consentForms, setConsentForms] = React.useState<ConsentDocument[]>([]);
+  const [treatments, setTreatments] = React.useState<Treatment[]>([]);
+  const [payments, setPayments] = React.useState<Payment[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isConsentModalOpen, setIsConsentModalOpen] = React.useState(false);
   const [consentFormsLoading, setConsentFormsLoading] = React.useState(true);
   const supabase = createClient();
+  const defaultTab = searchParams.get('tab') || 'odontogram';
 
-  const fetchPatientAndClinicData = React.useCallback(async () => {
+  const fetchPatientData = React.useCallback(async () => {
     setIsLoading(true);
     const fetchedPatient = await getPatientById(patientId);
     if (fetchedPatient) {
-      setPatient(fetchedPatient);
-      // Once we have the patient, we can get clinic data
-      const userData = await getUserData();
-      if(userData && userData.clinic?.id === fetchedPatient.clinic_id) {
-          setClinic(userData.clinic);
-      }
+        setPatient(fetchedPatient);
+        const userData = await getUserData();
+        if(userData && userData.clinic?.id === fetchedPatient.clinic_id) {
+            setClinic(userData.clinic);
+        }
     } else {
-      notFound();
+        notFound();
     }
     setIsLoading(false);
+  }, [patientId]);
+
+  const fetchFinancialData = React.useCallback(async () => {
+    const [treatmentsData, paymentsData] = await Promise.all([
+        getTreatmentsForPatient(patientId),
+        getPaymentsForPatient(patientId)
+    ]);
+    setTreatments(treatmentsData as Treatment[]);
+    setPayments(paymentsData as Payment[]);
   }, [patientId]);
 
   const fetchConsentForms = React.useCallback(async () => {
@@ -60,16 +329,17 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
     setConsentFormsLoading(false);
   }, [patientId]);
 
-
   React.useEffect(() => {
-    fetchPatientAndClinicData();
+    fetchPatientData();
+    fetchFinancialData();
     fetchConsentForms();
-  }, [fetchPatientAndClinicData, fetchConsentForms]);
+  }, [fetchPatientData, fetchFinancialData, fetchConsentForms]);
   
   const handleConsentModalClose = (wasSubmitted: boolean) => {
       setIsConsentModalOpen(false);
-      if(wasSubmitted) {
-          fetchConsentForms(); // Refresh the list
+      if (wasSubmitted) {
+          fetchConsentForms();
+          fetchFinancialData(); // Also refetch financial data in case a treatment was added
       }
   }
 
@@ -210,7 +480,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
             </Card>
         </div>
         <div className="lg:col-span-5 md:col-span-4">
-            <Tabs defaultValue="odontogram">
+            <Tabs defaultValue={defaultTab}>
                 <TabsList>
                     <TabsTrigger value="odontogram">Odontograma</TabsTrigger>
                     <TabsTrigger value="history">Historia Clínica</TabsTrigger>
@@ -239,15 +509,10 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
                     </Card>
                 </TabsContent>
                  <TabsContent value="billing">
-                     <Card>
-                        <CardHeader>
-                        <CardTitle>Facturación y Pagos</CardTitle>
-                        <CardDescription>Registro de todas las transacciones financieras.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                           <p className="text-muted-foreground">La función de facturación estará disponible pronto.</p>
-                        </CardContent>
-                    </Card>
+                     <div className="space-y-4">
+                        <TreatmentsList treatments={treatments} onRefetch={fetchFinancialData} />
+                        <PaymentsHistory payments={payments} />
+                     </div>
                 </TabsContent>
             </Tabs>
         </div>

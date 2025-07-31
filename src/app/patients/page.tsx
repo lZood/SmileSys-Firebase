@@ -203,10 +203,10 @@ export default function PatientsPage() {
                             <DropdownMenuItem onClick={() => router.push(`/patients/${patient.id}`)}>
                                 <Eye className="mr-2 h-4 w-4" /> Ver Detalles
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => router.push(`/appointments?patient_id=${patient.id}`)}>
                                 <Calendar className="mr-2 h-4 w-4" /> Citas
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => router.push(`/patients/${patient.id}?tab=billing`)}>
                                 <FileText className="mr-2 h-4 w-4" /> Pagos
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
