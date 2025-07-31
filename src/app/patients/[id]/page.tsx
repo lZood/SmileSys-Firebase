@@ -28,6 +28,7 @@ type ConsentDocument = {
 };
 
 export default function PatientDetailPage({ params }: { params: { id: string } }) {
+  const patientId = params.id;
   const [patient, setPatient] = React.useState<Patient | null>(null);
   const [clinic, setClinic] = React.useState<Clinic | null>(null);
   const [consentForms, setConsentForms] = React.useState<ConsentDocument[]>([]);
@@ -38,7 +39,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
 
   const fetchPatientAndClinicData = React.useCallback(async () => {
     setIsLoading(true);
-    const fetchedPatient = await getPatientById(params.id);
+    const fetchedPatient = await getPatientById(patientId);
     if (fetchedPatient) {
       setPatient(fetchedPatient);
       // Once we have the patient, we can get clinic data
@@ -50,14 +51,14 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
       notFound();
     }
     setIsLoading(false);
-  }, [params.id]);
+  }, [patientId]);
 
   const fetchConsentForms = React.useCallback(async () => {
     setConsentFormsLoading(true);
-    const forms = await getConsentFormsForPatient(params.id);
+    const forms = await getConsentFormsForPatient(patientId);
     setConsentForms(forms as ConsentDocument[]);
     setConsentFormsLoading(false);
-  }, [params.id]);
+  }, [patientId]);
 
 
   React.useEffect(() => {
@@ -254,5 +255,3 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
     </DashboardLayout>
   );
 }
-
-    
