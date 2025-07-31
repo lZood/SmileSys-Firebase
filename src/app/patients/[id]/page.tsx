@@ -8,16 +8,17 @@ import { notFound, useRouter, useSearchParams } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { FileText, Pencil, Trash2, ChevronLeft, Download, MoreHorizontal, HandCoins, PlusCircle, AlertCircle } from "lucide-react";
+import { FileText, Pencil, Trash2, ChevronLeft, Download, MoreHorizontal, HandCoins, PlusCircle, AlertCircle, Calendar, Stethoscope, Tooth } from "lucide-react";
 import { Odontogram, ToothState } from "@/components/odontogram";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
 import { ConsentForm } from '@/components/consent-form';
-import { getPatientById, getConsentFormsForPatient, updatePatientDentalChart } from '../actions';
+import { getPatientById, getConsentFormsForPatient, updatePatientDentalChart, getDentalUpdatesForPatient } from '../actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createClient } from '@/lib/supabase/client';
 import { getUserData } from '@/app/user/actions';
 import { getTreatmentsForPatient, getPaymentsForPatient, addPaymentToTreatment, deleteTreatment, updateTreatment } from '@/app/billing/actions';
+import { getAppointmentsForPatient } from '@/app/appointments/actions';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +47,16 @@ type ConsentDocument = {
 };
 type Treatment = Awaited<ReturnType<typeof getTreatmentsForPatient>>[0];
 type Payment = Awaited<ReturnType<typeof getPaymentsForPatient>>[0];
+type Appointment = Awaited<ReturnType<typeof getAppointmentsForPatient>>[0];
+type DentalUpdate = Awaited<ReturnType<typeof getDentalUpdatesForPatient>>[0];
+
+type TimelineEvent = {
+    date: string;
+    type: 'appointment' | 'treatment' | 'dental_update';
+    title: string;
+    description: string;
+    icon: React.ComponentType<any>;
+};
 
 const getStatusInSpanish = (status: any) => {
     const translations: Record<string, string> = {
@@ -423,6 +434,41 @@ const PaymentsHistory = ({ payments, onAddPaymentClick }: { payments: Payment[],
     </Card>
 );
 
+const ClinicalHistoryTimeline = ({ events }: { events: TimelineEvent[] }) => {
+    if (events.length === 0) {
+        return (
+            <div className="flex items-center justify-center h-48 text-muted-foreground">
+                No hay eventos en la historia clínica del paciente.
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-8">
+            {events.map((event, index) => (
+                <div key={index} className="flex items-start gap-4">
+                    <div className="flex flex-col items-center">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                            <event.icon className="h-5 w-5" />
+                        </span>
+                        {index < events.length - 1 && <div className="w-px h-full bg-border flex-grow mt-2"></div>}
+                    </div>
+                    <div className="flex-1 pt-1.5">
+                        <div className="flex items-center justify-between">
+                             <p className="font-semibold">{event.title}</p>
+                             <time className="text-sm text-muted-foreground">
+                                {new Date(event.date).toLocaleDateString('es-MX', { timeZone: 'UTC', day: '2-digit', month: 'long', year: 'numeric' })}
+                             </time>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">{event.description}</p>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+
 // Custom hook to handle "beforeunload" event
 const useBeforeUnload = (isDirty: boolean) => {
     React.useEffect(() => {
@@ -452,6 +498,7 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
   const [consentForms, setConsentForms] = React.useState<ConsentDocument[]>([]);
   const [treatments, setTreatments] = React.useState<Treatment[]>([]);
   const [payments, setPayments] = React.useState<Payment[]>([]);
+  const [timelineEvents, setTimelineEvents] = React.useState<TimelineEvent[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isConsentModalOpen, setIsConsentModalOpen] = React.useState(false);
   const [isGeneralPaymentModalOpen, setIsGeneralPaymentModalOpen] = React.useState(false);
@@ -464,53 +511,89 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
 
   useBeforeUnload(isChartDirty);
 
-  const fetchPatientData = React.useCallback(async (id: string) => {
+  const fetchAllData = React.useCallback(async (id: string) => {
     setIsLoading(true);
-    const fetchedPatient = await getPatientById(id);
-    if (fetchedPatient) {
-        setPatient(fetchedPatient);
-        setDentalChartState(fetchedPatient.dental_chart);
-        const userData = await getUserData();
-        if(userData && userData.clinic?.id === fetchedPatient.clinic_id) {
-            setClinic(userData.clinic);
-        }
+    
+    const [
+        patientData,
+        userData,
+        treatmentsData,
+        paymentsData,
+        consentFormsData,
+        appointmentsData,
+        dentalUpdatesData
+    ] = await Promise.all([
+        getPatientById(id),
+        getUserData(),
+        getTreatmentsForPatient(id),
+        getPaymentsForPatient(id),
+        getConsentFormsForPatient(id),
+        getAppointmentsForPatient(id),
+        getDentalUpdatesForPatient(id)
+    ]);
+    
+    if (patientData) {
+        setPatient(patientData);
+        setDentalChartState(patientData.dental_chart);
     } else {
         notFound();
     }
+    
+    if(userData && userData.clinic?.id === patientData?.clinic_id) {
+        setClinic(userData.clinic);
+    }
+
+    setTreatments(treatmentsData as Treatment[]);
+    setPayments(paymentsData as Payment[]);
+    setConsentForms(consentFormsData as ConsentDocument[]);
+    setConsentFormsLoading(false);
+
+    // Process data for timeline
+    const events: TimelineEvent[] = [];
+    
+    (appointmentsData as Appointment[]).forEach(app => {
+        events.push({
+            date: app.appointment_date,
+            type: 'appointment',
+            title: `Cita: ${app.service_description}`,
+            description: `Con ${app.doctor_name || 'doctor sin asignar'} a las ${app.appointment_time}. Estado: ${app.status}`,
+            icon: Calendar
+        });
+    });
+
+    (treatmentsData as Treatment[]).forEach(t => {
+        events.push({
+            date: t.start_date,
+            type: 'treatment',
+            title: `Inicio de Tratamiento: ${t.description}`,
+            description: `Costo total: $${t.total_cost}. Estado: ${getStatusInSpanish(t.status)}`,
+            icon: Stethoscope
+        });
+    });
+
+    (dentalUpdatesData as DentalUpdate[]).forEach(u => {
+        events.push({
+            date: u.created_at,
+            type: 'dental_update',
+            title: 'Actualización de Odontograma',
+            description: u.notes || 'Se modificó el estado dental del paciente.',
+            icon: Tooth
+        });
+    });
+    
+    setTimelineEvents(events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    
     setIsLoading(false);
   }, []);
 
-  const fetchFinancialData = React.useCallback(async (id: string) => {
-    const [treatmentsData, paymentsData] = await Promise.all([
-        getTreatmentsForPatient(id),
-        getPaymentsForPatient(id)
-    ]);
-    setTreatments(treatmentsData as Treatment[]);
-    setPayments(paymentsData as Payment[]);
-  }, []);
-
-  const fetchConsentForms = React.useCallback(async (id: string) => {
-    setConsentFormsLoading(true);
-    const forms = await getConsentFormsForPatient(id);
-    setConsentForms(forms as ConsentDocument[]);
-    setConsentFormsLoading(false);
-  }, []);
-
-  const fetchAllData = React.useCallback(() => {
-    fetchPatientData(patientId);
-    fetchFinancialData(patientId);
-    fetchConsentForms(patientId);
-  }, [patientId, fetchPatientData, fetchFinancialData, fetchConsentForms]);
-
   React.useEffect(() => {
-    fetchAllData();
-  }, [fetchAllData]);
+    fetchAllData(patientId);
+  }, [patientId, fetchAllData]);
   
   const handleConsentModalClose = (wasSubmitted: boolean) => {
       setIsConsentModalOpen(false);
       if (wasSubmitted) {
-          fetchConsentForms(patientId);
-          fetchFinancialData(patientId); // Also refetch financial data in case a treatment was added
+          fetchAllData(patientId); // Refetch all data
       }
   }
 
@@ -546,9 +629,8 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
           toast({ variant: 'destructive', title: 'Error', description: error });
       } else {
           toast({ title: 'Odontograma Actualizado', description: 'Los cambios se han guardado correctamente.' });
-          // Update the base patient data to reflect the new saved state
-          setPatient(prev => prev ? { ...prev, dental_chart: dentalChartState } : null);
           setIsChartDirty(false);
+          fetchAllData(patientId); // Refetch to update patient state and timeline
       }
   };
 
@@ -611,7 +693,7 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
        <AddGeneralPaymentModal
             isOpen={isGeneralPaymentModalOpen}
             onClose={() => setIsGeneralPaymentModalOpen(false)}
-            onPaymentAdded={() => fetchFinancialData(patientId)}
+            onPaymentAdded={() => fetchAllData(patientId)}
             patients={[{id: patient.id, first_name: patient.first_name, last_name: patient.last_name}]}
             clinic={clinic}
             preselectedPatientId={patient.id}
@@ -730,16 +812,16 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
                      <Card>
                         <CardHeader>
                         <CardTitle>Historia Clínica</CardTitle>
-                        <CardDescription>Cronología de todos los tratamientos y notas.</CardDescription>
+                        <CardDescription>Cronología de todos los tratamientos, citas y actualizaciones.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                           <p className="text-muted-foreground">La función de historia clínica estará disponible pronto.</p>
+                           <ClinicalHistoryTimeline events={timelineEvents} />
                         </CardContent>
                     </Card>
                 </TabsContent>
                  <TabsContent value="billing">
                      <div className="space-y-4">
-                        <TreatmentsList treatments={treatments} onRefetch={() => fetchFinancialData(patientId)} />
+                        <TreatmentsList treatments={treatments} onRefetch={() => fetchAllData(patientId)} />
                         <PaymentsHistory payments={payments} onAddPaymentClick={() => setIsGeneralPaymentModalOpen(true)} />
                      </div>
                 </TabsContent>

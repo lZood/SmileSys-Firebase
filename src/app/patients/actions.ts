@@ -229,3 +229,19 @@ export async function updatePatientDentalChart(data: z.infer<typeof updateDental
     return { error: null };
 }
 
+export async function getDentalUpdatesForPatient(patientId: string) {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('dental_updates')
+        .select('*')
+        .eq('patient_id', patientId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching dental updates for patient:', error);
+        return [];
+    }
+
+    return data;
+}
+
