@@ -22,8 +22,15 @@ export function DatePicker({
   date: Date | undefined;
   setDate: (date: Date | undefined) => void;
 }) {
+  const [isOpen, setIsOpen] = React.useState(false);
+
+  const handleDateSelect = (selectedDate: Date | undefined) => {
+    setDate(selectedDate);
+    setIsOpen(false);
+  };
+
   return (
-    <Popover>
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <Button
           variant={'outline'}
@@ -31,6 +38,7 @@ export function DatePicker({
             'w-full justify-start text-left font-normal',
             !date && 'text-muted-foreground'
           )}
+          onClick={() => setIsOpen(true)}
         >
           <CalendarIcon className="mr-2 h-4 w-4" />
           {date ? format(date, "PPP", { locale: es }) : <span>Selecciona una fecha</span>}
@@ -40,7 +48,7 @@ export function DatePicker({
         <Calendar
           mode="single"
           selected={date}
-          onSelect={setDate}
+          onSelect={handleDateSelect}
           initialFocus
           locale={es}
         />

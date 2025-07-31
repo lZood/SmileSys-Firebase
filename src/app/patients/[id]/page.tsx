@@ -4,16 +4,16 @@
 import * as React from 'react';
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { notFound, useSearchParams } from "next/navigation";
+import { notFound, useRouter, useSearchParams } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
-import { FileText, Pencil, Trash2, ChevronLeft, Download, MoreHorizontal, HandCoins, PlusCircle } from "lucide-react";
-import { Odontogram } from "@/components/odontogram";
+import { FileText, Pencil, Trash2, ChevronLeft, Download, MoreHorizontal, HandCoins, PlusCircle, AlertCircle } from "lucide-react";
+import { Odontogram, ToothState } from "@/components/odontogram";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
 import { ConsentForm } from '@/components/consent-form';
-import { getPatientById, getConsentFormsForPatient } from '../actions';
+import { getPatientById, getConsentFormsForPatient, updatePatientDentalChart } from '../actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createClient } from '@/lib/supabase/client';
 import { getUserData } from '@/app/user/actions';
@@ -423,8 +423,30 @@ const PaymentsHistory = ({ payments, onAddPaymentClick }: { payments: Payment[],
     </Card>
 );
 
+// Custom hook to handle "beforeunload" event
+const useBeforeUnload = (isDirty: boolean) => {
+    React.useEffect(() => {
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            if (isDirty) {
+                event.preventDefault();
+                // Browsers show a generic message, custom messages are deprecated
+                event.returnValue = ''; 
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [isDirty]);
+};
+
+
 const PatientDetailView = ({ patientId }: { patientId: string }) => {
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   const [patient, setPatient] = React.useState<Patient | null>(null);
   const [clinic, setClinic] = React.useState<Clinic | null>(null);
   const [consentForms, setConsentForms] = React.useState<ConsentDocument[]>([]);
@@ -434,14 +456,20 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
   const [isConsentModalOpen, setIsConsentModalOpen] = React.useState(false);
   const [isGeneralPaymentModalOpen, setIsGeneralPaymentModalOpen] = React.useState(false);
   const [consentFormsLoading, setConsentFormsLoading] = React.useState(true);
+  const [dentalChartState, setDentalChartState] = React.useState<ToothState | null>(null);
+  const [isChartDirty, setIsChartDirty] = React.useState(false);
+  
   const supabase = createClient();
   const defaultTab = searchParams.get('tab') || 'odontogram';
+
+  useBeforeUnload(isChartDirty);
 
   const fetchPatientData = React.useCallback(async (id: string) => {
     setIsLoading(true);
     const fetchedPatient = await getPatientById(id);
     if (fetchedPatient) {
         setPatient(fetchedPatient);
+        setDentalChartState(fetchedPatient.dental_chart);
         const userData = await getUserData();
         if(userData && userData.clinic?.id === fetchedPatient.clinic_id) {
             setClinic(userData.clinic);
@@ -490,6 +518,40 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
     const { data } = supabase.storage.from('consent-forms').getPublicUrl(filePath);
     return data.publicUrl;
   }
+
+  const handleOdontogramChange = (newChartState: ToothState) => {
+    setDentalChartState(newChartState);
+    if (!isChartDirty) {
+        setIsChartDirty(true);
+    }
+  };
+
+  const handleCancelChartChanges = () => {
+    if (patient) {
+        setDentalChartState(patient.dental_chart);
+    }
+    setIsChartDirty(false);
+  };
+
+  const handleSaveChartChanges = async () => {
+      if (!patient || !dentalChartState || !clinic) return;
+
+      const { error } = await updatePatientDentalChart({
+          patientId: patient.id,
+          clinicId: clinic.id,
+          dentalChart: dentalChartState
+      });
+
+      if (error) {
+          toast({ variant: 'destructive', title: 'Error', description: error });
+      } else {
+          toast({ title: 'Odontograma Actualizado', description: 'Los cambios se han guardado correctamente.' });
+          // Update the base patient data to reflect the new saved state
+          setPatient(prev => prev ? { ...prev, dental_chart: dentalChartState } : null);
+          setIsChartDirty(false);
+      }
+  };
+
 
   if (isLoading) {
     return (
@@ -640,11 +702,27 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
                 <TabsContent value="odontogram">
                     <Card>
                         <CardHeader>
-                        <CardTitle>Odontograma Interactivo</CardTitle>
-                        <CardDescription>Representación gráfica de la dentición del paciente.</CardDescription>
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <CardTitle>Odontograma Interactivo</CardTitle>
+                                    <CardDescription>Representación gráfica de la dentición del paciente.</CardDescription>
+                                </div>
+                                {isChartDirty && (
+                                     <div className="flex items-center gap-2">
+                                        <AlertCircle className="w-5 h-5 text-yellow-500" />
+                                        <span className="text-sm text-yellow-600 font-medium">Cambios sin guardar</span>
+                                    </div>
+                                )}
+                            </div>
                         </CardHeader>
                         <CardContent>
-                            <Odontogram initialData={patient.dental_chart} />
+                            <Odontogram initialData={dentalChartState} onChange={handleOdontogramChange} />
+                            {isChartDirty && (
+                                <div className="flex justify-end gap-2 mt-4">
+                                    <Button variant="outline" onClick={handleCancelChartChanges}>Cancelar</Button>
+                                    <Button onClick={handleSaveChartChanges}>Guardar Cambios</Button>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>

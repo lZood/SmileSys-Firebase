@@ -53,15 +53,20 @@ const toothNumbers = {
   lowerRightDeciduous: ['81', '82', '83', '84', '85'],
 };
 
-const Tooth = ({ id, condition, onConditionChange }: { id: string; condition: Condition; onConditionChange: (id: string, condition: Condition) => void; }) => {
+const Tooth = ({ id, condition, onConditionChange, isReadOnly }: { id: string; condition: Condition; onConditionChange: (id: string, condition: Condition) => void; isReadOnly: boolean; }) => {
   const [isOpen, setIsOpen] = React.useState(false);
 
   const currentCondition = conditions.find(c => c.id === condition) || conditions[0];
+  
+  const handleValueChange = (value: string) => {
+    onConditionChange(id, value as Condition);
+    setIsOpen(false);
+  }
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <button className="flex flex-col items-center group">
+      <PopoverTrigger asChild disabled={isReadOnly}>
+        <button className="flex flex-col items-center group disabled:cursor-not-allowed">
             <svg width="40" height="50" viewBox="0 0 40 50" className="cursor-pointer">
               <path d="M10 10 C 10 0, 30 0, 30 10 L 30 30 C 30 45, 25 45, 25 45 L 23 30 L 17 30 L 15 45 C 15 45, 10 45, 10 30 Z" className={cn('stroke-gray-400 stroke-1 group-hover:stroke-primary transition-all', currentCondition.color)} />
             </svg>
@@ -75,7 +80,7 @@ const Tooth = ({ id, condition, onConditionChange }: { id: string; condition: Co
             <p className="text-sm text-muted-foreground">Selecciona la condición.</p>
           </div>
           <ScrollArea className="h-48">
-            <RadioGroup defaultValue={condition} onValueChange={(value) => onConditionChange(id, value as Condition)} className="p-1">
+            <RadioGroup defaultValue={condition} onValueChange={handleValueChange} className="p-1">
               {conditions.map(c => (
                 <div key={c.id} className="flex items-center space-x-2 py-1">
                   <RadioGroupItem value={c.id} id={`cond-${id}-${c.id}`} />
@@ -86,7 +91,6 @@ const Tooth = ({ id, condition, onConditionChange }: { id: string; condition: Co
               ))}
             </RadioGroup>
           </ScrollArea>
-          <Button onClick={() => setIsOpen(false)} size="sm">Aplicar</Button>
         </div>
       </PopoverContent>
     </Popover>
@@ -137,7 +141,7 @@ export function Odontogram({ initialData, onChange, isReadOnly = false }: Odonto
     return (
         <div className="flex justify-center space-x-1">
         {quadrant.map(num => (
-            <Tooth key={num} id={num} condition={toothState[num] || 'healthy'} onConditionChange={handleConditionChange} />
+            <Tooth key={num} id={num} condition={toothState[num] || 'healthy'} onConditionChange={handleConditionChange} isReadOnly={isReadOnly} />
         ))}
         </div>
     );

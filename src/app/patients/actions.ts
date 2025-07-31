@@ -3,6 +3,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 export async function addPatient(formData: any) {
     const supabase = createClient();
@@ -176,4 +177,55 @@ export async function getConsentFormsForPatient(patientId: string) {
     return data;
 }
 
+
+const updateDentalChartSchema = z.object({
+    patientId: z.string().uuid(),
+    clinicId: z.string().uuid(),
+    dentalChart: z.any(),
+});
+
+export async function updatePatientDentalChart(data: z.infer<typeof updateDentalChartSchema>) {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return { error: 'No autorizado' };
+
+    const parsedData = updateDentalChartSchema.safeParse(data);
+    if (!parsedData.success) {
+        return { error: parsedData.error.message };
+    }
+
+    const { patientId, clinicId, dentalChart } = parsedData.data;
+
+    // 1. Update the patient's record
+    const { error: patientUpdateError } = await supabase
+        .from('patients')
+        .update({ dental_chart: dentalChart })
+        .eq('id', patientId);
+
+    if (patientUpdateError) {
+        console.error("Error updating patient's dental chart:", patientUpdateError);
+        return { error: 'No se pudo actualizar la ficha del paciente.' };
+    }
+
+    // 2. Log the change in the new dental_updates table
+    const { error: logError } = await supabase
+        .from('dental_updates')
+        .insert({
+            patient_id: patientId,
+            clinic_id: clinicId,
+            dental_chart: dentalChart,
+            updated_by: user.id,
+            notes: 'Actualización de odontograma desde la interfaz de paciente.'
+        });
     
+    if (logError) {
+        // This is not a critical failure, we can just log it and proceed.
+        // In a more robust system, you might want to handle this more gracefully.
+        console.error("Error logging dental chart update:", logError);
+    }
+    
+    revalidatePath(`/patients/${patientId}`);
+    return { error: null };
+}
+
