@@ -4,6 +4,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { startOfMonth, endOfMonth, format, isValid } from 'date-fns';
 
+const commonServices = [
+    'Consulta / Revisión',
+    'Limpieza Dental',
+    'Blanqueamiento Dental',
+    'Relleno de Caries (Restauración)',
+    'Extracción Dental',
+    'Tratamiento de Conducto (Endodoncia)',
+    'Corona Dental',
+    'Ortodoncia (Ajuste)',
+];
+
 export async function getDashboardData(dateString: string) {
     const supabase = createClient();
 
@@ -23,7 +34,7 @@ export async function getDashboardData(dateString: string) {
     }
     
     const clinicId = profile.clinic_id;
-    const today = new Date(dateString);
+    const today = new Date(dateString.replace(/-/g, '/'));
 
     if (!isValid(today)) {
         return { error: 'Invalid date provided to getDashboardData' };
@@ -90,14 +101,15 @@ export async function getDashboardData(dateString: string) {
     // Process data for service stats
     const serviceCounts = (allAppointments || []).reduce((acc, app) => {
         const service = app.service_description.trim();
-        acc[service] = (acc[service] || 0) + 1;
+        const serviceKey = commonServices.includes(service) ? service : 'Otros';
+        acc[serviceKey] = (acc[serviceKey] || 0) + 1;
         return acc;
     }, {} as Record<string, number>);
 
     const serviceStats = Object.entries(serviceCounts)
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count)
-        .slice(0, 5); // Top 5 services
+        .slice(0, 6); // Top 5 + Otros
 
     return {
         totalPatients: totalPatients ?? 0,
