@@ -13,8 +13,6 @@ import {
   startOfWeek,
   endOfWeek,
   add,
-  isSameDay,
-  isAfter,
   isBefore,
   startOfDay,
 } from 'date-fns';
@@ -249,7 +247,7 @@ const AppointmentDetailsModal = ({
 }
 
 export default function AppointmentsCalendarPage() {
-  const [currentDate, setCurrentDate] = React.useState(new Date());
+  const [currentDate, setCurrentDate] = React.useState<Date | null>(null);
   const [appointments, setAppointments] = React.useState<Appointment[]>([]); 
   const [isLoading, setIsLoading] = React.useState(true);
   const [isFormModalOpen, setIsFormModalOpen] = React.useState(false);
@@ -260,10 +258,17 @@ export default function AppointmentsCalendarPage() {
   const [doctors, setDoctors] = React.useState<Doctor[]>([]);
   const { toast } = useToast();
 
-  const fetchMonthAppointments = React.useCallback(async (date: Date) => {
+  // Set initial date on client to avoid hydration mismatch
+  React.useEffect(() => {
+    setCurrentDate(new Date());
+  }, []);
+
+  const fetchVisibleAppointments = React.useCallback(async (date: Date) => {
     setIsLoading(true);
-    const start = format(startOfMonth(date), 'yyyy-MM-dd');
-    const end = format(endOfMonth(date), 'yyyy-MM-dd');
+    const firstDay = startOfMonth(date);
+    const lastDay = endOfMonth(date);
+    const start = format(startOfWeek(firstDay, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const end = format(endOfWeek(lastDay, { weekStartsOn: 1 }), 'yyyy-MM-dd');
     const appointmentsData = await getAppointments(start, end);
     setAppointments(appointmentsData as Appointment[]);
     setIsLoading(false);
@@ -284,21 +289,30 @@ export default function AppointmentsCalendarPage() {
   }, []);
 
   React.useEffect(() => {
-      fetchMonthAppointments(currentDate);
-  }, [currentDate, fetchMonthAppointments]);
+      if(currentDate) {
+        fetchVisibleAppointments(currentDate);
+      }
+  }, [currentDate, fetchVisibleAppointments]);
   
+  if (!currentDate) {
+    return (
+        <div className="flex items-center justify-center h-full">
+            <Skeleton className="h-[70vh] w-full" />
+        </div>
+    );
+  }
+
   const today = startOfDay(new Date());
   const todayString = format(today, 'yyyy-MM-dd');
   const pendingToday = appointments.filter(app => app.date === todayString && (app.status === 'Scheduled' || app.status === 'In-progress')).length;
   
-  const startOfNextDay = add(today, { days: 1 });
   const endOfWeekDate = endOfWeek(today, { weekStartsOn: 1 });
   
   const appointmentsThisWeek = appointments.filter(app => {
-      const appDate = new Date(app.date); // Simple conversion assuming YYYY-MM-DD is local
-      return isAfter(appDate, today) && isBefore(appDate, endOfWeekDate);
+      const appDate = new Date(app.date.replace(/-/g, '/'));
+      return isBefore(today, appDate) && isBefore(appDate, endOfWeekDate);
   }).length;
-  const appointmentsThisMonth = appointments.filter(app => isSameMonth(new Date(app.date), currentDate)).length;
+  const appointmentsThisMonth = appointments.filter(app => isSameMonth(new Date(app.date.replace(/-/g, '/')), currentDate)).length;
 
   const firstDayOfMonth = startOfMonth(currentDate);
   const lastDayOfMonth = endOfMonth(currentDate);
@@ -323,7 +337,7 @@ export default function AppointmentsCalendarPage() {
     } else {
         toast({ title: 'Cita Creada', description: 'La nueva cita ha sido agendada.' });
         setIsFormModalOpen(false);
-        fetchMonthAppointments(currentDate);
+        fetchVisibleAppointments(currentDate);
     }
   };
 
@@ -335,7 +349,7 @@ export default function AppointmentsCalendarPage() {
         toast({ title: 'Cita Actualizada', description: 'La cita ha sido modificada.' });
         setIsFormModalOpen(false);
         setSelectedAppointment(null);
-        fetchMonthAppointments(currentDate);
+        fetchVisibleAppointments(currentDate);
     }
   }
 
@@ -346,7 +360,7 @@ export default function AppointmentsCalendarPage() {
       } else {
         toast({ title: 'Cita Eliminada', description: 'La cita ha sido eliminada.'});
         setIsDetailsModalOpen(false); // Cierra el modal de detalles
-        fetchMonthAppointments(currentDate);
+        fetchVisibleAppointments(currentDate);
       }
   }
 
@@ -457,9 +471,9 @@ export default function AppointmentsCalendarPage() {
                   key={day.toString()}
                   onClick={() => handleDayClick(day)}
                   className={cn(
-                    'relative h-28 sm:h-36 p-2 border-b border-r border-border flex flex-col cursor-pointer hover:bg-muted transition-colors',
-                    !isSameMonth(day, currentDate) && 'bg-muted/50 text-muted-foreground',
-                    isPastDay && 'bg-muted/50'
+                    'relative h-28 sm:h-36 p-2 border-b border-r border-border flex flex-col cursor-pointer hover:bg-accent/50 transition-colors',
+                    !isSameMonth(day, currentDate) && 'bg-muted text-muted-foreground',
+                    isPastDay && !isToday(day) && 'bg-muted/70'
                   )}
                 >
                   <time
@@ -467,14 +481,14 @@ export default function AppointmentsCalendarPage() {
                     className={cn(
                       'text-xs font-semibold',
                       isToday(day) && 'flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground',
-                      isPastDay && 'text-muted-foreground/50'
+                      isPastDay && 'text-muted-foreground/60'
                     )}
                   >
                     {format(day, 'd')}
                   </time>
                   <div className="mt-1 flex-grow overflow-y-auto text-xs space-y-1">
                     {isLoading ? (
-                        <Skeleton className="h-4 w-full rounded-md" />
+                        Array.from({ length: 1 }).map((_, i) => <Skeleton key={i} className="h-4 w-full rounded-md" />)
                     ) : (
                         <>
                             {appointmentsForDay.slice(0, maxVisible).map(app => (
@@ -498,3 +512,5 @@ export default function AppointmentsCalendarPage() {
     </div>
   );
 }
+
+    
