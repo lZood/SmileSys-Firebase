@@ -87,7 +87,9 @@ export async function createAppointment(data: z.infer<typeof appointmentSchema>)
             .eq('clinic_id', profile.clinic_id)
             .eq('appointment_date', parsedData.data.appointment_date)
             .eq('appointment_time', parsedData.data.appointment_time)
-            .in('status', ['Scheduled', 'In-progress']);
+            .in('status', ['Scheduled', 'In-progress'])
+            .or(`patient_id.eq.${parsedData.data.patient_id},doctor_id.eq.${parsedData.data.doctor_id}`);
+
 
         if (conflictError) {
             console.error("Error checking for conflicts:", conflictError);
@@ -97,7 +99,7 @@ export async function createAppointment(data: z.infer<typeof appointmentSchema>)
         if (existingAppointments && existingAppointments.length > 0) {
             const patientConflict = existingAppointments.find(a => a.patient_id === parsedData.data.patient_id);
             if (patientConflict) {
-                 const patientName = `${patientConflict.patients?.first_name || ''} ${patientConflict.patients?.last_name || 'Este paciente'}`;
+                const patientName = `${patientConflict.patients?.first_name || ''} ${patientConflict.patients?.last_name || 'Este paciente'}`;
                 return { error: `${patientName} ya tiene una cita programada a esta hora.` };
             }
 
