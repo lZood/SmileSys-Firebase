@@ -2,7 +2,7 @@
 'use server';
 
 import { createClient } from "@/lib/supabase/server";
-import { startOfMonth, endOfMonth, format } from 'date-fns';
+import { startOfMonth, endOfMonth, format, isValid } from 'date-fns';
 
 export async function getDashboardData(dateString: string) {
     const supabase = createClient();
@@ -23,7 +23,12 @@ export async function getDashboardData(dateString: string) {
     }
     
     const clinicId = profile.clinic_id;
-    const today = new Date(dateString.replace(/-/g, '/') + 'T00:00:00'); 
+    const today = new Date(dateString);
+
+    if (!isValid(today)) {
+        return { error: 'Invalid date provided to getDashboardData' };
+    }
+
     const startDate = startOfMonth(today);
     const endDate = endOfMonth(today);
 
