@@ -4,7 +4,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { startOfMonth, endOfMonth, format } from 'date-fns';
 
-export async function getDashboardData() {
+export async function getDashboardData(dateString: string) {
     const supabase = createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -23,8 +23,7 @@ export async function getDashboardData() {
     }
     
     const clinicId = profile.clinic_id;
-    const today = new Date();
-    const todayString = format(today, 'yyyy-MM-dd'); // Use a consistent string format
+    const today = new Date(dateString + 'T00:00:00Z'); // Use the provided date string as UTC
     const startDate = startOfMonth(today);
     const endDate = endOfMonth(today);
 
@@ -60,7 +59,7 @@ export async function getDashboardData() {
             doctors:profiles (id, first_name, last_name)
         `)
         .eq('clinic_id', clinicId)
-        .eq('appointment_date', todayString) // Compare with the formatted string
+        .eq('appointment_date', dateString)
         .order('appointment_time', { ascending: true });
 
 

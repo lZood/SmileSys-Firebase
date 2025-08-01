@@ -13,6 +13,7 @@ import { getUserData } from '../user/actions';
 import { getDashboardData } from './actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
 
 // Data will be fetched from Supabase
 const treatmentStatsData: any[] = [];
@@ -34,9 +35,10 @@ export default function DashboardPage() {
     
     async function fetchData() {
         setIsLoading(true);
+        const todayString = format(new Date(), 'yyyy-MM-dd');
         const [user, data] = await Promise.all([
             getUserData(),
-            getDashboardData()
+            getDashboardData(todayString)
         ]);
         if (user) setUserData(user);
         if (data) setDashboardData(data as DashboardData);
@@ -60,6 +62,16 @@ export default function DashboardPage() {
         default: return 'bg-gray-100 text-gray-800';
     }
   };
+  
+  const getStatusInSpanish = (status: string) => {
+    const translations: Record<string, string> = {
+        'Scheduled': 'Programada',
+        'Completed': 'Completada',
+        'Canceled': 'Cancelada',
+        'In-progress': 'En Progreso'
+    };
+    return translations[status] || status;
+}
 
   return (
     <DashboardLayout>
@@ -175,7 +187,7 @@ export default function DashboardPage() {
                         <TableCell>{appointment.appointment_time}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={cn(getAppointmentStatusClass(appointment.status), 'capitalize')}>
-                            {appointment.status}
+                            {getStatusInSpanish(appointment.status)}
                           </Badge>
                         </TableCell>
                       </TableRow>
