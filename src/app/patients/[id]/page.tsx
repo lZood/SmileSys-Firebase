@@ -415,7 +415,7 @@ const PaymentsHistory = ({ payments, onAddPaymentClick }: { payments: Payment[],
                 <TableBody>
                     {payments.length > 0 ? payments.map(payment => (
                         <TableRow key={payment.id}>
-                            <TableCell>{new Date(`${payment.date}T00:00:00Z`).toLocaleDateString('es-MX', { timeZone: 'UTC' })}</TableCell>
+                            <TableCell>{new Date(payment.date.replace(/-/g, '/')).toLocaleDateString('es-MX')}</TableCell>
                             <TableCell>{payment.concept}</TableCell>
                             <TableCell>
                                 <div className="flex items-center gap-2">
@@ -459,7 +459,7 @@ const ClinicalHistoryTimeline = ({ events }: { events: TimelineEvent[] }) => {
                         <div className="flex items-center justify-between">
                              <p className="font-semibold">{event.title}</p>
                              <time className="text-sm text-muted-foreground">
-                                {new Date(`${event.date}T00:00:00Z`).toLocaleDateString('es-MX', { timeZone: 'UTC', day: '2-digit', month: 'long', year: 'numeric' })}
+                                {new Date(event.date.replace(/-/g, '/')).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}
                              </time>
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">{event.description}</p>
@@ -734,7 +734,7 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
                 </div>
                  <div className="flex justify-between">
                   <span>Última Visita:</span>
-                  <span className="font-medium text-foreground">{new Date(`${patient.created_at}T00:00:00Z`).toLocaleDateString('es-MX', { timeZone: 'UTC' })}</span>
+                  <span className="font-medium text-foreground">{new Date(patient.created_at.replace(/-/g, '/')).toLocaleDateString('es-MX')}</span>
                 </div>
                  <div className="flex justify-between">
                   <span>Estado:</span>
@@ -763,7 +763,7 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
                       ) : consentForms.length > 0 ? (
                           consentForms.map(form => (
                               <div key={form.id} className="flex justify-between items-center p-2 rounded-md bg-muted">
-                                  <span>Consentimiento - {new Date(`${form.created_at}T00:00:00Z`).toLocaleDateString('es-MX', { timeZone: 'UTC' })}</span>
+                                  <span>Consentimiento - {new Date(form.created_at.replace(/-/g, '/')).toLocaleDateString('es-MX')}</span>
                                    <Button asChild variant="ghost" size="icon">
                                       <a href={getPublicUrl(form.file_path)} target="_blank" rel="noopener noreferrer">
                                         <Download className="h-4 w-4" />

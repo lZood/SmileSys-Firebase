@@ -248,11 +248,6 @@ const AppointmentDetailsModal = ({
     );
 }
 
-// Helper para convertir fechas. Asegura que la fecha se interprete como UTC.
-const dateStringToUtcDate = (dateString: string) => {
-    return new Date(dateString + 'T00:00:00.000Z');
-}
-
 export default function AppointmentsCalendarPage() {
   const [currentDate, setCurrentDate] = React.useState(new Date());
   const [appointments, setAppointments] = React.useState<Appointment[]>([]); 
@@ -293,14 +288,17 @@ export default function AppointmentsCalendarPage() {
   }, [currentDate, fetchMonthAppointments]);
   
   const today = startOfDay(new Date());
-  const pendingToday = appointments.filter(app => isSameDay(dateStringToUtcDate(app.date), today) && (app.status === 'Scheduled' || app.status === 'In-progress')).length;
+  const todayString = format(today, 'yyyy-MM-dd');
+  const pendingToday = appointments.filter(app => app.date === todayString && (app.status === 'Scheduled' || app.status === 'In-progress')).length;
+  
   const startOfNextDay = add(today, { days: 1 });
   const endOfWeekDate = endOfWeek(today, { weekStartsOn: 1 });
+  
   const appointmentsThisWeek = appointments.filter(app => {
-      const appDate = dateStringToUtcDate(app.date);
-      return isAfter(appDate, startOfNextDay) && isBefore(appDate, endOfWeekDate);
+      const appDate = new Date(app.date); // Simple conversion assuming YYYY-MM-DD is local
+      return isAfter(appDate, today) && isBefore(appDate, endOfWeekDate);
   }).length;
-  const appointmentsThisMonth = appointments.filter(app => isSameMonth(dateStringToUtcDate(app.date), currentDate)).length;
+  const appointmentsThisMonth = appointments.filter(app => isSameMonth(new Date(app.date), currentDate)).length;
 
   const firstDayOfMonth = startOfMonth(currentDate);
   const lastDayOfMonth = endOfMonth(currentDate);
@@ -365,8 +363,9 @@ export default function AppointmentsCalendarPage() {
   }
 
   const getAppointmentsForDay = (day: Date) => {
+    const dayString = format(day, 'yyyy-MM-dd');
     return appointments.filter((appointment) =>
-      isSameDay(dateStringToUtcDate(appointment.date), day)
+      appointment.date === dayString
     ).sort((a, b) => a.time.localeCompare(b.time));
   };
 

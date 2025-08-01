@@ -295,7 +295,7 @@ export default function InventoryPage() {
                       <TableCell className="hidden md:table-cell">{item.category}</TableCell>
                       <TableCell>{item.stock} unidades</TableCell>
                        <TableCell className="hidden sm:table-cell">${item.price.toFixed(2)}</TableCell>
-                       <TableCell className="hidden md:table-cell">{new Date(item.lastOrdered).toLocaleDateString('es-MX', { timeZone: 'UTC' })}</TableCell>
+                       <TableCell className="hidden md:table-cell">{new Date(item.lastOrdered.replace(/-/g, '/')).toLocaleDateString('es-MX')}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={cn(getStatusClass(item.status), 'capitalize')}>
                           {item.status.replace(/-/g, ' ').toLowerCase()}

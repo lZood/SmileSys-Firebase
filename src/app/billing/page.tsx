@@ -235,10 +235,9 @@ export default function BillingPage() {
 
     const totalIncomeThisMonth = payments
         .filter(p => {
-            // Correct way to handle 'YYYY-MM-DD' strings to avoid timezone issues
-            const paymentDate = new Date(`${p.date}T00:00:00Z`);
+            const paymentDate = new Date(p.date.replace(/-/g, '/'));
             const today = new Date();
-            return paymentDate.getUTCFullYear() === today.getUTCFullYear() && paymentDate.getUTCMonth() === today.getUTCMonth();
+            return paymentDate.getFullYear() === today.getFullYear() && paymentDate.getMonth() === today.getMonth();
         })
         .reduce((sum, p) => sum + p.amount, 0);
 
@@ -388,7 +387,7 @@ export default function BillingPage() {
                                     <div className="flex items-center gap-2">{getPaymentMethodIcon(payment.method)}<span>{payment.method}</span></div>
                                 )}
                             </TableCell>
-                            <TableCell>{new Date(`${payment.date}T00:00:00Z`).toLocaleDateString('es-MX', { timeZone: 'UTC' })}</TableCell>
+                            <TableCell>{new Date(payment.date.replace(/-/g, '/')).toLocaleDateString('es-MX')}</TableCell>
                             <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(payment.status))}>{getStatusInSpanish(payment.status)}</Badge></TableCell>
                         </TableRow>
                     ))
