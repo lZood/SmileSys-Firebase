@@ -38,6 +38,17 @@ const commonServices = [
 ];
 const OTHER_SERVICE = 'Otro';
 
+const hours12 = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+const minutes = ['00', '30'];
+const periods = ['AM', 'PM'];
+
+const convert12hTo24h = (hour: string, minute: string, period: 'AM' | 'PM') => {
+    let h = parseInt(hour, 10);
+    if (period === 'PM' && h < 12) h += 12;
+    if (period === 'AM' && h === 12) h = 0; // Midnight case
+    return `${String(h).padStart(2, '0')}:${minute}`;
+};
+
 const convert24hTo12h = (time24: string) => {
     if (!time24) return { hour: '10', minute: '00', period: 'AM' as 'AM'|'PM' };
     const [h, m] = time24.split(':');

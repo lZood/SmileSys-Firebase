@@ -22,6 +22,7 @@ import {
   Moon,
   Sun,
   Circle,
+  X,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -46,7 +47,8 @@ import { Skeleton } from '../ui/skeleton';
 import Image from 'next/image';
 import { getAppointments } from '@/app/appointments/actions';
 import { startOfToday, format, differenceInMinutes, parse } from 'date-fns';
-import { useToast } from '@/hooks/use-toast';
+import { Toaster, toast as hotToast } from 'react-hot-toast';
+
 
 type DashboardLayoutProps = {
   children: React.ReactNode;
@@ -126,11 +128,11 @@ const ThemeSwitcher = ({ inMobileNav = false }: { inMobileNav?: boolean }) => {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { toast } = useToast();
   const [isExpanded, setIsExpanded] = React.useState(true);
   const [userData, setUserData] = React.useState<UserData | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
+  const [remindersToDismiss, setRemindersToDismiss] = React.useState<string[]>([]);
   
   // Real-time notifications and reminders
   React.useEffect(() => {
@@ -180,20 +182,33 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
         const now = new Date();
         appointmentsToday.forEach(app => {
-            const appTime = parse(app.time, 'HH:mm:ss', new Date(app.date.replace(/-/g, '/')));
+             if (remindersToDismiss.includes(app.id)) return;
+
+            const appTime = parse(app.time, 'HH:mm', new Date(app.date.replace(/-/g, '/')));
             const diff = differenceInMinutes(appTime, now);
 
-            // Notify if appointment is exactly 5 minutes away
-            if (diff === 5) {
-                 toast({
-                    title: 'Recordatorio de Cita',
-                    description: `Tu cita con ${app.patientName} empieza en 5 minutos.`,
+            if (diff > 0 && diff <= 5) {
+                const toastId = `reminder-${app.id}`;
+                 hotToast((t) => (
+                    <div className="flex items-center justify-between w-full">
+                        <div className="flex-1">
+                            <p className="font-bold">Recordatorio de Cita</p>
+                            <p>Tu cita con {app.patientName} empieza en {diff} minuto(s).</p>
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => {
+                            setRemindersToDismiss(prev => [...prev, app.id]);
+                            hotToast.dismiss(t.id);
+                        }}><X className="h-4 w-4" /></Button>
+                    </div>
+                 ), {
+                    id: toastId, // Use a unique ID to prevent duplicates
+                    duration: 60000 // 1 minute
                  });
             }
         });
     };
     
-    // Check for reminders every minute
+    checkAppointmentsForReminders(); // Check immediately on load
     reminderInterval = setInterval(checkAppointmentsForReminders, 60000);
     
     // Cleanup on unmount
@@ -201,7 +216,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       supabase.removeChannel(notificationsChannel);
       clearInterval(reminderInterval);
     };
-  }, [userData?.user?.id, toast]);
+  }, [userData?.user?.id, remindersToDismiss]);
 
 
   React.useEffect(() => {
@@ -345,6 +360,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
+       <Toaster position="bottom-right" />
       <aside className={cn(
         "fixed inset-y-0 left-0 z-10 hidden flex-col border-r bg-background sm:flex transition-all duration-300",
         isExpanded ? 'w-56' : 'w-20'
@@ -475,5 +491,3 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     </div>
   );
 }
-
-  

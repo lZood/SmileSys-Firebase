@@ -22,6 +22,13 @@ export async function createNotification(input: z.infer<typeof createNotificatio
         return { error: `Invalid notification data: ${parsedData.error.message}` };
     }
 
+    // Since we're using a service_role key, Supabase might not know which user is performing the action,
+    // which can conflict with RLS policies.
+    // We can call a function to set the `auth.uid()` for the current transaction.
+    if (parsedData.data.triggered_by) {
+        await supabase.rpc('set_auth_uid', { uid: parsedData.data.triggered_by });
+    }
+    
     const { error } = await supabase
         .from('notifications')
         .insert(parsedData.data);
