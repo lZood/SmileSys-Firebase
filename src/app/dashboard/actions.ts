@@ -34,7 +34,7 @@ export async function getDashboardData(dateString: string) {
     }
     
     const clinicId = profile.clinic_id;
-    const today = new Date(dateString.replace(/-/g, '/'));
+    const today = new Date(dateString);
 
     if (!isValid(today)) {
         return { error: 'Invalid date provided to getDashboardData' };
@@ -109,7 +109,7 @@ export async function getDashboardData(dateString: string) {
     const serviceStats = Object.entries(serviceCounts)
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count)
-        .slice(0, 6); // Top 5 + Otros
+        .slice(0, 5); // Top 5 services
 
     return {
         totalPatients: totalPatients ?? 0,
