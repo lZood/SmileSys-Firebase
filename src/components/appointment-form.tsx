@@ -20,6 +20,8 @@ import { Combobox } from '@/components/ui/combobox';
 import type { Appointment } from '@/app/appointments/page';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { DatePicker } from './ui/date-picker';
+import { getDoctorAvailability } from '@/app/appointments/actions';
+import { Skeleton } from './ui/skeleton';
 
 type Patient = { id: string; first_name: string; last_name: string };
 type Doctor = { id: string; first_name: string; last_name: string; roles: string[] };
@@ -36,9 +38,19 @@ const commonServices = [
 ];
 const OTHER_SERVICE = 'Otro';
 
-const hours12 = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')); // 01 to 12
-const minutes = ['00', '30'];
-const periods = ['AM', 'PM'];
+const convert24hTo12h = (time24: string) => {
+    if (!time24) return { hour: '10', minute: '00', period: 'AM' as 'AM'|'PM' };
+    const [h, m] = time24.split(':');
+    let hour = parseInt(h, 10);
+    const period = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12 || 12; // Convert hour to 12-hour format, 0 becomes 12
+    return {
+        hour: String(hour).padStart(2, '0'),
+        minute: m,
+        period,
+    };
+};
+
 
 export const AppointmentForm = ({
   isOpen, 
@@ -62,45 +74,54 @@ export const AppointmentForm = ({
     const [patientId, setPatientId] = React.useState('');
     const [doctorId, setDoctorId] = React.useState('');
     
-    // State for the service dropdown and the custom service input
     const [service, setService] = React.useState('');
     const [customService, setCustomService] = React.useState('');
     
-    // State for date and time
     const [appointmentDate, setAppointmentDate] = React.useState<Date | undefined>(selectedDate);
-    const [hour, setHour] = React.useState('10');
-    const [minute, setMinute] = React.useState('00');
-    const [period, setPeriod] = React.useState<'AM' | 'PM'>('AM');
+    const [availableTimes, setAvailableTimes] = React.useState<string[]>([]);
+    const [isFetchingTimes, setIsFetchingTimes] = React.useState(false);
+    
+    const [time, setTime] = React.useState('');
+
+    const patientOptions = patients.map(p => ({ label: `${p.first_name} ${p.last_name}`, value: p.id }));
+    const doctorOptions = doctors
+        .filter(d => d.roles.includes('doctor'))
+        .map(d => ({ label: `Dr. ${d.first_name} ${d.last_name}`, value: d.id }));
+
+    // Effect to fetch availability
+    React.useEffect(() => {
+        if (doctorId && appointmentDate) {
+            setIsFetchingTimes(true);
+            setAvailableTimes([]);
+            setTime(''); // Reset time when date/doctor changes
+            
+            const dateString = format(appointmentDate, 'yyyy-MM-dd');
+            getDoctorAvailability(doctorId, dateString)
+                .then(result => {
+                    if (result.error) {
+                        toast({ variant: 'destructive', title: 'Error', description: result.error });
+                        setAvailableTimes([]);
+                    } else {
+                        setAvailableTimes(result.data);
+                    }
+                })
+                .finally(() => setIsFetchingTimes(false));
+        } else {
+            setAvailableTimes([]);
+        }
+    }, [doctorId, appointmentDate, toast]);
 
 
+    // Effect to populate form when editing
     React.useEffect(() => {
         if (existingAppointment) {
             setPatientId(existingAppointment.patientId);
             setDoctorId(existingAppointment.doctorId);
-            setAppointmentDate(new Date(existingAppointment.date.replace(/-/g, '/')));
+            const dateToSet = new Date(existingAppointment.date.replace(/-/g, '/'));
+            dateToSet.setMinutes(dateToSet.getMinutes() + dateToSet.getTimezoneOffset());
+            setAppointmentDate(dateToSet);
+            setTime(existingAppointment.time);
 
-            if (existingAppointment.time) {
-                const [h, m] = existingAppointment.time.split(':');
-                let hour24 = parseInt(h);
-                let currentPeriod: 'AM' | 'PM' = 'AM';
-                
-                if (hour24 >= 12) {
-                    currentPeriod = 'PM';
-                    if (hour24 > 12) {
-                        hour24 -= 12;
-                    }
-                }
-                if (hour24 === 0) hour24 = 12; // Midnight case
-
-                setHour(String(hour24).padStart(2, '0'));
-                setMinute(m.substring(0, 2));
-                setPeriod(currentPeriod);
-            } else {
-                 setHour('10');
-                 setMinute('00');
-                 setPeriod('AM');
-            }
-            
             const existingService = existingAppointment.service;
             if (commonServices.includes(existingService)) {
                 setService(existingService);
@@ -110,28 +131,20 @@ export const AppointmentForm = ({
                 setCustomService(existingService);
             }
         } else {
-            // Reset fields for new appointment
+             // Reset fields for new appointment
              setPatientId('');
              setDoctorId('');
              setAppointmentDate(selectedDate);
-             setHour('10');
-             setMinute('00');
-             setPeriod('AM');
+             setTime('');
              setService('');
              setCustomService('');
         }
     }, [existingAppointment, isOpen, selectedDate]);
-
-
-    const patientOptions = patients.map(p => ({ label: `${p.first_name} ${p.last_name}`, value: p.id }));
-    const doctorOptions = doctors
-        .filter(d => d.roles.includes('doctor'))
-        .map(d => ({ label: `Dr. ${d.first_name} ${d.last_name}`, value: d.id }));
-
+    
     const handleSubmit = async () => {
         const finalService = service === OTHER_SERVICE ? customService : service;
 
-        if (!patientId || !doctorId || !hour || !minute || !finalService || !appointmentDate) {
+        if (!patientId || !doctorId || !time || !finalService || !appointmentDate) {
             toast({
                 variant: "destructive",
                 title: "Campos Incompletos",
@@ -141,17 +154,7 @@ export const AppointmentForm = ({
         }
         setIsLoading(true);
         
-        // Convert 12h to 24h format
-        let hour24 = parseInt(hour, 10);
-        if (period === 'PM' && hour24 < 12) {
-            hour24 += 12;
-        }
-        if (period === 'AM' && hour24 === 12) { // Midnight case
-            hour24 = 0;
-        }
-        
         const dateString = format(appointmentDate, 'yyyy-MM-dd');
-        const timeString = `${String(hour24).padStart(2, '0')}:${minute}`;
         
         const data = {
             id: existingAppointment?.id,
@@ -159,13 +162,18 @@ export const AppointmentForm = ({
             doctor_id: doctorId,
             service_description: finalService,
             appointment_date: dateString,
-            appointment_time: timeString,
+            appointment_time: time.substring(0, 5), // Ensure HH:mm format
             status: existingAppointment?.status || 'Scheduled',
         };
 
         await onSubmit(data);
         setIsLoading(false);
     };
+
+    const timeOptions12h = availableTimes.map(t24 => {
+        const { hour, minute, period } = convert24hTo12h(t24);
+        return { value: t24, label: `${hour}:${minute} ${period}` };
+    });
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -178,7 +186,7 @@ export const AppointmentForm = ({
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                      <div className="grid gap-2">
-                        <Label htmlFor="patient-name">Nombre del Paciente</Label>
+                        <Label htmlFor="patient-name">1. Seleccione el Paciente</Label>
                         <Combobox 
                             options={patientOptions}
                             value={patientId}
@@ -187,44 +195,51 @@ export const AppointmentForm = ({
                             emptyMessage="No se encontraron pacientes."
                         />
                     </div>
+                     <div className="grid gap-2">
+                        <Label htmlFor="doctor">2. Seleccione el Doctor</Label>
+                         <Combobox 
+                            options={doctorOptions}
+                            value={doctorId}
+                            onChange={setDoctorId}
+                            placeholder="Seleccionar doctor..."
+                            emptyMessage="No se encontraron doctores."
+                        />
+                    </div>
+
                      <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
-                             <Label htmlFor="date">Fecha</Label>
+                             <Label htmlFor="date">3. Seleccione la Fecha</Label>
                              <DatePicker date={appointmentDate} setDate={setAppointmentDate} />
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
-                             <div className="grid gap-2">
-                                <Label htmlFor="hour">Hora</Label>
-                                <Select value={hour} onValueChange={setHour}>
-                                    <SelectTrigger><SelectValue/></SelectTrigger>
+                        <div className="grid gap-2">
+                            <Label htmlFor="time">4. Seleccione la Hora</Label>
+                            {isFetchingTimes ? (
+                                <Skeleton className="h-10 w-full" />
+                            ) : (
+                                <Select 
+                                    value={time}
+                                    onValueChange={setTime}
+                                    disabled={!doctorId || !appointmentDate || availableTimes.length === 0}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder={!doctorId || !appointmentDate ? "Seleccione doctor/fecha" : "Horarios disponibles..."} />
+                                    </SelectTrigger>
                                     <SelectContent>
-                                        {hours12.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                                        {timeOptions12h.length > 0 ? (
+                                            timeOptions12h.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)
+                                        ) : (
+                                            <SelectItem value="no-slots" disabled>
+                                                No hay horarios disponibles.
+                                            </SelectItem>
+                                        )}
                                     </SelectContent>
                                 </Select>
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="minute">Min</Label>
-                                 <Select value={minute} onValueChange={setMinute}>
-                                    <SelectTrigger><SelectValue/></SelectTrigger>
-                                    <SelectContent>
-                                        {minutes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                             <div className="grid gap-2">
-                                <Label htmlFor="period">AM/PM</Label>
-                                 <Select value={period} onValueChange={(v: 'AM' | 'PM') => setPeriod(v)}>
-                                    <SelectTrigger><SelectValue/></SelectTrigger>
-                                    <SelectContent>
-                                        {periods.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            )}
                         </div>
                     </div>
 
                      <div className="grid gap-2">
-                        <Label htmlFor="service">Servicio</Label>
+                        <Label htmlFor="service">5. Seleccione el Servicio</Label>
                         <Select value={service} onValueChange={setService}>
                             <SelectTrigger>
                                 <SelectValue placeholder="Seleccionar servicio..." />
@@ -238,7 +253,7 @@ export const AppointmentForm = ({
 
                     {service === OTHER_SERVICE && (
                         <div className="grid gap-2">
-                            <Label htmlFor="customService">Especificar Otro Servicio</Label>
+                            <Label htmlFor="customService">Especifique el Servicio</Label>
                             <Input 
                                 id="customService" 
                                 value={customService} 
@@ -247,17 +262,6 @@ export const AppointmentForm = ({
                             />
                         </div>
                     )}
-
-                     <div className="grid gap-2">
-                        <Label htmlFor="doctor">Doctor</Label>
-                         <Combobox 
-                            options={doctorOptions}
-                            value={doctorId}
-                            onChange={setDoctorId}
-                            placeholder="Seleccionar doctor..."
-                            emptyMessage="No se encontraron doctores."
-                        />
-                    </div>
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose} disabled={isLoading}>Cancelar</Button>

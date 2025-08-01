@@ -4,7 +4,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { isBefore, subHours, format } from 'date-fns';
+import { isBefore, subHours, format, startOfDay, endOfDay } from 'date-fns';
 import { createNotification } from "../notifications/actions";
 
 export async function autoCompleteAppointments(clinicId: string) {
@@ -284,4 +284,44 @@ export async function getAppointmentsForPatient(patientId: string) {
     }
 
     return data;
+}
+
+export async function getDoctorAvailability(doctorId: string, date: string) {
+    if (!doctorId || !date) {
+        return { error: "Doctor y fecha son requeridos.", data: [] };
+    }
+
+    const supabase = createClient();
+    
+    // 1. Define working hours and time slots
+    const workDayStart = 8; // 8 AM
+    const workDayEnd = 17; // 5 PM (17:00)
+    const slotDuration = 30; // in minutes
+    const allSlots: string[] = [];
+
+    for (let hour = workDayStart; hour <= workDayEnd; hour++) {
+        for (let minute = 0; minute < 60; minute += slotDuration) {
+             if (hour === workDayEnd && minute > 30) continue; // Don't add slots past 17:30
+            allSlots.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+        }
+    }
+    
+    // 2. Fetch existing appointments for the doctor on that day
+    const { data: existingAppointments, error } = await supabase
+        .from('appointments')
+        .select('appointment_time')
+        .eq('doctor_id', doctorId)
+        .eq('appointment_date', date)
+        .in('status', ['Scheduled', 'In-progress']);
+
+    if (error) {
+        console.error("Error fetching doctor's appointments:", error);
+        return { error: "No se pudo obtener la disponibilidad del doctor.", data: [] };
+    }
+
+    // 3. Filter out booked slots
+    const bookedSlots = existingAppointments.map(app => app.appointment_time.substring(0, 5));
+    const availableSlots = allSlots.filter(slot => !bookedSlots.includes(slot));
+    
+    return { error: null, data: availableSlots };
 }
