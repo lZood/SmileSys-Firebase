@@ -23,7 +23,7 @@ export async function getDashboardData(dateString: string) {
     }
     
     const clinicId = profile.clinic_id;
-    const today = new Date(dateString + 'T00:00:00Z'); // Use the provided date string as UTC
+    const today = new Date(dateString.replace(/-/g, '/') + 'T00:00:00'); 
     const startDate = startOfMonth(today);
     const endDate = endOfMonth(today);
 
@@ -50,8 +50,8 @@ export async function getDashboardData(dateString: string) {
 
     const totalIncomeThisMonth = (monthlyPayments?.reduce((sum, p) => sum + p.amount_paid, 0) || 0) + (generalMonthlyPayments?.reduce((sum, p) => sum + p.amount, 0) || 0);
 
-    // 3. Get appointments for today
-    const { data: appointmentsToday, error: appointmentsError } = await supabase
+    // 3. Get appointments for today AND for the month (for stats)
+    const { data: allAppointments, error: appointmentsError } = await supabase
         .from('appointments')
         .select(`
             *,
@@ -59,7 +59,8 @@ export async function getDashboardData(dateString: string) {
             doctors:profiles (id, first_name, last_name)
         `)
         .eq('clinic_id', clinicId)
-        .eq('appointment_date', dateString)
+        .gte('appointment_date', format(startDate, 'yyyy-MM-dd'))
+        .lte('appointment_date', format(endDate, 'yyyy-MM-dd'))
         .order('appointment_time', { ascending: true });
 
 
@@ -67,6 +68,9 @@ export async function getDashboardData(dateString: string) {
         console.error({ patientsError, paymentsError, appointmentsError, generalPaymentsError });
         return { error: 'Failed to fetch dashboard data' };
     }
+    
+    // Process data for today's appointments
+    const appointmentsToday = allAppointments?.filter(app => app.appointment_date === dateString) || [];
 
     // Map to structure expected by the frontend
     const formattedAppointments = appointmentsToday?.map(app => ({
@@ -78,10 +82,23 @@ export async function getDashboardData(dateString: string) {
         status: app.status
     }));
 
+    // Process data for service stats
+    const serviceCounts = (allAppointments || []).reduce((acc, app) => {
+        const service = app.service_description.trim();
+        acc[service] = (acc[service] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const serviceStats = Object.entries(serviceCounts)
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5); // Top 5 services
+
     return {
         totalPatients: totalPatients ?? 0,
         totalIncomeThisMonth,
         appointmentsToday: formattedAppointments ?? [],
-        appointmentsTodayCount: appointmentsToday?.length ?? 0
+        appointmentsTodayCount: appointmentsToday?.length ?? 0,
+        serviceStats
     };
 }

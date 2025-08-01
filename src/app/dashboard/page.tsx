@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { Activity, DollarSign, Users, Package } from 'lucide-react';
+import { Activity, DollarSign, Users, Package, CalendarPlus, UserPlus, FilePlus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -14,39 +14,122 @@ import { getDashboardData } from './actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-
-// Data will be fetched from Supabase
-const treatmentStatsData: any[] = [];
+import { Button } from '@/components/ui/button';
+import { NewPatientForm } from '@/components/new-patient-form';
+import { AddGeneralPaymentModal } from '@/components/add-general-payment-modal';
+import { AppointmentForm } from '../appointments/page';
+import { getPatients } from '../patients/actions';
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
+type Patient = { id: string; first_name: string; last_name: string };
+type Doctor = { id: string; first_name: string; last_name: string; roles: string[] };
+
+const QuickActionModals = ({
+    showAppointmentModal,
+    showPatientModal,
+    showPaymentModal,
+    onClose,
+    onSuccess,
+    patients,
+    doctors,
+    clinic
+}: {
+    showAppointmentModal: boolean;
+    showPatientModal: boolean;
+    showPaymentModal: boolean;
+    onClose: (modal: 'appointment' | 'patient' | 'payment') => void;
+    onSuccess: (modal: 'appointment' | 'patient' | 'payment') => void;
+    patients: Patient[];
+    doctors: Doctor[];
+    clinic: NonNullable<UserData['clinic']> | null;
+}) => {
+    return (
+        <>
+            {showAppointmentModal && (
+                <AppointmentForm
+                    isOpen={true}
+                    onClose={() => onClose('appointment')}
+                    selectedDate={new Date()}
+                    onSubmit={async (data) => {
+                        // This logic needs to be abstracted or passed in.
+                        // For now, it's a placeholder.
+                        console.log("Creating appointment", data);
+                        onSuccess('appointment');
+                    }}
+                    patients={patients}
+                    doctors={doctors}
+                />
+            )}
+            {showPatientModal && <NewPatientForm onClose={(submitted) => {
+                onClose('patient');
+                if (submitted) onSuccess('patient');
+            }} />}
+            {showPaymentModal && clinic && (
+                <AddGeneralPaymentModal
+                    isOpen={true}
+                    onClose={() => onClose('payment')}
+                    onPaymentAdded={() => {
+                        onSuccess('payment');
+                        onClose('payment');
+                    }}
+                    patients={patients}
+                    clinic={clinic}
+                />
+            )}
+        </>
+    );
+};
 
 export default function DashboardPage() {
   const [isWelcomeTourOpen, setIsWelcomeTourOpen] = React.useState(false);
   const [userData, setUserData] = React.useState<UserData | null>(null);
   const [dashboardData, setDashboardData] = React.useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [patients, setPatients] = React.useState<Patient[]>([]);
+  const [doctors, setDoctors] = React.useState<Doctor[]>([]);
+
+  // State for modals
+  const [modalState, setModalState] = React.useState({
+      appointment: false,
+      patient: false,
+      payment: false,
+  });
+  
+  const openModal = (modal: 'appointment' | 'patient' | 'payment') => setModalState(prev => ({...prev, [modal]: true}));
+  const closeModal = (modal: 'appointment' | 'patient' | 'payment') => setModalState(prev => ({...prev, [modal]: false}));
+
+  const fetchData = React.useCallback(async () => {
+    setIsLoading(true);
+    const todayString = format(new Date(), 'yyyy-MM-dd');
+    const [user, data, patientsData] = await Promise.all([
+        getUserData(),
+        getDashboardData(todayString),
+        getPatients()
+    ]);
+    if (user) {
+        setUserData(user);
+        if (user.teamMembers) {
+            setDoctors(user.teamMembers as Doctor[]);
+        }
+    }
+    if (data) setDashboardData(data as DashboardData);
+    setPatients(patientsData as Patient[]);
+    setIsLoading(false);
+  }, []);
 
   React.useEffect(() => {
     const hasSeenWelcomeTour = localStorage.getItem('hasSeenWelcomeTour');
     if (!hasSeenWelcomeTour) {
       setIsWelcomeTourOpen(true);
     }
-    
-    async function fetchData() {
-        setIsLoading(true);
-        const todayString = format(new Date(), 'yyyy-MM-dd');
-        const [user, data] = await Promise.all([
-            getUserData(),
-            getDashboardData(todayString)
-        ]);
-        if (user) setUserData(user);
-        if (data) setDashboardData(data as DashboardData);
-        setIsLoading(false);
-    }
     fetchData();
-
-  }, []);
+  }, [fetchData]);
+  
+  const handleModalSuccess = (modal: 'appointment' | 'patient' | 'payment') => {
+      fetchData(); // Refetch all data on success
+      closeModal(modal);
+  };
 
   const handleTourClose = () => {
     localStorage.setItem('hasSeenWelcomeTour', 'true');
@@ -76,6 +159,16 @@ export default function DashboardPage() {
   return (
     <DashboardLayout>
       <WelcomeTour isOpen={isWelcomeTourOpen} onClose={handleTourClose} />
+       <QuickActionModals
+            showAppointmentModal={modalState.appointment}
+            showPatientModal={modalState.patient}
+            showPaymentModal={modalState.payment}
+            onClose={closeModal}
+            onSuccess={handleModalSuccess}
+            patients={patients}
+            doctors={doctors}
+            clinic={userData?.clinic || null}
+        />
       <div className="flex flex-col gap-4">
         <div className="mb-4">
             <h1 className="text-3xl font-bold font-headline">
@@ -131,23 +224,52 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+            <CardHeader>
+                <CardTitle>Acciones Rápidas</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-2" onClick={() => openModal('appointment')}>
+                    <CalendarPlus className="h-6 w-6" />
+                    <span className="text-base">Agendar Cita</span>
+                </Button>
+                <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-2" onClick={() => openModal('patient')}>
+                    <UserPlus className="h-6 w-6" />
+                    <span className="text-base">Registrar Paciente</span>
+                </Button>
+                 <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-2" onClick={() => openModal('payment')}>
+                    <FilePlus className="h-6 w-6" />
+                    <span className="text-base">Registrar Pago</span>
+                </Button>
+            </CardContent>
+        </Card>
+
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
           <Card className="lg:col-span-4">
             <CardHeader>
-              <CardTitle>Estadísticas de Tratamientos</CardTitle>
-              <CardDescription>Resumen de procedimientos realizados este mes.</CardDescription>
+              <CardTitle>Servicios del Mes</CardTitle>
+              <CardDescription>Resumen de los servicios más realizados este mes.</CardDescription>
             </CardHeader>
             <CardContent className="pl-2">
               <ResponsiveContainer width="100%" height={350}>
-                <BarChart data={treatmentStatsData}>
-                  <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
-                  <Tooltip
-                    cursor={{fill: 'hsl(var(--muted))'}}
-                    contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
-                  />
-                  <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
+                {isLoading ? <Skeleton className="w-full h-full" /> : 
+                    dashboardData?.serviceStats && dashboardData.serviceStats.length > 0 ? (
+                    <BarChart data={dashboardData.serviceStats}>
+                      <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
+                      <Tooltip
+                        cursor={{fill: 'hsl(var(--muted))'}}
+                        contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
+                      />
+                      <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                    ) : (
+                        <div className="flex items-center justify-center h-full text-muted-foreground">
+                            No hay datos de servicios este mes.
+                        </div>
+                    )
+                }
               </ResponsiveContainer>
             </CardContent>
           </Card>
