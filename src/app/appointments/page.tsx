@@ -3,7 +3,7 @@
 
 import * as React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Plus, Edit, Trash2, CalendarClock, ListTodo, CalendarDays, MoreVertical, FilterX } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Edit, Trash2, CalendarClock, ListTodo, CalendarDays, MoreVertical, FilterX, SlidersHorizontal } from 'lucide-react';
 import {
   eachDayOfInterval,
   endOfMonth,
@@ -42,6 +42,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 
 // Types
@@ -310,6 +311,7 @@ export default function AppointmentsCalendarPage() {
   const [patientFilter, setPatientFilter] = React.useState(searchParams.get('patientId') || 'all');
   const [doctorFilter, setDoctorFilter] = React.useState('all');
   const [statusFilter, setStatusFilter] = React.useState('all');
+  const [showFilters, setShowFilters] = React.useState(false);
 
 
   const fetchVisibleAppointments = React.useCallback(async (date: Date) => {
@@ -358,12 +360,12 @@ export default function AppointmentsCalendarPage() {
 
   // Update URL when filters change
   React.useEffect(() => {
-    const params = new URLSearchParams();
-    if (patientFilter !== 'all') params.set('patientId', patientFilter);
-    if (doctorFilter !== 'all') params.set('doctorId', doctorFilter);
-    if (statusFilter !== 'all') params.set('status', statusFilter);
+    const params = new URLSearchParams(searchParams);
+    if (patientFilter !== 'all') params.set('patientId', patientFilter); else params.delete('patientId');
+    if (doctorFilter !== 'all') params.set('doctorId', doctorFilter); else params.delete('doctorId');
+    if (statusFilter !== 'all') params.set('status', statusFilter); else params.delete('status');
     router.push(`/appointments?${params.toString()}`, { scroll: false });
-  }, [patientFilter, doctorFilter, statusFilter, router]);
+  }, [patientFilter, doctorFilter, statusFilter, router, searchParams]);
   
   if (!currentDate) {
     return (
@@ -380,7 +382,7 @@ export default function AppointmentsCalendarPage() {
   const endOfWeekDate = endOfWeek(today, { weekStartsOn: 1 });
   
   const appointmentsThisWeek = appointments.filter(app => {
-      const appDate = new Date(app.date); // Directly use the string
+      const appDate = new Date(app.date.replace(/-/g, '/'));
       return isBefore(today, appDate) && isBefore(appDate, endOfWeekDate);
   }).length;
   
@@ -561,34 +563,42 @@ export default function AppointmentsCalendarPage() {
               <Button variant="outline" size="icon" onClick={goToNextMonth} className="h-8 w-8">
                 <ChevronRight className="h-4 w-4" />
               </Button>
+               <Button variant="outline" size="icon" onClick={() => setShowFilters(!showFilters)} className="h-8 w-8">
+                <SlidersHorizontal className="h-4 w-4" />
+              </Button>
             </div>
           </div>
+          
+          <Collapsible open={showFilters}>
+            <CollapsibleContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 border rounded-lg bg-muted/50">
+                    <div className="md:col-span-1">
+                        <Label htmlFor="patient-filter">Paciente</Label>
+                        <Combobox options={patientOptions} value={patientFilter} onChange={setPatientFilter} placeholder="Filtrar por paciente..." emptyMessage="No se encontraron." />
+                    </div>
+                    <div className="md:col-span-1">
+                        <Label htmlFor="doctor-filter">Doctor</Label>
+                        <Combobox options={doctorOptions} value={doctorFilter} onChange={setDoctorFilter} placeholder="Filtrar por doctor..." emptyMessage="No se encontraron." />
+                    </div>
+                    <div className="md:col-span-1">
+                        <Label htmlFor="status-filter">Estado</Label>
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <SelectTrigger id="status-filter"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                {statusOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="md:col-span-1 flex items-end">
+                        <Button variant="ghost" onClick={clearFilters} className="w-full">
+                            <FilterX className="h-4 w-4 mr-2" />
+                            Limpiar Filtros
+                        </Button>
+                    </div>
+                </div>
+            </CollapsibleContent>
+          </Collapsible>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 border rounded-lg bg-muted/50">
-                <div className="md:col-span-1">
-                    <Label htmlFor="patient-filter">Paciente</Label>
-                    <Combobox options={patientOptions} value={patientFilter} onChange={setPatientFilter} placeholder="Filtrar por paciente..." emptyMessage="No se encontraron." />
-                </div>
-                <div className="md:col-span-1">
-                    <Label htmlFor="doctor-filter">Doctor</Label>
-                    <Combobox options={doctorOptions} value={doctorFilter} onChange={setDoctorFilter} placeholder="Filtrar por doctor..." emptyMessage="No se encontraron." />
-                </div>
-                <div className="md:col-span-1">
-                     <Label htmlFor="status-filter">Estado</Label>
-                     <Select value={statusFilter} onValueChange={setStatusFilter}>
-                        <SelectTrigger id="status-filter"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            {statusOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                        </SelectContent>
-                     </Select>
-                </div>
-                <div className="md:col-span-1 flex items-end">
-                    <Button variant="ghost" onClick={clearFilters} className="w-full">
-                        <FilterX className="h-4 w-4 mr-2" />
-                        Limpiar Filtros
-                    </Button>
-                </div>
-            </div>
 
           <div className="grid grid-cols-7 border-t border-l border-border">
             {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((day) => (
