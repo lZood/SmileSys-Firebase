@@ -63,19 +63,22 @@ type TimelineEvent = {
 const getStatusInSpanish = (status: any) => {
     const translations: Record<string, string> = {
         'Paid': 'Pagado', 'Pending': 'Pendiente', 'Canceled': 'Cancelado',
-        'active': 'Activo', 'completed': 'Completado', 'cancelled': 'Cancelado'
+        'active': 'Activo', 'completed': 'Completado', 'cancelled': 'Cancelado',
+        'Scheduled': 'Programada', 'Completed': 'Completada', 'In-progress': 'En Progreso'
     };
     return translations[status] || status;
 }
 
 const getStatusClass = (status: any) => {
   switch (status) {
-    case 'Paid': case 'completed':
+    case 'Paid': case 'completed': case 'Completed':
       return 'bg-green-100 text-green-800 border-green-200';
-    case 'Pending': case 'active':
+    case 'Pending': case 'active': case 'In-progress':
       return 'bg-yellow-100 text-yellow-800 border-yellow-200';
     case 'Canceled': case 'cancelled':
       return 'bg-red-100 text-red-800 border-red-200';
+    case 'Scheduled':
+      return 'bg-blue-100 text-blue-800 border-blue-200';
     default:
       return 'bg-gray-100 text-gray-800';
   }
@@ -558,7 +561,7 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
             date: app.appointment_date,
             type: 'appointment',
             title: `Cita: ${app.service_description}`,
-            description: `Con ${app.doctor_name || 'doctor sin asignar'} a las ${app.appointment_time}. Estado: ${app.status}`,
+            description: `Con ${app.doctor_name || 'doctor sin asignar'} a las ${app.appointment_time}. Estado: ${getStatusInSpanish(app.status)}`,
             icon: Calendar
         });
     });

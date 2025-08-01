@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronLeft, ChevronRight, Plus, Edit, Trash2, CalendarClock, ListTodo, CalendarDays } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Edit, Trash2, CalendarClock, ListTodo, CalendarDays, MoreVertical } from 'lucide-react';
 import {
   eachDayOfInterval,
   endOfMonth,
@@ -37,9 +37,12 @@ import { Combobox } from '@/components/ui/combobox';
 import { createAppointment, getAppointments, deleteAppointment, updateAppointment } from './actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
 
 
 // Types
+type AppointmentStatus = 'Scheduled' | 'Completed' | 'Canceled' | 'In-progress';
 export type Appointment = {
   id: string;
   patientName: string;
@@ -47,13 +50,33 @@ export type Appointment = {
   service: string;
   time: string;
   date: string; // YYYY-MM-DD
-  status: 'Scheduled' | 'Completed' | 'Canceled' | 'In-progress';
+  status: AppointmentStatus;
   patientId: string;
   doctorId: string;
 };
 
 type Patient = { id: string; first_name: string; last_name: string };
 type Doctor = { id: string; first_name: string; last_name: string; roles: string[] };
+
+const getStatusInSpanish = (status: AppointmentStatus) => {
+    const translations: Record<AppointmentStatus, string> = {
+        'Scheduled': 'Programada',
+        'Completed': 'Completada',
+        'Canceled': 'Cancelada',
+        'In-progress': 'En Progreso'
+    };
+    return translations[status] || status;
+}
+
+const getStatusClass = (status: AppointmentStatus) => {
+    const classes: Record<AppointmentStatus, string> = {
+        'Scheduled': 'bg-blue-100 text-blue-800 border-blue-200',
+        'Completed': 'bg-green-100 text-green-800 border-green-200',
+        'Canceled': 'bg-red-100 text-red-800 border-red-200',
+        'In-progress': 'bg-yellow-100 text-yellow-800 border-yellow-200'
+    };
+    return classes[status] || 'bg-gray-100 text-gray-800';
+};
 
 const AppointmentForm = ({ 
   isOpen, 
@@ -170,7 +193,8 @@ const AppointmentDetailsModal = ({
     appointments,
     onAdd,
     onEdit,
-    onDelete
+    onDelete,
+    onStatusChange,
 } : {
     isOpen: boolean,
     onClose: () => void,
@@ -178,7 +202,8 @@ const AppointmentDetailsModal = ({
     appointments: Appointment[],
     onAdd: () => void,
     onEdit: (app: Appointment) => void,
-    onDelete: (id: string) => void
+    onDelete: (id: string) => void,
+    onStatusChange: (id: string, status: AppointmentStatus) => void,
 }) => {
     const isPast = isBefore(startOfDay(date), startOfDay(new Date()));
 
@@ -198,12 +223,25 @@ const AppointmentDetailsModal = ({
                         <div className="space-y-3">
                         {appointments.map(app => (
                             <div key={app.id} className="flex justify-between items-center p-3 bg-muted rounded-lg">
-                                <div>
+                                <div className="flex-1">
                                     <p className="font-semibold">{app.time} - {app.patientName}</p>
                                     <p className="text-sm text-muted-foreground">{app.service} con {app.doctor}</p>
+                                    <Badge variant="outline" className={cn('mt-1 capitalize', getStatusClass(app.status))}>
+                                      {getStatusInSpanish(app.status)}
+                                    </Badge>
                                 </div>
                                 {!isPast && (
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-1">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent>
+                                                <DropdownMenuItem onClick={() => onStatusChange(app.id, 'In-progress')}>Marcar como 'En Progreso'</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => onStatusChange(app.id, 'Completed')}>Marcar como 'Completada'</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => onStatusChange(app.id, 'Canceled')}>Marcar como 'Cancelada'</DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
                                         <Button variant="ghost" size="icon" onClick={() => onEdit(app)}>
                                             <Edit className="w-4 h-4" />
                                         </Button>
@@ -258,11 +296,6 @@ export default function AppointmentsCalendarPage() {
   const [doctors, setDoctors] = React.useState<Doctor[]>([]);
   const { toast } = useToast();
 
-  // Set initial date on client to avoid hydration mismatch
-  React.useEffect(() => {
-    setCurrentDate(new Date());
-  }, []);
-
   const fetchVisibleAppointments = React.useCallback(async (date: Date) => {
     setIsLoading(true);
     const firstDay = startOfMonth(date);
@@ -272,6 +305,11 @@ export default function AppointmentsCalendarPage() {
     const appointmentsData = await getAppointments(start, end);
     setAppointments(appointmentsData as Appointment[]);
     setIsLoading(false);
+  }, []);
+
+  // Set initial date on client to avoid hydration mismatch
+  React.useEffect(() => {
+    setCurrentDate(new Date());
   }, []);
   
   React.useEffect(() => {
@@ -312,7 +350,9 @@ export default function AppointmentsCalendarPage() {
       const appDate = new Date(app.date.replace(/-/g, '/'));
       return isBefore(today, appDate) && isBefore(appDate, endOfWeekDate);
   }).length;
-  const appointmentsThisMonth = appointments.filter(app => isSameMonth(new Date(app.date.replace(/-/g, '/')), currentDate)).length;
+  
+  const monthString = format(currentDate, 'yyyy-MM');
+  const appointmentsThisMonth = appointments.filter(app => app.date.startsWith(monthString)).length;
 
   const firstDayOfMonth = startOfMonth(currentDate);
   const lastDayOfMonth = endOfMonth(currentDate);
@@ -359,10 +399,20 @@ export default function AppointmentsCalendarPage() {
         toast({ variant: 'destructive', title: 'Error', description: error });
       } else {
         toast({ title: 'Cita Eliminada', description: 'La cita ha sido eliminada.'});
-        setIsDetailsModalOpen(false); // Cierra el modal de detalles
+        setIsDetailsModalOpen(false);
         fetchVisibleAppointments(currentDate);
       }
   }
+
+  const handleStatusChange = async (id: string, status: AppointmentStatus) => {
+    const { error } = await updateAppointment({ id, status });
+    if (error) {
+        toast({ variant: 'destructive', title: 'Error', description: error });
+    } else {
+        toast({ title: 'Estado Actualizado', description: `La cita ahora está ${getStatusInSpanish(status)}.`});
+        fetchVisibleAppointments(currentDate);
+    }
+  };
 
   const openAddForm = () => {
       setSelectedAppointment(null);
@@ -381,6 +431,16 @@ export default function AppointmentsCalendarPage() {
     return appointments.filter((appointment) =>
       appointment.date === dayString
     ).sort((a, b) => a.time.localeCompare(b.time));
+  };
+
+  const getAppointmentDotColor = (status: AppointmentStatus) => {
+    switch (status) {
+      case 'Scheduled': return 'bg-blue-500';
+      case 'In-progress': return 'bg-yellow-500';
+      case 'Completed': return 'bg-green-500';
+      case 'Canceled': return 'bg-red-500';
+      default: return 'bg-gray-400';
+    }
   };
 
   return (
@@ -438,6 +498,7 @@ export default function AppointmentsCalendarPage() {
                     onAdd={openAddForm}
                     onEdit={openEditForm}
                     onDelete={handleDeleteAppointment}
+                    onStatusChange={handleStatusChange}
                 />
             )}
           <div className="flex items-center justify-between mb-6">
@@ -464,7 +525,6 @@ export default function AppointmentsCalendarPage() {
               const appointmentsForDay = getAppointmentsForDay(day);
               const maxVisible = 2;
               const hiddenCount = appointmentsForDay.length - maxVisible;
-              const isPastDay = isBefore(startOfDay(day), today);
 
               return (
                 <div
@@ -472,8 +532,7 @@ export default function AppointmentsCalendarPage() {
                   onClick={() => handleDayClick(day)}
                   className={cn(
                     'relative h-28 sm:h-36 p-2 border-b border-r border-border flex flex-col cursor-pointer hover:bg-accent/50 transition-colors',
-                    !isSameMonth(day, currentDate) && 'bg-muted text-muted-foreground',
-                    isPastDay && !isToday(day) && 'bg-muted/70'
+                    !isSameMonth(day, currentDate) && 'bg-muted/50 text-muted-foreground',
                   )}
                 >
                   <time
@@ -481,7 +540,7 @@ export default function AppointmentsCalendarPage() {
                     className={cn(
                       'text-xs font-semibold',
                       isToday(day) && 'flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground',
-                      isPastDay && 'text-muted-foreground/60'
+                      !isSameMonth(day, currentDate) && 'text-muted-foreground/60'
                     )}
                   >
                     {format(day, 'd')}
@@ -492,8 +551,9 @@ export default function AppointmentsCalendarPage() {
                     ) : (
                         <>
                             {appointmentsForDay.slice(0, maxVisible).map(app => (
-                            <div key={app.id} className="p-1 bg-primary/10 rounded-md text-primary-dark font-medium truncate">
-                                {app.time} - {app.patientName}
+                            <div key={app.id} className="p-1 bg-primary/10 rounded-md text-primary-dark font-medium truncate flex items-center gap-2">
+                                <span className={cn("h-2 w-2 rounded-full", getAppointmentDotColor(app.status))}></span>
+                                <span className="flex-1 truncate">{app.time} - {app.patientName}</span>
                             </div>
                             ))}
                             {hiddenCount > 0 && (
@@ -512,5 +572,3 @@ export default function AppointmentsCalendarPage() {
     </div>
   );
 }
-
-    

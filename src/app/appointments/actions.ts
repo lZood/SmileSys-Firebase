@@ -4,6 +4,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { isBefore, subHours } from 'date-fns';
 
 const appointmentSchema = z.object({
   patient_id: z.string().uuid("Seleccione un paciente."),
@@ -69,7 +70,7 @@ export async function createAppointment(data: z.infer<typeof appointmentSchema>)
 
 const updateAppointmentSchema = appointmentSchema.extend({
     id: z.string().uuid(),
-});
+}).partial(); // Make all fields optional for partial updates
 
 export async function updateAppointment(data: z.infer<typeof updateAppointmentSchema>) {
     const supabase = createClient();
@@ -80,6 +81,10 @@ export async function updateAppointment(data: z.infer<typeof updateAppointmentSc
     }
 
     const { id, ...updateData } = parsedData.data;
+
+    if (!id) {
+        return { error: "ID de la cita es requerido." };
+    }
     
     const { error } = await supabase
         .from('appointments')
@@ -122,17 +127,30 @@ export async function getAppointments(startDate: string, endDate: string) {
         return [];
     }
     
-    return data.map(app => ({
-        id: app.id,
-        patientName: app.patients ? `${app.patients.first_name} ${app.patients.last_name}` : 'Paciente Eliminado',
-        doctor: app.doctors ? `Dr. ${app.doctors.first_name} ${app.doctors.last_name}` : 'Doctor no asignado',
-        service: app.service_description,
-        time: app.appointment_time,
-        date: app.appointment_date,
-        status: app.status,
-        patientId: app.patient_id,
-        doctorId: app.doctor_id,
-    }));
+    // Auto-complete logic
+    const now = new Date();
+    return data.map(app => {
+        const [hours, minutes] = app.appointment_time.split(':');
+        const appointmentDateTime = new Date(`${app.appointment_date}T${hours}:${minutes}:00`);
+
+        let finalStatus = app.status;
+        // If appointment is more than 1 hour ago and is still scheduled/in-progress, mark as completed for display
+        if ((app.status === 'Scheduled' || app.status === 'In-progress') && isBefore(appointmentDateTime, subHours(now, 1))) {
+            finalStatus = 'Completed';
+        }
+
+        return {
+            id: app.id,
+            patientName: app.patients ? `${app.patients.first_name} ${app.patients.last_name}` : 'Paciente Eliminado',
+            doctor: app.doctors ? `Dr. ${app.doctors.first_name} ${app.doctors.last_name}` : 'Doctor no asignado',
+            service: app.service_description,
+            time: app.appointment_time,
+            date: app.appointment_date,
+            status: finalStatus,
+            patientId: app.patient_id,
+            doctorId: app.doctor_id,
+        }
+    });
 }
 
 
@@ -153,11 +171,7 @@ export async function deleteAppointment(id: string) {
 
 export async function getAppointmentsForPatient(patientId: string) {
     const supabase = createClient();
-    const { data, error } = await supabase
-        .from('appointments')
-        .select('*')
-        .eq('patient_id', patientId)
-        .order('appointment_date', { ascending: false });
+    const { data, error } = await supabase.rpc('get_appointments_for_patient', { p_patient_id: patientId });
 
     if (error) {
         console.error('Error fetching appointments for patient:', error);
