@@ -2,7 +2,7 @@
 'use server';
 
 import { createClient } from "@/lib/supabase/server";
-import { startOfMonth, endOfMonth, format, isValid } from 'date-fns';
+import { startOfMonth, endOfMonth, format, isValid, subHours } from 'date-fns';
 
 const commonServices = [
     'Consulta / Revisión',
@@ -14,6 +14,62 @@ const commonServices = [
     'Corona Dental',
     'Ortodoncia (Ajuste)',
 ];
+
+
+async function autoCompleteAppointments(clinicId: string) {
+    const supabase = createClient();
+    const oneHourAgo = format(subHours(new Date(), 1), "yyyy-MM-dd'T'HH:mm:ss");
+
+    // 1. Fetch appointments that should be completed
+    // We combine date and time into a single timestamp for comparison
+    const { data: appointmentsToUpdate, error: fetchError } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('clinic_id', clinicId)
+        .in('status', ['Scheduled', 'In-progress'])
+        .lt('appointment_date', oneHourAgo.split('T')[0]) // filter by date first for efficiency
+        .filter( 'appointment_time', 'lt', oneHourAgo.split('T')[1]); // then by time
+
+    // This is a simplified approach. A proper way would be to create a timestamp column.
+    // For now, we will manually filter.
+     const { data: allPotentials, error: fetchAllError } = await supabase
+        .from('appointments')
+        .select('id, appointment_date, appointment_time')
+        .eq('clinic_id', clinicId)
+        .in('status', ['Scheduled', 'In-progress'])
+        .lte('appointment_date', oneHourAgo.split('T')[0]); // Get all appointments up to today
+
+     if (fetchAllError) {
+        console.error("Error fetching appointments for auto-complete:", fetchAllError);
+        return;
+    }
+
+    const now = new Date();
+    const idsToUpdate = allPotentials
+        .filter(app => {
+            const appDateTime = new Date(`${app.appointment_date}T${app.appointment_time}`);
+            return appDateTime < subHours(now, 1);
+        })
+        .map(app => app.id);
+
+
+    if (idsToUpdate.length === 0) {
+        return; // Nothing to update
+    }
+
+    // 2. Update their status to 'Completed'
+    const { error: updateError } = await supabase
+        .from('appointments')
+        .update({ status: 'Completed' })
+        .in('id', idsToUpdate);
+
+    if (updateError) {
+        console.error('Error auto-completing appointments:', updateError);
+    } else {
+        console.log(`Auto-completed ${idsToUpdate.length} appointments.`);
+    }
+}
+
 
 export async function getDashboardData(dateString: string) {
     const supabase = createClient();
@@ -34,6 +90,11 @@ export async function getDashboardData(dateString: string) {
     }
     
     const clinicId = profile.clinic_id;
+
+    // --- Auto-complete appointments before fetching data ---
+    await autoCompleteAppointments(clinicId);
+    // ----------------------------------------------------
+
     const today = new Date(dateString);
 
     if (!isValid(today)) {
