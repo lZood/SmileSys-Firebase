@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { isBefore, subHours, format } from 'date-fns';
+import { createNotification } from "../notifications/actions";
 
 export async function autoCompleteAppointments(clinicId: string) {
     const supabase = createClient();
@@ -79,16 +80,18 @@ export async function createAppointment(data: z.infer<typeof appointmentSchema>)
         if (!parsedData.success) {
             return { error: `Datos inválidos: ${parsedData.error.errors.map(e => e.message).join(', ')}` };
         }
+        
+        const { patient_id, doctor_id, appointment_date, appointment_time } = parsedData.data;
 
         // --- Conflict Detection ---
         const { data: existingAppointments, error: conflictError } = await supabase
             .from('appointments')
             .select('id, patient_id, doctor_id, patients(first_name, last_name), doctors:profiles(first_name, last_name)')
             .eq('clinic_id', profile.clinic_id)
-            .eq('appointment_date', parsedData.data.appointment_date)
-            .eq('appointment_time', parsedData.data.appointment_time)
+            .eq('appointment_date', appointment_date)
+            .eq('appointment_time', appointment_time)
             .in('status', ['Scheduled', 'In-progress'])
-            .or(`patient_id.eq.${parsedData.data.patient_id},doctor_id.eq.${parsedData.data.doctor_id}`);
+            .or(`patient_id.eq.${patient_id},doctor_id.eq.${doctor_id}`);
 
 
         if (conflictError) {
@@ -97,13 +100,13 @@ export async function createAppointment(data: z.infer<typeof appointmentSchema>)
         }
 
         if (existingAppointments && existingAppointments.length > 0) {
-            const patientConflict = existingAppointments.find(a => a.patient_id === parsedData.data.patient_id);
+            const patientConflict = existingAppointments.find(a => a.patient_id === patient_id);
             if (patientConflict) {
                 const patientName = `${patientConflict.patients?.first_name || ''} ${patientConflict.patients?.last_name || 'Este paciente'}`;
                 return { error: `${patientName} ya tiene una cita programada a esta hora.` };
             }
 
-            const doctorConflict = existingAppointments.find(a => a.doctor_id === parsedData.data.doctor_id);
+            const doctorConflict = existingAppointments.find(a => a.doctor_id === doctor_id);
             if (doctorConflict) {
                 const doctorName = `El Dr. ${doctorConflict.doctors?.first_name || ''} ${doctorConflict.doctors?.last_name || ''}`;
                 return { error: `${doctorName} ya tiene una cita programada a esta hora.` };
@@ -123,7 +126,22 @@ export async function createAppointment(data: z.infer<typeof appointmentSchema>)
             return { error: `No se pudo crear la cita en la base de datos. Código: ${insertError.code}. Detalles: ${insertError.message}` };
         }
         
+        // --- Create Notification ---
+        const { data: patient } = await supabase.from('patients').select('first_name, last_name').eq('id', patient_id).single();
+        if (patient) {
+            await createNotification({
+                clinic_id: profile.clinic_id,
+                user_id: doctor_id, // Notify the doctor
+                title: 'Nueva Cita Agendada',
+                message: `Se te asignó una nueva cita con ${patient.first_name} ${patient.last_name} para el ${appointment_date} a las ${appointment_time}.`,
+                link_to: `/patients/${patient_id}`,
+                triggered_by: user.id
+            });
+        }
+        // --- End Notification ---
+        
         revalidatePath('/appointments');
+        revalidatePath('/dashboard');
         return { error: null };
 
     } catch (e: any) {

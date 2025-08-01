@@ -21,6 +21,7 @@ import {
   LineChart,
   Moon,
   Sun,
+  Circle,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,15 @@ type DashboardLayoutProps = {
 };
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
+// Define a type for your notifications
+type Notification = {
+    id: string;
+    title: string;
+    message: string;
+    is_read: boolean;
+    link_to?: string;
+};
+
 
 const allNavItems = [
   { href: '/dashboard', icon: Home, label: 'Dashboard', roles: ['admin', 'doctor', 'staff'] },
@@ -115,6 +125,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [isExpanded, setIsExpanded] = React.useState(true);
   const [userData, setUserData] = React.useState<UserData | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [notifications, setNotifications] = React.useState<Notification[]>([]);
   
   React.useEffect(() => {
     getUserData().then(data => {
@@ -253,6 +264,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     )
   }
 
+  const unreadNotificationsCount = notifications.filter(n => !n.is_read).length;
+
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
       <aside className={cn(
@@ -317,16 +330,32 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
+              <Button variant="ghost" size="icon" className="rounded-full relative">
                 <Bell className="h-5 w-5" />
+                 {unreadNotificationsCount > 0 && (
+                    <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500" />
+                 )}
                  <span className="sr-only">Ver notificaciones</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-80">
               <DropdownMenuLabel>Notificaciones</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Recordatorio de cita enviado a J. Doe</DropdownMenuItem>
-              <DropdownMenuItem>Alerta de stock bajo para "Guantes"</DropdownMenuItem>
+               {notifications.length > 0 ? (
+                    notifications.map(notification => (
+                        <DropdownMenuItem key={notification.id} className="flex items-start gap-2">
+                            {!notification.is_read && <Circle className="h-2 w-2 mt-1.5 fill-blue-500 text-blue-500" />}
+                            <div className="flex-1 space-y-1">
+                                <p className="text-sm font-medium">{notification.title}</p>
+                                <p className="text-xs text-muted-foreground">{notification.message}</p>
+                            </div>
+                        </DropdownMenuItem>
+                    ))
+                ) : (
+                    <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+                        No tienes notificaciones nuevas.
+                    </div>
+                )}
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
