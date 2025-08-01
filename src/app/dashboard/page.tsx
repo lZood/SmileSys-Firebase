@@ -17,8 +17,10 @@ import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { NewPatientForm } from '@/components/new-patient-form';
 import { AddGeneralPaymentModal } from '@/components/add-general-payment-modal';
-import { AppointmentForm } from '../appointments/page';
+import { AppointmentForm } from '@/components/appointment-form';
 import { getPatients } from '../patients/actions';
+import { createAppointment } from '../appointments/actions';
+import { useToast } from '@/hooks/use-toast';
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
@@ -44,6 +46,18 @@ const QuickActionModals = ({
     doctors: Doctor[];
     clinic: NonNullable<UserData['clinic']> | null;
 }) => {
+    const { toast } = useToast();
+    
+    const handleCreateAppointment = async (data: any) => {
+        const result = await createAppointment(data);
+        if (result.error) {
+            toast({ variant: 'destructive', title: 'Error', description: result.error });
+        } else {
+            toast({ title: 'Cita Creada', description: 'La nueva cita ha sido agendada.' });
+            onSuccess('appointment');
+        }
+    };
+    
     return (
         <>
             {showAppointmentModal && (
@@ -51,12 +65,7 @@ const QuickActionModals = ({
                     isOpen={true}
                     onClose={() => onClose('appointment')}
                     selectedDate={new Date()}
-                    onSubmit={async (data) => {
-                        // This logic needs to be abstracted or passed in.
-                        // For now, it's a placeholder.
-                        console.log("Creating appointment", data);
-                        onSuccess('appointment');
-                    }}
+                    onSubmit={handleCreateAppointment}
                     patients={patients}
                     doctors={doctors}
                 />
