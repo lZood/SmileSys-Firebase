@@ -44,12 +44,16 @@ import { createClient } from '@/lib/supabase/client';
 import { getUserData } from '@/app/user/actions';
 import { Skeleton } from '../ui/skeleton';
 import Image from 'next/image';
+import { getAppointments } from '@/app/appointments/actions';
+import { startOfToday, format, differenceInMinutes, parse } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 type DashboardLayoutProps = {
   children: React.ReactNode;
 };
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
+type Appointment = Awaited<ReturnType<typeof getAppointments>>[0];
 // Define a type for your notifications
 type Notification = {
     id: string;
@@ -122,11 +126,84 @@ const ThemeSwitcher = ({ inMobileNav = false }: { inMobileNav?: boolean }) => {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { toast } = useToast();
   const [isExpanded, setIsExpanded] = React.useState(true);
   const [userData, setUserData] = React.useState<UserData | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   
+  // Real-time notifications and reminders
+  React.useEffect(() => {
+    const supabase = createClient();
+
+    // 1. Fetch initial notifications
+    const fetchNotifications = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            const { data, error } = await supabase
+                .from('notifications')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false });
+            
+            if (data) setNotifications(data);
+        }
+    };
+    fetchNotifications();
+
+    // 2. Listen for new notifications in real-time
+    const notificationsChannel = supabase
+      .channel('public:notifications')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, 
+        (payload) => {
+          // Check if the notification is for the current user
+          if ((payload.new as Notification).user_id === userData?.user?.id) {
+             setNotifications(currentNotifications => [
+                payload.new as Notification, 
+                ...currentNotifications
+             ]);
+          }
+        }
+      )
+      .subscribe();
+      
+    // 3. Reminder logic
+    let reminderInterval: NodeJS.Timeout;
+
+    const checkAppointmentsForReminders = async () => {
+        const today = startOfToday();
+        const todayString = format(today, 'yyyy-MM-dd');
+        const appointmentsToday = await getAppointments({
+            startDate: todayString,
+            endDate: todayString,
+        });
+
+        const now = new Date();
+        appointmentsToday.forEach(app => {
+            const appTime = parse(app.time, 'HH:mm:ss', new Date(app.date.replace(/-/g, '/')));
+            const diff = differenceInMinutes(appTime, now);
+
+            // Notify if appointment is exactly 5 minutes away
+            if (diff === 5) {
+                 toast({
+                    title: 'Recordatorio de Cita',
+                    description: `Tu cita con ${app.patientName} empieza en 5 minutos.`,
+                 });
+            }
+        });
+    };
+    
+    // Check for reminders every minute
+    reminderInterval = setInterval(checkAppointmentsForReminders, 60000);
+    
+    // Cleanup on unmount
+    return () => {
+      supabase.removeChannel(notificationsChannel);
+      clearInterval(reminderInterval);
+    };
+  }, [userData?.user?.id, toast]);
+
+
   React.useEffect(() => {
     getUserData().then(data => {
       setUserData(data);
@@ -398,3 +475,5 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     </div>
   );
 }
+
+  
