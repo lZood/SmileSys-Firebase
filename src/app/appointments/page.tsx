@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -99,7 +100,11 @@ const AppointmentForm = ({
     const [isLoading, setIsLoading] = React.useState(false);
     const [patientId, setPatientId] = React.useState(existingAppointment?.patientId || '');
     const [doctorId, setDoctorId] = React.useState(existingAppointment?.doctorId || '');
-    const [time, setTime] = React.useState(existingAppointment?.time || '10:00');
+    
+    // Ensure time is always in HH:mm format for the input
+    const initialTime = existingAppointment?.time ? existingAppointment.time.substring(0, 5) : '10:00';
+    const [time, setTime] = React.useState(initialTime);
+
     const [service, setService] = React.useState(existingAppointment?.service || '');
 
     const patientOptions = patients.map(p => ({ label: `${p.first_name} ${p.last_name}`, value: p.id }));
@@ -347,7 +352,7 @@ export default function AppointmentsCalendarPage() {
   const endOfWeekDate = endOfWeek(today, { weekStartsOn: 1 });
   
   const appointmentsThisWeek = appointments.filter(app => {
-      const appDate = new Date(app.date.replace(/-/g, '/'));
+      const appDate = new Date(app.date.replace(/-/g, '\/'));
       return isBefore(today, appDate) && isBefore(appDate, endOfWeekDate);
   }).length;
   
