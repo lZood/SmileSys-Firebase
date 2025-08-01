@@ -6,7 +6,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 export const Step1PersonalInfo = ({ formData, setFormData }: { formData: any, setFormData: Function }) => {
     
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData({ ...formData, [e.target.id]: e.target.value });
+        const { id, value, type } = e.target;
+        
+        // Basic filtering for numeric inputs
+        if (id === 'age') {
+            const numericValue = parseInt(value, 10);
+            if (value === '' || (numericValue >= 0 && !isNaN(numericValue))) {
+                 setFormData({ ...formData, [id]: value });
+            }
+            return;
+        }
+        
+        if (id === 'phone') {
+            // Allow numbers, spaces, and common phone characters like ()-+
+            const phoneValue = value.replace(/[^0-9\s\-+()]/g, '');
+            setFormData({ ...formData, [id]: phoneValue });
+            return;
+        }
+
+        setFormData({ ...formData, [id]: value });
     };
 
     const handleSelectChange = (value: string) => {
@@ -25,7 +43,7 @@ export const Step1PersonalInfo = ({ formData, setFormData }: { formData: any, se
             </div>
             <div className="grid gap-2">
                 <Label htmlFor="age">Edad <span className="text-red-500">*</span></Label>
-                <Input id="age" type="number" value={formData.age} onChange={handleChange} placeholder="30" required />
+                <Input id="age" type="number" min="0" value={formData.age} onChange={handleChange} placeholder="30" required />
             </div>
              <div className="grid gap-2">
                 <Label htmlFor="gender">Género</Label>

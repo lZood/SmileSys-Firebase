@@ -29,7 +29,15 @@ export const Step2MedicalHistory = ({ formData, setFormData }: { formData: any, 
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        setFormData({ ...formData, [e.target.id]: e.target.value });
+        const { id, value } = e.target;
+        if (id === 'pregnancyQuarter') {
+            const numValue = value.replace(/[^1-4]/g, '');
+            if (numValue === '' || (parseInt(numValue) >= 1 && parseInt(numValue) <= 4)) {
+                 setFormData({ ...formData, [id]: numValue });
+            }
+            return;
+        }
+        setFormData({ ...formData, [id]: value });
     };
 
     return (
@@ -56,9 +64,11 @@ export const Step2MedicalHistory = ({ formData, setFormData }: { formData: any, 
                     <Label htmlFor="pregnancyQuarter">Trimestre de Embarazo (si aplica)</Label>
                     <Input 
                         id="pregnancyQuarter" 
+                        type="text"
                         value={formData.pregnancyQuarter} 
                         onChange={handleChange} 
-                        placeholder="Ej. 2do Trimestre" 
+                        placeholder="Ej. 2"
+                        maxLength={1}
                     />
                 </div>
                 <div className="grid gap-2">

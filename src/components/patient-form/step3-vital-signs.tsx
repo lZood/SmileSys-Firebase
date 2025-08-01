@@ -6,7 +6,17 @@ import { Textarea } from '@/components/ui/textarea';
 export const Step3VitalSigns = ({ formData, setFormData }: { formData: any, setFormData: Function }) => {
     
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        setFormData({ ...formData, [e.target.id]: e.target.value });
+        const { id, value } = e.target;
+        if (id === 'pulse' || id === 'temperature') {
+            // Allow only numbers and a decimal point for temperature
+            const numericValue = value.replace(/[^0-9.]/g, '');
+            // Prevent multiple decimal points
+            if (numericValue.split('.').length > 2 && id === 'temperature') return;
+
+            setFormData({ ...formData, [id]: numericValue });
+            return;
+        }
+        setFormData({ ...formData, [id]: value });
     };
 
     return (
@@ -19,12 +29,12 @@ export const Step3VitalSigns = ({ formData, setFormData }: { formData: any, setF
                         <Input id="bloodPressure" value={formData.bloodPressure} onChange={handleChange} placeholder="120/80" />
                     </div>
                      <div className="grid gap-2">
-                        <Label htmlFor="pulse">Pulso</Label>
-                        <Input id="pulse" value={formData.pulse} onChange={handleChange} placeholder="75 bpm" />
+                        <Label htmlFor="pulse">Pulso (bpm)</Label>
+                        <Input id="pulse" type="text" value={formData.pulse} onChange={handleChange} placeholder="75" />
                     </div>
                      <div className="grid gap-2">
-                        <Label htmlFor="temperature">Temperatura</Label>
-                        <Input id="temperature" value={formData.temperature} onChange={handleChange} placeholder="36.5°C" />
+                        <Label htmlFor="temperature">Temperatura (°C)</Label>
+                        <Input id="temperature" type="text" value={formData.temperature} onChange={handleChange} placeholder="36.5" />
                     </div>
                  </div>
             </div>
