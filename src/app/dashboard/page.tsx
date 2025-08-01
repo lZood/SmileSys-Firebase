@@ -168,8 +168,8 @@ export default function DashboardPage() {
                     dashboardData.appointmentsToday.slice(0, 5).map((appointment: any) => (
                       <TableRow key={appointment.id}>
                         <TableCell>
-                          <div className="font-medium">{appointment.patientName || `Paciente ${appointment.patient_id.substring(0,4)}`}</div>
-                          <div className="text-sm text-muted-foreground">{appointment.doctor_name}</div>
+                          <div className="font-medium">{appointment.patientName}</div>
+                          <div className="text-sm text-muted-foreground">{appointment.doctorName}</div>
                         </TableCell>
                         <TableCell>{appointment.service_description}</TableCell>
                         <TableCell>{appointment.appointment_time}</TableCell>

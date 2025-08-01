@@ -24,6 +24,7 @@ export async function getDashboardData() {
     
     const clinicId = profile.clinic_id;
     const today = new Date();
+    const todayString = format(today, 'yyyy-MM-dd'); // Use a consistent string format
     const startDate = startOfMonth(today);
     const endDate = endOfMonth(today);
 
@@ -53,9 +54,13 @@ export async function getDashboardData() {
     // 3. Get appointments for today
     const { data: appointmentsToday, error: appointmentsError } = await supabase
         .from('appointments')
-        .select('*')
+        .select(`
+            *,
+            patients (id, first_name, last_name),
+            doctors:profiles (id, first_name, last_name)
+        `)
         .eq('clinic_id', clinicId)
-        .eq('appointment_date', format(today, 'yyyy-MM-dd'))
+        .eq('appointment_date', todayString) // Compare with the formatted string
         .order('appointment_time', { ascending: true });
 
 
@@ -64,10 +69,20 @@ export async function getDashboardData() {
         return { error: 'Failed to fetch dashboard data' };
     }
 
+    // Map to structure expected by the frontend
+    const formattedAppointments = appointmentsToday?.map(app => ({
+        id: app.id,
+        patientName: app.patients ? `${app.patients.first_name} ${app.patients.last_name}` : 'Paciente no encontrado',
+        doctorName: app.doctors ? `Dr. ${app.doctors.first_name} ${app.doctors.last_name}` : 'Doctor no asignado',
+        service_description: app.service_description,
+        appointment_time: app.appointment_time,
+        status: app.status
+    }));
+
     return {
         totalPatients: totalPatients ?? 0,
         totalIncomeThisMonth,
-        appointmentsToday: appointmentsToday ?? [],
+        appointmentsToday: formattedAppointments ?? [],
         appointmentsTodayCount: appointmentsToday?.length ?? 0
     };
 }
