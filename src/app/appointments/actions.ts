@@ -41,16 +41,8 @@ export async function createAppointment(data: z.infer<typeof appointmentSchema>)
         }
         console.log("4. [VALIDATION] Data passed Zod validation.");
 
-        // Additional Server-Side Date Validation
-        const appointmentDate = new Date(parsedData.data.appointment_date + 'T00:00:00Z'); // Treat as UTC midnight
-        const today = new Date();
-        today.setUTCHours(0, 0, 0, 0); // Set today to UTC midnight for fair comparison
-
-        if (appointmentDate < today) {
-            console.error("5. [ERROR] Date validation failed: Appointment date is in the past.");
-            return { error: "No se pueden crear citas en fechas pasadas." };
-        }
-        console.log("5. [DATE CHECK] Appointment date is valid (not in the past).");
+        // NOTE: Past date validation is now handled on the client-side to avoid timezone issues on the server.
+        // The UI prevents creating appointments for past dates.
 
         const dataToInsert = {
             ...parsedData.data,

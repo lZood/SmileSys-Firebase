@@ -55,7 +55,7 @@ export type Appointment = {
 };
 
 type Patient = { id: string; first_name: string; last_name: string };
-type Doctor = { id: string; first_name: string; last_name: string };
+type Doctor = { id: string; first_name: string; last_name: string; roles: string[] };
 
 const AppointmentForm = ({ 
   isOpen, 
@@ -82,7 +82,9 @@ const AppointmentForm = ({
     const [service, setService] = React.useState(existingAppointment?.service || '');
 
     const patientOptions = patients.map(p => ({ label: `${p.first_name} ${p.last_name}`, value: p.id }));
-    const doctorOptions = doctors.map(d => ({ label: `Dr. ${d.first_name} ${d.last_name}`, value: d.id }));
+    const doctorOptions = doctors
+        .filter(d => d.roles.includes('doctor'))
+        .map(d => ({ label: `Dr. ${d.first_name} ${d.last_name}`, value: d.id }));
 
     const handleSubmit = async () => {
         if (!patientId || !doctorId || !time || !service) {
@@ -280,8 +282,7 @@ export default function AppointmentsCalendarPage() {
         ]);
         setPatients(patientsData as Patient[]);
         if (userData?.teamMembers) {
-            const doctorMembers = userData.teamMembers.filter(m => m.roles.includes('doctor'));
-            setDoctors(doctorMembers as Doctor[]);
+            setDoctors(userData.teamMembers as Doctor[]);
         }
     }
     fetchInitialData();
@@ -450,7 +451,7 @@ export default function AppointmentsCalendarPage() {
               const appointmentsForDay = getAppointmentsForDay(day);
               const maxVisible = 2;
               const hiddenCount = appointmentsForDay.length - maxVisible;
-              const isPastDay = isBefore(day, today);
+              const isPastDay = isBefore(startOfDay(day), today);
 
               return (
                 <div
