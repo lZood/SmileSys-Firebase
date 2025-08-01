@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { format } from 'date-fns';
+import { format, startOfToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Calendar as CalendarIcon } from 'lucide-react';
 
@@ -28,6 +28,8 @@ export function DatePicker({
     setDate(selectedDate);
     setIsOpen(false);
   };
+  
+  const today = startOfToday();
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -51,6 +53,7 @@ export function DatePicker({
           onSelect={handleDateSelect}
           initialFocus
           locale={es}
+          disabled={{ before: today }}
         />
       </PopoverContent>
     </Popover>

@@ -62,46 +62,65 @@ const appointmentSchema = z.object({
 });
 
 export async function createAppointment(data: z.infer<typeof appointmentSchema>) {
-    console.log("1. [SERVER ACTION] Received data for createAppointment:", data);
-
     const supabase = createClient();
     
     try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
-            console.error("2. [ERROR] Authentication failed. No user object found.");
             return { error: "No autorizado. El usuario no está autenticado." };
         }
-        console.log("2. [AUTH] User authenticated with ID:", user.id);
 
         const { data: profile, error: profileError } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).single();
         if (profileError || !profile) {
-            console.error("3. [ERROR] Failed to fetch user profile or profile is null. Error:", profileError);
             return { error: "Perfil de usuario no encontrado." };
         }
-        console.log("3. [PROFILE] User profile found. Clinic ID:", profile.clinic_id);
 
         const parsedData = appointmentSchema.safeParse(data);
         if (!parsedData.success) {
-            console.error("4. [ERROR] Zod validation failed:", parsedData.error.flatten());
             return { error: `Datos inválidos: ${parsedData.error.errors.map(e => e.message).join(', ')}` };
         }
-        console.log("4. [VALIDATION] Data passed Zod validation.");
 
+        // --- Conflict Detection ---
+        const { data: existingAppointments, error: conflictError } = await supabase
+            .from('appointments')
+            .select('id, patient_id, doctor_id, patients(first_name, last_name), doctors:profiles(first_name, last_name)')
+            .eq('clinic_id', profile.clinic_id)
+            .eq('appointment_date', parsedData.data.appointment_date)
+            .eq('appointment_time', parsedData.data.appointment_time)
+            .in('status', ['Scheduled', 'In-progress']);
+
+        if (conflictError) {
+            console.error("Error checking for conflicts:", conflictError);
+            return { error: "No se pudo verificar si hay conflictos de citas." };
+        }
+
+        if (existingAppointments && existingAppointments.length > 0) {
+            const patientConflict = existingAppointments.find(a => a.patient_id === parsedData.data.patient_id);
+            if (patientConflict) {
+                 const patientName = `${patientConflict.patients?.first_name || ''} ${patientConflict.patients?.last_name || 'Este paciente'}`;
+                return { error: `${patientName} ya tiene una cita programada a esta hora.` };
+            }
+
+            const doctorConflict = existingAppointments.find(a => a.doctor_id === parsedData.data.doctor_id);
+            if (doctorConflict) {
+                const doctorName = `El Dr. ${doctorConflict.doctors?.first_name || ''} ${doctorConflict.doctors?.last_name || ''}`;
+                return { error: `${doctorName} ya tiene una cita programada a esta hora.` };
+            }
+        }
+        // --- End Conflict Detection ---
+        
         const dataToInsert = {
             ...parsedData.data,
             clinic_id: profile.clinic_id
         };
         
-        console.log("6. [INSERTION] Attempting to insert the following data into 'appointments' table:", dataToInsert);
         const { error: insertError } = await supabase.from('appointments').insert(dataToInsert);
 
         if (insertError) {
-            console.error("7. [DB ERROR] Supabase insert failed:", insertError);
+            console.error("Supabase insert failed:", insertError);
             return { error: `No se pudo crear la cita en la base de datos. Código: ${insertError.code}. Detalles: ${insertError.message}` };
         }
         
-        console.log("7. [SUCCESS] Appointment created successfully.");
         revalidatePath('/appointments');
         return { error: null };
 

@@ -36,9 +36,9 @@ const commonServices = [
 ];
 const OTHER_SERVICE = 'Otro';
 
-const hours = Array.from({ length: 13 }, (_, i) => String(i + 8).padStart(2, '0')); // 08 to 20
+const hours12 = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')); // 01 to 12
 const minutes = ['00', '30'];
-
+const periods = ['AM', 'PM'];
 
 export const AppointmentForm = ({
   isOpen, 
@@ -70,6 +70,7 @@ export const AppointmentForm = ({
     const [appointmentDate, setAppointmentDate] = React.useState<Date | undefined>(selectedDate);
     const [hour, setHour] = React.useState('10');
     const [minute, setMinute] = React.useState('00');
+    const [period, setPeriod] = React.useState<'AM' | 'PM'>('AM');
 
 
     React.useEffect(() => {
@@ -80,15 +81,26 @@ export const AppointmentForm = ({
 
             if (existingAppointment.time) {
                 const [h, m] = existingAppointment.time.split(':');
-                setHour(h);
-                setMinute(m.substring(0, 2)); // Ensure it's '00' or '30'
+                let hour24 = parseInt(h);
+                let currentPeriod: 'AM' | 'PM' = 'AM';
+                
+                if (hour24 >= 12) {
+                    currentPeriod = 'PM';
+                    if (hour24 > 12) {
+                        hour24 -= 12;
+                    }
+                }
+                if (hour24 === 0) hour24 = 12; // Midnight case
+
+                setHour(String(hour24).padStart(2, '0'));
+                setMinute(m.substring(0, 2));
+                setPeriod(currentPeriod);
             } else {
                  setHour('10');
                  setMinute('00');
+                 setPeriod('AM');
             }
             
-
-            // Logic to set service state when editing
             const existingService = existingAppointment.service;
             if (commonServices.includes(existingService)) {
                 setService(existingService);
@@ -104,6 +116,7 @@ export const AppointmentForm = ({
              setAppointmentDate(selectedDate);
              setHour('10');
              setMinute('00');
+             setPeriod('AM');
              setService('');
              setCustomService('');
         }
@@ -128,8 +141,17 @@ export const AppointmentForm = ({
         }
         setIsLoading(true);
         
+        // Convert 12h to 24h format
+        let hour24 = parseInt(hour, 10);
+        if (period === 'PM' && hour24 < 12) {
+            hour24 += 12;
+        }
+        if (period === 'AM' && hour24 === 12) { // Midnight case
+            hour24 = 0;
+        }
+        
         const dateString = format(appointmentDate, 'yyyy-MM-dd');
-        const timeString = `${hour}:${minute}`;
+        const timeString = `${String(hour24).padStart(2, '0')}:${minute}`;
         
         const data = {
             id: existingAppointment?.id,
@@ -170,13 +192,13 @@ export const AppointmentForm = ({
                              <Label htmlFor="date">Fecha</Label>
                              <DatePicker date={appointmentDate} setDate={setAppointmentDate} />
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-3 gap-2">
                              <div className="grid gap-2">
                                 <Label htmlFor="hour">Hora</Label>
                                 <Select value={hour} onValueChange={setHour}>
                                     <SelectTrigger><SelectValue/></SelectTrigger>
                                     <SelectContent>
-                                        {hours.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                                        {hours12.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -186,6 +208,15 @@ export const AppointmentForm = ({
                                     <SelectTrigger><SelectValue/></SelectTrigger>
                                     <SelectContent>
                                         {minutes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                             <div className="grid gap-2">
+                                <Label htmlFor="period">AM/PM</Label>
+                                 <Select value={period} onValueChange={(v: 'AM' | 'PM') => setPeriod(v)}>
+                                    <SelectTrigger><SelectValue/></SelectTrigger>
+                                    <SelectContent>
+                                        {periods.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
