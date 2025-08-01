@@ -4,7 +4,53 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { isBefore, subHours } from 'date-fns';
+import { isBefore, subHours, format } from 'date-fns';
+
+export async function autoCompleteAppointments(clinicId: string) {
+    const supabase = createClient();
+    const oneHourAgo = format(subHours(new Date(), 1), "yyyy-MM-dd'T'HH:mm:ss");
+
+    // This is a simplified approach. A proper way would be to create a timestamp column.
+    // For now, we will manually filter.
+     const { data: allPotentials, error: fetchAllError } = await supabase
+        .from('appointments')
+        .select('id, appointment_date, appointment_time')
+        .eq('clinic_id', clinicId)
+        .in('status', ['Scheduled', 'In-progress'])
+        .lte('appointment_date', oneHourAgo.split('T')[0]); // Get all appointments up to today
+
+     if (fetchAllError) {
+        console.error("Error fetching appointments for auto-complete:", fetchAllError);
+        return;
+    }
+
+    const now = new Date();
+    const idsToUpdate = allPotentials
+        .filter(app => {
+            const [hours, minutes] = app.appointment_time.split(':');
+            const appDateTime = new Date(`${app.appointment_date}T${hours}:${minutes}:00`);
+            return isBefore(appDateTime, subHours(now, 1));
+        })
+        .map(app => app.id);
+
+
+    if (idsToUpdate.length === 0) {
+        return; // Nothing to update
+    }
+
+    // 2. Update their status to 'Completed'
+    const { error: updateError } = await supabase
+        .from('appointments')
+        .update({ status: 'Completed' })
+        .in('id', idsToUpdate);
+
+    if (updateError) {
+        console.error('Error auto-completing appointments:', updateError);
+    } else {
+        console.log(`Auto-completed ${idsToUpdate.length} appointments.`);
+    }
+}
+
 
 const appointmentSchema = z.object({
   patient_id: z.string().uuid("Seleccione un paciente."),
@@ -112,6 +158,9 @@ export async function getAppointments(filters: {
     
     const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).single();
     if (!profile) return [];
+    
+    // Auto-complete appointments before fetching
+    await autoCompleteAppointments(profile.clinic_id);
 
     let query = supabase
         .from('appointments')
@@ -151,7 +200,7 @@ export async function getAppointments(filters: {
         const appointmentDateTime = new Date(`${app.appointment_date}T${hours}:${minutes}:00`);
 
         let finalStatus = app.status;
-        // If appointment is more than 1 hour ago and is still scheduled/in-progress, mark as completed for display
+        // This is now redundant as autoCompleteAppointments handles it, but it's a good fallback for immediate UI feedback.
         if ((app.status === 'Scheduled' || app.status === 'In-progress') && isBefore(appointmentDateTime, subHours(now, 1))) {
             finalStatus = 'Completed';
         }
