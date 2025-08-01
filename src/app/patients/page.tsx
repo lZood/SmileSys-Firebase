@@ -181,7 +181,7 @@ export default function PatientsPage() {
                     {patient.phone || 'N/A'}
                   </TableCell>
                   <TableCell className="hidden lg:table-cell">
-                    {new Date(patient.created_at.replace(/-/g, '/')).toLocaleDateString('es-MX')}
+                    {new Date(patient.created_at).toLocaleDateString('es-MX')}
                   </TableCell>
                    <TableCell>
                     <Badge variant="outline" className={cn("capitalize", statusStyles[patient.status as keyof typeof statusStyles])}>
@@ -203,7 +203,7 @@ export default function PatientsPage() {
                             <DropdownMenuItem onClick={() => router.push(`/patients/${patient.id}`)}>
                                 <Eye className="mr-2 h-4 w-4" /> Ver Detalles
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => router.push(`/appointments?patient_id=${patient.id}`)}>
+                            <DropdownMenuItem onClick={() => router.push(`/appointments?patientId=${patient.id}`)}>
                                 <Calendar className="mr-2 h-4 w-4" /> Citas
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => router.push(`/patients/${patient.id}?tab=billing`)}>

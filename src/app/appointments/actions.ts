@@ -42,9 +42,6 @@ export async function createAppointment(data: z.infer<typeof appointmentSchema>)
         }
         console.log("4. [VALIDATION] Data passed Zod validation.");
 
-        // NOTE: Past date validation is now handled on the client-side to avoid timezone issues on the server.
-        // The UI prevents creating appointments for past dates.
-
         const dataToInsert = {
             ...parsedData.data,
             clinic_id: profile.clinic_id
@@ -101,7 +98,13 @@ export async function updateAppointment(data: z.infer<typeof updateAppointmentSc
 }
 
 
-export async function getAppointments(startDate: string, endDate: string) {
+export async function getAppointments(filters: { 
+    startDate: string, 
+    endDate: string,
+    patientId?: string | null,
+    doctorId?: string | null,
+    status?: string | null,
+}) {
     const supabase = createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -110,7 +113,7 @@ export async function getAppointments(startDate: string, endDate: string) {
     const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).single();
     if (!profile) return [];
 
-    const { data, error } = await supabase
+    let query = supabase
         .from('appointments')
         .select(`
             *,
@@ -118,9 +121,23 @@ export async function getAppointments(startDate: string, endDate: string) {
             doctors:profiles (id, first_name, last_name)
         `)
         .eq('clinic_id', profile.clinic_id)
-        .gte('appointment_date', startDate)
-        .lte('appointment_date', endDate)
+        .gte('appointment_date', filters.startDate)
+        .lte('appointment_date', filters.endDate)
         .order('appointment_date', { ascending: false });
+
+    // Apply filters
+    if (filters.patientId) {
+        query = query.eq('patient_id', filters.patientId);
+    }
+    if (filters.doctorId) {
+        query = query.eq('doctor_id', filters.doctorId);
+    }
+    if (filters.status) {
+        query = query.eq('status', filters.status);
+    }
+
+    const { data, error } = await query;
+
 
     if (error) {
         console.error('Error fetching appointments:', error);

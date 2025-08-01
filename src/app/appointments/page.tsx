@@ -1,9 +1,9 @@
 
-
 'use client';
 
 import * as React from 'react';
-import { ChevronLeft, ChevronRight, Plus, Edit, Trash2, CalendarClock, ListTodo, CalendarDays, MoreVertical } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ChevronLeft, ChevronRight, Plus, Edit, Trash2, CalendarClock, ListTodo, CalendarDays, MoreVertical, FilterX } from 'lucide-react';
 import {
   eachDayOfInterval,
   endOfMonth,
@@ -16,6 +16,7 @@ import {
   add,
   isBefore,
   startOfDay,
+  isSameDay,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -40,6 +41,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
 // Types
@@ -210,7 +212,8 @@ const AppointmentDetailsModal = ({
     onDelete: (id: string) => void,
     onStatusChange: (id: string, status: AppointmentStatus) => void,
 }) => {
-    const isPast = isBefore(startOfDay(date), startOfDay(new Date()));
+    const isPast = isBefore(startOfDay(date), startOfDay(new Date())) && !isSameDay(date, new Date());
+
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -290,6 +293,9 @@ const AppointmentDetailsModal = ({
 }
 
 export default function AppointmentsCalendarPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [currentDate, setCurrentDate] = React.useState<Date | null>(null);
   const [appointments, setAppointments] = React.useState<Appointment[]>([]); 
   const [isLoading, setIsLoading] = React.useState(true);
@@ -301,16 +307,29 @@ export default function AppointmentsCalendarPage() {
   const [doctors, setDoctors] = React.useState<Doctor[]>([]);
   const { toast } = useToast();
 
+  const [patientFilter, setPatientFilter] = React.useState(searchParams.get('patientId') || 'all');
+  const [doctorFilter, setDoctorFilter] = React.useState('all');
+  const [statusFilter, setStatusFilter] = React.useState('all');
+
+
   const fetchVisibleAppointments = React.useCallback(async (date: Date) => {
     setIsLoading(true);
     const firstDay = startOfMonth(date);
     const lastDay = endOfMonth(date);
     const start = format(startOfWeek(firstDay, { weekStartsOn: 1 }), 'yyyy-MM-dd');
     const end = format(endOfWeek(lastDay, { weekStartsOn: 1 }), 'yyyy-MM-dd');
-    const appointmentsData = await getAppointments(start, end);
+    
+    const appointmentsData = await getAppointments({
+        startDate: start,
+        endDate: end,
+        patientId: patientFilter !== 'all' ? patientFilter : null,
+        doctorId: doctorFilter !== 'all' ? doctorFilter : null,
+        status: statusFilter !== 'all' ? statusFilter : null,
+    });
+
     setAppointments(appointmentsData as Appointment[]);
     setIsLoading(false);
-  }, []);
+  }, [patientFilter, doctorFilter, statusFilter]);
 
   // Set initial date on client to avoid hydration mismatch
   React.useEffect(() => {
@@ -336,6 +355,15 @@ export default function AppointmentsCalendarPage() {
         fetchVisibleAppointments(currentDate);
       }
   }, [currentDate, fetchVisibleAppointments]);
+
+  // Update URL when filters change
+  React.useEffect(() => {
+    const params = new URLSearchParams();
+    if (patientFilter !== 'all') params.set('patientId', patientFilter);
+    if (doctorFilter !== 'all') params.set('doctorId', doctorFilter);
+    if (statusFilter !== 'all') params.set('status', statusFilter);
+    router.push(`/appointments?${params.toString()}`, { scroll: false });
+  }, [patientFilter, doctorFilter, statusFilter, router]);
   
   if (!currentDate) {
     return (
@@ -352,7 +380,7 @@ export default function AppointmentsCalendarPage() {
   const endOfWeekDate = endOfWeek(today, { weekStartsOn: 1 });
   
   const appointmentsThisWeek = appointments.filter(app => {
-      const appDate = new Date(app.date.replace(/-/g, '\/'));
+      const appDate = new Date(app.date); // Directly use the string
       return isBefore(today, appDate) && isBefore(appDate, endOfWeekDate);
   }).length;
   
@@ -448,6 +476,22 @@ export default function AppointmentsCalendarPage() {
     }
   };
 
+  const clearFilters = () => {
+    setPatientFilter('all');
+    setDoctorFilter('all');
+    setStatusFilter('all');
+  }
+
+  const patientOptions = [{ label: "Todos los Pacientes", value: "all" }, ...patients.map(p => ({ label: `${p.first_name} ${p.last_name}`, value: p.id }))];
+  const doctorOptions = [{ label: "Todos los Doctores", value: "all" }, ...doctors.filter(d => d.roles.includes('doctor')).map(d => ({ label: `Dr. ${d.first_name} ${d.last_name}`, value: d.id }))];
+  const statusOptions = [
+      { label: "Todos los Estados", value: "all" },
+      { label: "Programada", value: "Scheduled" },
+      { label: "En Progreso", value: "In-progress" },
+      { label: "Completada", value: "Completed" },
+      { label: "Cancelada", value: "Canceled" },
+  ];
+
   return (
     <div className="flex flex-col gap-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -506,7 +550,7 @@ export default function AppointmentsCalendarPage() {
                     onStatusChange={handleStatusChange}
                 />
             )}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl sm:text-2xl font-bold font-headline capitalize">
               {format(currentDate, 'MMMM yyyy', { locale: es })}
             </h1>
@@ -519,6 +563,32 @@ export default function AppointmentsCalendarPage() {
               </Button>
             </div>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 border rounded-lg bg-muted/50">
+                <div className="md:col-span-1">
+                    <Label htmlFor="patient-filter">Paciente</Label>
+                    <Combobox options={patientOptions} value={patientFilter} onChange={setPatientFilter} placeholder="Filtrar por paciente..." emptyMessage="No se encontraron." />
+                </div>
+                <div className="md:col-span-1">
+                    <Label htmlFor="doctor-filter">Doctor</Label>
+                    <Combobox options={doctorOptions} value={doctorFilter} onChange={setDoctorFilter} placeholder="Filtrar por doctor..." emptyMessage="No se encontraron." />
+                </div>
+                <div className="md:col-span-1">
+                     <Label htmlFor="status-filter">Estado</Label>
+                     <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger id="status-filter"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            {statusOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                        </SelectContent>
+                     </Select>
+                </div>
+                <div className="md:col-span-1 flex items-end">
+                    <Button variant="ghost" onClick={clearFilters} className="w-full">
+                        <FilterX className="h-4 w-4 mr-2" />
+                        Limpiar Filtros
+                    </Button>
+                </div>
+            </div>
 
           <div className="grid grid-cols-7 border-t border-l border-border">
             {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((day) => (
