@@ -63,6 +63,7 @@ type Notification = {
     message: string;
     is_read: boolean;
     link_to?: string;
+    user_id: string;
 };
 
 
