@@ -86,7 +86,7 @@ export async function createAppointment(data: z.infer<typeof appointmentSchema>)
         // --- Conflict Detection ---
         const { data: existingAppointments, error: conflictError } = await supabase
             .from('appointments')
-            .select('id, patient_id, doctor_id, patients(first_name, last_name), doctors:profiles(first_name, last_name)')
+            .select('id, patient_id, doctor_id')
             .eq('clinic_id', profile.clinic_id)
             .eq('appointment_date', appointment_date)
             .eq('appointment_time', appointment_time)
@@ -102,14 +102,12 @@ export async function createAppointment(data: z.infer<typeof appointmentSchema>)
         if (existingAppointments && existingAppointments.length > 0) {
             const patientConflict = existingAppointments.find(a => a.patient_id === patient_id);
             if (patientConflict) {
-                const patientName = `${patientConflict.patients?.first_name || ''} ${patientConflict.patients?.last_name || 'Este paciente'}`;
-                return { error: `${patientName} ya tiene una cita programada a esta hora.` };
+                 return { error: `Este paciente ya tiene una cita programada a esta hora.` };
             }
 
             const doctorConflict = existingAppointments.find(a => a.doctor_id === doctor_id);
             if (doctorConflict) {
-                const doctorName = `El Dr. ${doctorConflict.doctors?.first_name || ''} ${doctorConflict.doctors?.last_name || ''}`;
-                return { error: `${doctorName} ya tiene una cita programada a esta hora.` };
+                 return { error: `Este doctor ya tiene una cita programada a esta hora.` };
             }
         }
         // --- End Conflict Detection ---
@@ -205,8 +203,8 @@ export async function getAppointments(filters: {
         .from('appointments')
         .select(`
             *,
-            patients (id, first_name, last_name),
-            doctors:profiles (id, first_name, last_name)
+            patients (*),
+            profiles!doctor_id(*)
         `)
         .eq('clinic_id', profile.clinic_id)
         .gte('appointment_date', filters.startDate)
@@ -235,6 +233,7 @@ export async function getAppointments(filters: {
     // Auto-complete logic
     const now = new Date();
     return data.map(app => {
+        const doctorProfile = app.profiles;
         const [hours, minutes] = app.appointment_time.split(':');
         const appointmentDateTime = new Date(`${app.appointment_date}T${hours}:${minutes}:00`);
 
@@ -247,7 +246,7 @@ export async function getAppointments(filters: {
         return {
             id: app.id,
             patientName: app.patients ? `${app.patients.first_name} ${app.patients.last_name}` : 'Paciente Eliminado',
-            doctor: app.doctors ? `Dr. ${app.doctors.first_name} ${app.doctors.last_name}` : 'Doctor no asignado',
+            doctor: doctorProfile ? `Dr. ${doctorProfile.first_name} ${doctorProfile.last_name}` : 'Doctor no asignado',
             service: app.service_description,
             time: app.appointment_time,
             date: app.appointment_date,

@@ -78,8 +78,8 @@ export async function getDashboardData(dateString: string) {
         .from('appointments')
         .select(`
             *,
-            patients (id, first_name, last_name),
-            doctors:profiles (id, first_name, last_name)
+            patients (*),
+            profiles!doctor_id(*)
         `)
         .eq('clinic_id', clinicId)
         .gte('appointment_date', format(startDate, 'yyyy-MM-dd'))
@@ -96,14 +96,17 @@ export async function getDashboardData(dateString: string) {
     const appointmentsToday = allAppointments?.filter(app => app.appointment_date === dateString) || [];
 
     // Map to structure expected by the frontend
-    const formattedAppointments = appointmentsToday?.map(app => ({
-        id: app.id,
-        patientName: app.patients ? `${app.patients.first_name} ${app.patients.last_name}` : 'Paciente no encontrado',
-        doctorName: app.doctors ? `Dr. ${app.doctors.first_name} ${app.doctors.last_name}` : 'Doctor no asignado',
-        service_description: app.service_description,
-        appointment_time: app.appointment_time,
-        status: app.status
-    }));
+    const formattedAppointments = appointmentsToday?.map(app => {
+        const doctorProfile = app.profiles;
+        return {
+            id: app.id,
+            patientName: app.patients ? `${app.patients.first_name} ${app.patients.last_name}` : 'Paciente no encontrado',
+            doctorName: doctorProfile ? `Dr. ${doctorProfile.first_name} ${doctorProfile.last_name}` : 'Doctor no asignado',
+            service_description: app.service_description,
+            appointment_time: app.appointment_time,
+            status: app.status
+        }
+    });
 
     // Process data for service stats
     const serviceCounts = (allAppointments || []).reduce((acc, app) => {
