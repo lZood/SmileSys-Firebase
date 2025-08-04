@@ -324,3 +324,5 @@ export async function getDoctorAvailability(doctorId: string, date: string) {
     
     return { error: null, data: availableSlots };
 }
+
+    
