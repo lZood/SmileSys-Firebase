@@ -8,9 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ToothIcon } from '@/components/icons/tooth-icon';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { SmileSysLogo } from '@/components/icons/smilesys-logo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -70,10 +70,10 @@ export default function LoginPage() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">
-      <Card className="mx-auto max-w-sm w-full">
+      <Card className="mx-auto max-w-md w-full">
         <CardHeader className="text-center">
           <div className="flex justify-center items-center mb-4">
-            <ToothIcon className="h-10 w-10 text-primary" />
+            <SmileSysLogo className="h-12 w-12" />
           </div>
           <CardTitle className="text-2xl font-bold font-headline">Bienvenido a SmileSys</CardTitle>
           <CardDescription>Ingresa tus credenciales para acceder al panel de tu clínica.</CardDescription>
