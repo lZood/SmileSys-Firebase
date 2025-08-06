@@ -14,7 +14,7 @@ const createNotificationSchema = z.object({
 });
 
 export async function createNotification(input: z.infer<typeof createNotificationSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const parsedData = createNotificationSchema.safeParse(input);
 
     if (!parsedData.success) {

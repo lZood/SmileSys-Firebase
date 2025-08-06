@@ -17,7 +17,7 @@ const treatmentSchema = z.object({
 });
 
 export async function createTreatment(data: z.infer<typeof treatmentSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     const parsedData = treatmentSchema.safeParse(data);
     if (!parsedData.success) {
@@ -57,7 +57,7 @@ const updateTreatmentSchema = z.object({
 });
 
 export async function updateTreatment(data: z.infer<typeof updateTreatmentSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const parsedData = updateTreatmentSchema.safeParse(data);
 
     if (!parsedData.success) {
@@ -92,7 +92,7 @@ export async function updateTreatment(data: z.infer<typeof updateTreatmentSchema
 }
 
 export async function getTreatmentsForClinic() {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
 
@@ -125,7 +125,7 @@ export async function getTreatmentsForClinic() {
 }
 
 export async function getTreatmentsForPatient(patientId: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data, error } = await supabase
         .from('treatments')
         .select(`
@@ -157,7 +157,7 @@ const paymentSchema = z.object({
 });
 
 export async function addPaymentToTreatment(data: z.infer<typeof paymentSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const parsedData = paymentSchema.safeParse(data);
     if(!parsedData.success) {
@@ -190,7 +190,7 @@ export async function addPaymentToTreatment(data: z.infer<typeof paymentSchema>)
 }
 
 export async function getPaymentsForClinic() {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'Not authenticated', data: [] };
 
@@ -246,7 +246,7 @@ export async function getPaymentsForClinic() {
 }
 
 export async function getPaymentsForPatient(patientId: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
     if (!patientId) return [];
 
     const { data: patient, error: patientError } = await supabase.from('patients').select('id').eq('id', patientId).single();
@@ -308,7 +308,7 @@ const generalPaymentSchema = z.object({
 });
 
 export async function createGeneralPayment(data: z.infer<typeof generalPaymentSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const parsedData = generalPaymentSchema.safeParse(data);
 
     if (!parsedData.success) {
@@ -335,7 +335,7 @@ export async function createGeneralPayment(data: z.infer<typeof generalPaymentSc
 }
 
 export async function getPatientsForBilling() {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
 
@@ -358,7 +358,7 @@ export async function getPatientsForBilling() {
 
 
 export async function deleteTreatment(treatmentId: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     const { data: treatment, error: fetchError } = await supabase.from('treatments').select('patient_id').eq('id', treatmentId).single();
     if(fetchError || !treatment) {

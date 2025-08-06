@@ -18,7 +18,7 @@ const commonServices = [
 
 
 export async function getDashboardData(dateString: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {

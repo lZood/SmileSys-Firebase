@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 export async function addPatient(formData: any) {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -58,7 +58,7 @@ export async function addPatient(formData: any) {
 }
 
 export async function getPatients() {
-    const supabase = createClient();
+    const supabase = await createClient();
      const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
 
@@ -85,7 +85,7 @@ export async function getPatients() {
 }
 
 export async function getPatientById(id: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data, error } = await supabase
         .from('patients')
         .select('*')
@@ -100,7 +100,7 @@ export async function getPatientById(id: string) {
 }
 
 export async function deletePatient(id: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { error } = await supabase
         .from('patients')
         .delete()
@@ -115,7 +115,7 @@ export async function deletePatient(id: string) {
 }
 
 export async function uploadConsentForm(patientId: string, clinicId: string, file: Blob, fileName: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Server-side validation: ensure the user belongs to the clinic they are uploading for
     const { data: { user } } = await supabase.auth.getUser();
@@ -163,7 +163,7 @@ export async function uploadConsentForm(patientId: string, clinicId: string, fil
 }
 
 export async function getConsentFormsForPatient(patientId: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data, error } = await supabase
         .from('consent_documents')
         .select('id, file_path, created_at')
@@ -185,7 +185,7 @@ const updateDentalChartSchema = z.object({
 });
 
 export async function updatePatientDentalChart(data: z.infer<typeof updateDentalChartSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) return { error: 'No autorizado' };
@@ -230,7 +230,7 @@ export async function updatePatientDentalChart(data: z.infer<typeof updateDental
 }
 
 export async function getDentalUpdatesForPatient(patientId: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data, error } = await supabase
         .from('dental_updates')
         .select('*')

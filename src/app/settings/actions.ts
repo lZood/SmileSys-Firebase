@@ -16,7 +16,7 @@ const clinicInfoSchema = z.object({
 });
 
 export async function updateClinicInfo(data: z.infer<typeof clinicInfoSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -57,7 +57,7 @@ export async function updateClinicInfo(data: z.infer<typeof clinicInfoSchema>) {
 
 
 export async function uploadClinicLogo(file: File, clinicId: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'No autorizado: Usuario no autenticado.' };
@@ -99,7 +99,7 @@ const inviteMemberSchema = z.object({
 });
 
 export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const { data: { user: adminUser } } = await supabase.auth.getUser();
     if (!adminUser) {
@@ -171,7 +171,7 @@ const updateUserPasswordSchema = z.object({
 
 
 export async function updateUserPassword(data: z.infer<typeof updateUserPasswordSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -201,7 +201,7 @@ const userProfileSchema = z.object({
 });
 
 export async function updateUserProfile(data: z.infer<typeof userProfileSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
         return { error: 'Usuario no autenticado.' };
@@ -233,7 +233,7 @@ const updateMemberRolesSchema = z.object({
 });
 
 export async function updateMemberRoles(data: z.infer<typeof updateMemberRolesSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const parsedData = updateMemberRolesSchema.safeParse(data);
     if (!parsedData.success) {
@@ -265,7 +265,7 @@ export async function updateMemberRoles(data: z.infer<typeof updateMemberRolesSc
 }
 
 export async function deleteMember(memberId: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // 1. Delete from profiles table (will be handled by CASCADE, but good to be explicit or have policies)
     const { error: profileError } = await supabase

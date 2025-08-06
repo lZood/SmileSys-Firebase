@@ -95,7 +95,7 @@ export async function activateInvitedUser(input: z.infer<typeof activateUserSche
     }
 
     const { firstName, lastName, password } = parsedInput.data;
-    const supabase = createClient();
+    const supabase = await createClient();
 
     // Get current user, who should be authenticated via the invite link
     const { data: { user }, error: userError } = await supabase.auth.getUser();

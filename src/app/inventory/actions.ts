@@ -53,7 +53,7 @@ async function getClinicId(supabase: ReturnType<typeof createClient>) {
 // --- Main Functions ---
 
 export async function getInventoryItems() {
-    const supabase = createClient();
+    const supabase = await createClient();
     try {
         const { clinicId } = await getClinicId(supabase);
         const { data, error } = await supabase
@@ -81,7 +81,7 @@ export async function getInventoryItems() {
 }
 
 export async function getInventoryCategories() {
-    const supabase = createClient();
+    const supabase = await createClient();
     try {
         const { clinicId } = await getClinicId(supabase);
         const { data, error } = await supabase
@@ -99,7 +99,7 @@ export async function getInventoryCategories() {
 }
 
 export async function createInventoryCategory(formData: z.infer<typeof createCategorySchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const parsedData = createCategorySchema.safeParse(formData);
     if (!parsedData.success) {
         return { error: parsedData.error.errors.map(e => e.message).join(', ') };
@@ -124,7 +124,7 @@ export async function createInventoryCategory(formData: z.infer<typeof createCat
 
 
 export async function createInventoryItem(formData: z.infer<typeof createItemSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const parsedData = createItemSchema.safeParse(formData);
     if (!parsedData.success) {
         return { error: parsedData.error.errors.map(e => e.message).join(', ') };
@@ -174,7 +174,7 @@ export async function createInventoryItem(formData: z.infer<typeof createItemSch
 }
 
 export async function updateInventoryItem(formData: z.infer<typeof updateItemSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const parsedData = updateItemSchema.safeParse(formData);
     if (!parsedData.success) {
         return { error: parsedData.error.errors.map(e => e.message).join(', ') };
@@ -208,7 +208,7 @@ export async function updateInventoryItem(formData: z.infer<typeof updateItemSch
 
 
 export async function adjustStock(formData: z.infer<typeof adjustStockSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const parsedData = adjustStockSchema.safeParse(formData);
     if (!parsedData.success) {
         return { error: parsedData.error.errors.map(e => e.message).join(', ') };

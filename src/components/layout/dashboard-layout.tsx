@@ -42,19 +42,18 @@ import { SmileSysLogo } from '../icons/smilesys-logo';
 import { useTheme } from 'next-themes';
 import { Switch } from '../ui/switch';
 import { createClient } from '@/lib/supabase/client';
-import { getUserData } from '@/app/user/actions';
 import { Skeleton } from '../ui/skeleton';
 import Image from 'next/image';
 import { getAppointments } from '@/app/appointments/actions';
 import { startOfToday, format, differenceInMinutes, parse } from 'date-fns';
 import { Toaster, toast as hotToast } from 'react-hot-toast';
+import { useUserData } from '@/context/UserDataProvider';
 
 
 type DashboardLayoutProps = {
   children: React.ReactNode;
 };
 
-type UserData = Awaited<ReturnType<typeof getUserData>>;
 type Appointment = Awaited<ReturnType<typeof getAppointments>>[0];
 // Define a type for your notifications
 type Notification = {
@@ -130,8 +129,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [isExpanded, setIsExpanded] = React.useState(true);
-  const [userData, setUserData] = React.useState<UserData | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
+  const { userData, isLoading } = useUserData();
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [remindersToDismiss, setRemindersToDismiss] = React.useState<string[]>([]);
   
@@ -220,12 +218,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [userData?.user?.id, remindersToDismiss]);
 
 
-  React.useEffect(() => {
-    getUserData().then(data => {
-      setUserData(data);
-      setIsLoading(false);
-    });
-  }, []);
+
 
   const userRoles = userData?.profile?.roles || [];
   const navItems = allNavItems.filter(item => 

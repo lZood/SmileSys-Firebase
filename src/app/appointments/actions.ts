@@ -8,7 +8,7 @@ import { isBefore, subHours, format, startOfDay, endOfDay } from 'date-fns';
 import { createNotification } from "../notifications/actions";
 
 export async function autoCompleteAppointments(clinicId: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const oneHourAgo = format(subHours(new Date(), 1), "yyyy-MM-dd'T'HH:mm:ss");
 
     // This is a simplified approach. A proper way would be to create a timestamp column.
@@ -63,7 +63,7 @@ const appointmentSchema = z.object({
 });
 
 export async function createAppointment(data: z.infer<typeof appointmentSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -153,7 +153,7 @@ const updateAppointmentSchema = appointmentSchema.extend({
 }).partial(); // Make all fields optional for partial updates
 
 export async function updateAppointment(data: z.infer<typeof updateAppointmentSchema>) {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const parsedData = updateAppointmentSchema.safeParse(data);
     if (!parsedData.success) {
@@ -188,7 +188,7 @@ export async function getAppointments(filters: {
     doctorId?: string | null,
     status?: string | null,
 }) {
-    const supabase = createClient();
+    const supabase = await createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
@@ -259,7 +259,7 @@ export async function getAppointments(filters: {
 
 
 export async function deleteAppointment(id: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const { error } = await supabase.from('appointments').delete().eq('id', id);
 
@@ -274,7 +274,7 @@ export async function deleteAppointment(id: string) {
 
 
 export async function getAppointmentsForPatient(patientId: string) {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data, error } = await supabase.rpc('get_appointments_for_patient', { p_patient_id: patientId });
 
     if (error) {
@@ -290,7 +290,7 @@ export async function getDoctorAvailability(doctorId: string, date: string) {
         return { error: "Doctor y fecha son requeridos.", data: [] };
     }
 
-    const supabase = createClient();
+    const supabase = await createClient();
     
     // 1. Define working hours and time slots
     const workDayStart = 8; // 8 AM

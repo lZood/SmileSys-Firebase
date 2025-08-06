@@ -1,52 +1,55 @@
-// src/context/UserDataProvider.tsx
 'use client';
 
-import * as React from 'react';
-import { getUserData } from '@/app/user/actions'; // Tu server action existente
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { getUserData } from '@/app/user/actions';
 
-// Definimos los tipos de datos que proveerá el contexto
 type UserData = Awaited<ReturnType<typeof getUserData>>;
-type UserDataContextType = {
+
+interface UserDataContextType {
   userData: UserData | null;
   isLoading: boolean;
-  refetch: () => void;
-};
+  error: string | null;
+  refetch: () => Promise<void>;
+}
 
-// Creamos el contexto
-const UserDataContext = React.createContext<UserDataContextType | undefined>(undefined);
+const UserDataContext = createContext<UserDataContextType | undefined>(undefined);
 
-// Creamos el proveedor
 export function UserDataProvider({ children }: { children: React.ReactNode }) {
-  const [userData, setUserData] = React.useState<UserData | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchUserData = React.useCallback(async () => {
-    setIsLoading(true);
+  const fetchUserData = async () => {
     try {
+      setIsLoading(true);
+      setError(null);
       const data = await getUserData();
       setUserData(data);
-    } catch (error) {
-      console.error("Failed to fetch user data:", error);
-      setUserData(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al cargar datos del usuario');
+      console.error('Error fetching user data:', err);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const refetch = async () => {
+    await fetchUserData();
+  };
+
+  useEffect(() => {
+    fetchUserData();
   }, []);
 
-  React.useEffect(() => {
-    fetchUserData();
-  }, [fetchUserData]);
-
   return (
-    <UserDataContext.Provider value={{ userData, isLoading, refetch: fetchUserData }}>
+    <UserDataContext.Provider value={{ userData, isLoading, error, refetch }}>
       {children}
     </UserDataContext.Provider>
   );
 }
 
-// Hook personalizado para usar el contexto fácilmente
 export function useUserData() {
-  const context = React.useContext(UserDataContext);
+  const context = useContext(UserDataContext);
   if (context === undefined) {
     throw new Error('useUserData must be used within a UserDataProvider');
   }
