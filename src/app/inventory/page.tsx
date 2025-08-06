@@ -29,7 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getInventoryItems, getInventoryCategories, createInventoryItem, createInventoryCategory, adjustStock } from './actions';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CreatableCombobox } from '@/components/combobox-creatable';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // Updated type to reflect the new structure from Supabase
 export type InventoryItem = {
@@ -58,6 +58,61 @@ const getStatusClass = (status: string) => {
     }
 };
 
+const CreateCategoryModal = ({
+    isOpen,
+    onClose,
+    onCategoryCreated,
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    onCategoryCreated: (newCategory: InventoryCategory) => void;
+}) => {
+    const { toast } = useToast();
+    const [name, setName] = React.useState('');
+    const [isLoading, setIsLoading] = React.useState(false);
+
+    const handleCreate = async () => {
+        if (!name) {
+            toast({ variant: 'destructive', title: 'Error', description: 'El nombre de la categoría no puede estar vacío.' });
+            return;
+        }
+        setIsLoading(true);
+        const result = await createInventoryCategory({ name });
+        setIsLoading(false);
+
+        if (result.error || !result.data) {
+            toast({ variant: 'destructive', title: 'Error', description: result.error || 'No se pudo crear la categoría.' });
+        } else {
+            toast({ title: 'Categoría Creada' });
+            onCategoryCreated(result.data);
+            onClose();
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Crear Nueva Categoría</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="category-name">Nombre de la Categoría</Label>
+                        <Input id="category-name" value={name} onChange={(e) => setName(e.target.value)} />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                    <Button onClick={handleCreate} disabled={isLoading}>
+                        {isLoading ? 'Creando...' : 'Crear'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+
 const NewItemForm = ({ 
     isOpen, 
     onClose,
@@ -73,6 +128,7 @@ const NewItemForm = ({
 }) => {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = React.useState(false);
+    const [isCategoryModalOpen, setIsCategoryModalOpen] = React.useState(false);
     
     const [newItem, setNewItem] = React.useState({
         name: '',
@@ -92,20 +148,6 @@ const NewItemForm = ({
         setNewItem(prev => ({ ...prev, categoryId: value }));
     };
 
-    const handleCategoryCreate = async (name: string) => {
-        setIsLoading(true);
-        const result = await createInventoryCategory({ name });
-        setIsLoading(false);
-        if (result.error || !result.data) {
-            toast({ variant: 'destructive', title: 'Error', description: result.error || 'No se pudo crear la categoría.' });
-            return null;
-        }
-        toast({ title: "Categoría Creada", description: `"${name}" ha sido creada.` });
-        onCategoryCreated(result.data);
-        return result.data;
-    };
-
-
     const handleSubmit = async () => {
         if (!newItem.name || !newItem.categoryId) {
             toast({ variant: 'destructive', title: 'Error', description: 'Por favor, completa el nombre y la categoría.' });
@@ -124,9 +166,16 @@ const NewItemForm = ({
         }
     };
     
-    const categoryOptions = categories.map(c => ({ label: c.name, value: c.id }));
-
     return (
+        <>
+        <CreateCategoryModal 
+            isOpen={isCategoryModalOpen}
+            onClose={() => setIsCategoryModalOpen(false)}
+            onCategoryCreated={(newCategory) => {
+                onCategoryCreated(newCategory);
+                handleCategoryChange(newCategory.id);
+            }}
+        />
          <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent>
                 <DialogHeader>
@@ -138,15 +187,17 @@ const NewItemForm = ({
                         <div className="grid gap-2"><Label htmlFor="name">Nombre <span className="text-red-500">*</span></Label><Input id="name" value={newItem.name} onChange={handleChange} /></div>
                         <div className="grid gap-2">
                             <Label htmlFor="category">Categoría <span className="text-red-500">*</span></Label>
-                            <CreatableCombobox 
-                                options={categoryOptions}
-                                value={newItem.categoryId}
-                                onChange={handleCategoryChange}
-                                onCreate={handleCategoryCreate}
-                                placeholder="Seleccionar o crear..."
-                                emptyMessage="No se encontraron categorías."
-                                createText="Crear nueva categoría"
-                            />
+                             <div className="flex items-center gap-2">
+                                <Select value={newItem.categoryId} onValueChange={handleCategoryChange}>
+                                    <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                    <SelectContent>
+                                        {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                                <Button variant="outline" size="icon" onClick={() => setIsCategoryModalOpen(true)}>
+                                    <Plus className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </div>
                     </div>
                     <div className="grid gap-2"><Label htmlFor="provider">Proveedor</Label><Input id="provider" value={newItem.provider} onChange={handleChange} /></div>
@@ -162,6 +213,7 @@ const NewItemForm = ({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+        </>
     );
 };
 
@@ -264,7 +316,7 @@ export default function InventoryPage() {
     };
     
     const handleCategoryCreated = (newCategory: InventoryCategory) => {
-        setCategories(prev => [...prev, newCategory]);
+        setCategories(prev => [...prev, newCategory].sort((a, b) => a.name.localeCompare(b.name)));
     };
 
     const filteredInventory = inventory.filter(item => 
