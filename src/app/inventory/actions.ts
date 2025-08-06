@@ -15,6 +15,15 @@ const createItemSchema = z.object({
     provider: z.string().optional(),
 });
 
+const updateItemSchema = z.object({
+    id: z.string().uuid(),
+    name: z.string().min(1, "El nombre es requerido."),
+    categoryId: z.string().uuid("Debe seleccionar una categoría válida."),
+    minStock: z.number().int().nonnegative("El stock mínimo no puede ser negativo."),
+    price: z.number().nonnegative("El precio no puede ser negativo."),
+    provider: z.string().optional().nullable(),
+});
+
 const createCategorySchema = z.object({
     name: z.string().min(1, "El nombre de la categoría es requerido."),
 });
@@ -51,7 +60,7 @@ export async function getInventoryItems() {
             .from('inventory_items')
             .select(`
                 *,
-                inventory_categories ( name )
+                inventory_categories ( id, name )
             `)
             .eq('clinic_id', clinicId)
             .order('name', { ascending: true });
@@ -61,6 +70,7 @@ export async function getInventoryItems() {
         return data.map(item => ({
             ...item,
             category: item.inventory_categories?.name || 'Sin Categoría',
+            categoryId: item.inventory_categories?.id,
             status: item.stock <= 0 ? 'Out of Stock' : (item.stock <= item.min_stock ? 'Low Stock' : 'In Stock')
         }));
 
@@ -159,6 +169,39 @@ export async function createInventoryItem(formData: z.infer<typeof createItemSch
         return { error: null };
     } catch (e: any) {
         console.error("Error creating inventory item:", e.message);
+        return { error: e.message };
+    }
+}
+
+export async function updateInventoryItem(formData: z.infer<typeof updateItemSchema>) {
+    const supabase = createClient();
+    const parsedData = updateItemSchema.safeParse(formData);
+    if (!parsedData.success) {
+        return { error: parsedData.error.errors.map(e => e.message).join(', ') };
+    }
+    
+    const { id, name, categoryId, minStock, price, provider } = parsedData.data;
+
+    try {
+        const { clinicId } = await getClinicId(supabase);
+        const { error } = await supabase
+            .from('inventory_items')
+            .update({
+                name,
+                category_id: categoryId,
+                min_stock: minStock,
+                price,
+                provider,
+            })
+            .eq('id', id)
+            .eq('clinic_id', clinicId); // Security check
+
+        if (error) throw error;
+        
+        revalidatePath('/inventory');
+        return { error: null };
+    } catch(e: any) {
+        console.error("Error updating inventory item:", e.message);
         return { error: e.message };
     }
 }

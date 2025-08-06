@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { PlusCircle, Edit, Minus, Plus, AlertTriangle, Package, Search } from "lucide-react";
+import { PlusCircle, Edit, Minus, Plus, AlertTriangle, Package, Search, Save } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,15 +27,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { getInventoryItems, getInventoryCategories, createInventoryItem, createInventoryCategory, adjustStock } from './actions';
+import { getInventoryItems, getInventoryCategories, createInventoryItem, createInventoryCategory, adjustStock, updateInventoryItem } from './actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 
 // Updated type to reflect the new structure from Supabase
 export type InventoryItem = {
     id: string;
     name: string;
     category: string; 
+    categoryId: string;
     stock: number;
     min_stock: number;
     price: number | null;
@@ -85,6 +87,7 @@ const CreateCategoryModal = ({
         } else {
             toast({ title: 'Categoría Creada' });
             onCategoryCreated(result.data);
+            setName('');
             onClose();
         }
     };
@@ -217,36 +220,148 @@ const NewItemForm = ({
     );
 };
 
+const EditItemForm = ({
+    isOpen,
+    onClose,
+    item,
+    categories,
+    onItemUpdated
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    item: InventoryItem | null;
+    categories: InventoryCategory[];
+    onItemUpdated: () => void;
+}) => {
+    const { toast } = useToast();
+    const [isLoading, setIsLoading] = React.useState(false);
+    const [formData, setFormData] = React.useState({
+        id: '',
+        name: '',
+        categoryId: '',
+        minStock: 0,
+        price: 0,
+        provider: '',
+    });
+
+    React.useEffect(() => {
+        if(item) {
+            setFormData({
+                id: item.id,
+                name: item.name,
+                categoryId: item.categoryId,
+                minStock: item.min_stock,
+                price: item.price || 0,
+                provider: item.provider || '',
+            });
+        }
+    }, [item]);
+    
+    if (!item) return null;
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { id, value, type } = e.target;
+        setFormData(prev => ({ ...prev, [id]: type === 'number' ? Number(value) : value }));
+    };
+    
+    const handleCategoryChange = (value: string) => {
+        setFormData(prev => ({ ...prev, categoryId: value }));
+    };
+
+    const handleSubmit = async () => {
+        setIsLoading(true);
+        const result = await updateInventoryItem(formData);
+        setIsLoading(false);
+
+        if (result.error) {
+            toast({ variant: 'destructive', title: 'Error al actualizar', description: result.error });
+        } else {
+            toast({ title: 'Artículo Actualizado', description: 'La información del artículo ha sido guardada.' });
+            onItemUpdated();
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Editar Artículo</DialogTitle>
+                    <DialogDescription>Modifica los detalles de {item.name}.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2"><Label htmlFor="name">Nombre</Label><Input id="name" value={formData.name} onChange={handleChange} /></div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="categoryId">Categoría</Label>
+                            <Select value={formData.categoryId} onValueChange={handleCategoryChange}>
+                                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                <SelectContent>
+                                    {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                     <div className="grid gap-2"><Label htmlFor="provider">Proveedor</Label><Input id="provider" value={formData.provider} onChange={handleChange} /></div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2"><Label htmlFor="minStock">Alerta de Stock</Label><Input id="minStock" type="number" value={formData.minStock} onChange={handleChange} /></div>
+                        <div className="grid gap-2"><Label htmlFor="price">Precio Unitario ($)</Label><Input id="price" type="number" value={formData.price} onChange={handleChange} /></div>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                    <Button onClick={handleSubmit} disabled={isLoading}>{isLoading ? 'Guardando...' : 'Guardar Cambios'}</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+
 const AdjustStockModal = ({
     isOpen,
     onClose,
     item,
-    onStockUpdated
+    onStockUpdated,
+    onEditClick
 }: {
     isOpen: boolean;
     onClose: () => void;
     item: InventoryItem | null;
     onStockUpdated: () => void;
+    onEditClick: () => void;
 }) => {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = React.useState(false);
-    const [amount, setAmount] = React.useState(1);
+    const [adjustment, setAdjustment] = React.useState(0);
     const [notes, setNotes] = React.useState('');
+
+    React.useEffect(() => {
+        // Reset local state when item changes or modal opens/closes
+        setAdjustment(0);
+        setNotes('');
+    }, [isOpen, item]);
 
     if (!item) return null;
     
-    const handleUpdateStock = async (change: number) => {
+    const handleSaveAdjustment = async () => {
+        if (adjustment === 0) {
+            toast({ variant: 'default', title: 'Sin cambios', description: 'No se ha realizado ningún ajuste.' });
+            return;
+        }
+
         setIsLoading(true);
-        const result = await adjustStock({ itemId: item.id, change, notes });
+        const result = await adjustStock({ itemId: item.id, change: adjustment, notes });
         setIsLoading(false);
+
         if (result.error) {
             toast({ variant: 'destructive', title: 'Error al ajustar stock', description: result.error });
         } else {
-            toast({ title: 'Stock Actualizado', description: `Se ${change > 0 ? 'añadieron' : 'restaron'} ${Math.abs(change)} unidad(es).`});
+            toast({ title: 'Stock Actualizado', description: `Se ${adjustment > 0 ? 'añadieron' : 'restaron'} ${Math.abs(adjustment)} unidad(es).`});
             onStockUpdated();
         }
     };
-
+    
+    const newStock = item.stock + adjustment;
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -256,27 +371,35 @@ const AdjustStockModal = ({
                     <DialogDescription>Ajusta el stock del artículo. Cada movimiento quedará registrado.</DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-6">
-                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center justify-around p-4 border rounded-lg text-center">
                         <div>
                             <p className="text-sm text-muted-foreground">Stock Actual</p>
-                            <p className="text-2xl font-bold">{item.stock} unidades</p>
+                            <p className="text-2xl font-bold">{item.stock}</p>
                         </div>
-                        <div className="flex items-center gap-2">
-                             <Button size="icon" variant="outline" onClick={() => handleUpdateStock(-amount)} disabled={item.stock < amount || isLoading}><Minus className="h-4 w-4" /></Button>
-                             <Input type="number" value={amount} onChange={(e) => setAmount(Math.max(1, parseInt(e.target.value) || 1))} className="w-16 text-center" />
-                             <Button size="icon" variant="outline" onClick={() => handleUpdateStock(amount)} disabled={isLoading}><Plus className="h-4 w-4" /></Button>
+                         <div className="flex items-center gap-2">
+                             <Button size="icon" variant="outline" onClick={() => setAdjustment(adj => adj - 1)} disabled={newStock <= 0}><Minus className="h-4 w-4" /></Button>
+                             <span className={cn("text-xl font-bold w-12 text-center", adjustment > 0 && "text-green-600", adjustment < 0 && "text-red-600")}>{adjustment > 0 ? `+${adjustment}`: adjustment}</span>
+                             <Button size="icon" variant="outline" onClick={() => setAdjustment(adj => adj + 1)}><Plus className="h-4 w-4" /></Button>
+                        </div>
+                        <div>
+                            <p className="text-sm text-muted-foreground">Nuevo Stock</p>
+                            <p className="text-2xl font-bold">{newStock}</p>
                         </div>
                     </div>
                      <div className="grid gap-2">
                         <Label htmlFor="notes">Notas del Ajuste (Opcional)</Label>
-                        <Input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ej: Conteo físico, producto dañado..." />
+                        <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ej: Conteo físico, producto dañado..." />
                     </div>
-                     <Button variant="outline" className="w-full" disabled>
-                        <Edit className="w-4 h-4 mr-2" /> Editar Información (Próximamente)
+                    <Button variant="secondary" className="w-full" onClick={onEditClick}>
+                        <Edit className="w-4 h-4 mr-2" /> Editar Información del Artículo
                     </Button>
                 </div>
                 <DialogFooter>
-                    <Button onClick={onClose}>Cerrar</Button>
+                    <Button variant="outline" onClick={onClose} disabled={isLoading}>Cerrar</Button>
+                    <Button onClick={handleSaveAdjustment} disabled={isLoading || adjustment === 0}>
+                        <Save className="w-4 h-4 mr-2" />
+                        {isLoading ? 'Guardando...' : 'Guardar Ajuste'}
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -292,6 +415,8 @@ export default function InventoryPage() {
     const [selectedItem, setSelectedItem] = React.useState<InventoryItem | null>(null);
     const [isNewItemModalOpen, setIsNewItemModalOpen] = React.useState(false);
     const [isAdjustStockModalOpen, setIsAdjustStockModalOpen] = React.useState(false);
+    const [isEditItemModalOpen, setIsEditItemModalOpen] = React.useState(false);
+
 
     const fetchData = React.useCallback(async () => {
         setIsLoading(true);
@@ -319,6 +444,21 @@ export default function InventoryPage() {
         setCategories(prev => [...prev, newCategory].sort((a, b) => a.name.localeCompare(b.name)));
     };
 
+    const handleStockUpdated = () => {
+        setIsAdjustStockModalOpen(false);
+        fetchData();
+    }
+    
+    const handleItemUpdated = () => {
+        setIsEditItemModalOpen(false);
+        fetchData();
+    }
+
+    const openEditModalFromAdjust = () => {
+        setIsAdjustStockModalOpen(false);
+        setIsEditItemModalOpen(true);
+    }
+
     const filteredInventory = inventory.filter(item => 
         item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.category.toLowerCase().includes(searchTerm.toLowerCase())
@@ -337,14 +477,15 @@ export default function InventoryPage() {
             isOpen={isAdjustStockModalOpen}
             onClose={() => setIsAdjustStockModalOpen(false)}
             item={selectedItem}
-            onStockUpdated={() => {
-                fetchData();
-                // We need to update the selected item as well to reflect changes in the modal
-                if (selectedItem) {
-                    const updatedItem = inventory.find(i => i.id === selectedItem.id);
-                     if (updatedItem) setSelectedItem(updatedItem);
-                }
-            }}
+            onStockUpdated={handleStockUpdated}
+            onEditClick={openEditModalFromAdjust}
+        />
+        <EditItemForm
+            isOpen={isEditItemModalOpen}
+            onClose={() => setIsEditItemModalOpen(false)}
+            item={selectedItem}
+            categories={categories}
+            onItemUpdated={handleItemUpdated}
         />
 
       <div className="space-y-4">
