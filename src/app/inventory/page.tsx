@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { PlusCircle, Edit, Minus, Plus, AlertTriangle, X } from "lucide-react";
+import { PlusCircle, Edit, Minus, Plus, AlertTriangle, Package, Search } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,19 +27,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { getInventoryItems, getInventoryCategories, createInventoryItem, createInventoryCategory, adjustStock } from './actions';
+import { Skeleton } from '@/components/ui/skeleton';
+import { CreatableCombobox } from '@/components/combobox-creatable';
 
-// Type will be adapted for Supabase
+// Updated type to reflect the new structure from Supabase
 export type InventoryItem = {
     id: string;
     name: string;
-    category: string;
+    category: string; 
     stock: number;
-    minStock: number;
-    price: number;
+    min_stock: number;
+    price: number | null;
+    provider: string | null;
     status: 'In Stock' | 'Low Stock' | 'Out of Stock';
-    provider: string;
-    lastOrdered: string; // YYYY-MM-DD
 };
+
+export type InventoryCategory = {
+    id: string;
+    name: string;
+};
+
 
 const getStatusClass = (status: string) => {
     switch (status) {
@@ -52,31 +60,27 @@ const getStatusClass = (status: string) => {
 
 const NewItemForm = ({ 
     isOpen, 
-    onClose, 
-    onAddItem 
+    onClose,
+    categories,
+    onItemAdded,
+    onCategoryCreated
 }: { 
     isOpen: boolean; 
     onClose: () => void; 
-    onAddItem: (item: Omit<InventoryItem, 'id' | 'status'>) => void;
+    categories: InventoryCategory[];
+    onItemAdded: () => void;
+    onCategoryCreated: (newCategory: InventoryCategory) => void;
 }) => {
     const { toast } = useToast();
+    const [isLoading, setIsLoading] = React.useState(false);
     
-    const getLocalDate = () => {
-        const date = new Date();
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
-
     const [newItem, setNewItem] = React.useState({
         name: '',
-        category: '',
+        categoryId: '',
         stock: 0,
         minStock: 5,
         price: 0,
         provider: '',
-        lastOrdered: getLocalDate()
     });
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -84,14 +88,43 @@ const NewItemForm = ({
         setNewItem(prev => ({ ...prev, [id]: type === 'number' ? Number(value) : value }));
     };
 
-    const handleSubmit = () => {
-        if (!newItem.name || !newItem.category || !newItem.provider || newItem.stock < 0 || newItem.minStock < 0 || newItem.price < 0) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Por favor, completa todos los campos requeridos.' });
+    const handleCategoryChange = (value: string) => {
+        setNewItem(prev => ({ ...prev, categoryId: value }));
+    };
+
+    const handleCategoryCreate = async (name: string) => {
+        setIsLoading(true);
+        const result = await createInventoryCategory({ name });
+        setIsLoading(false);
+        if (result.error || !result.data) {
+            toast({ variant: 'destructive', title: 'Error', description: result.error || 'No se pudo crear la categoría.' });
+            return null;
+        }
+        toast({ title: "Categoría Creada", description: `"${name}" ha sido creada.` });
+        onCategoryCreated(result.data);
+        return result.data;
+    };
+
+
+    const handleSubmit = async () => {
+        if (!newItem.name || !newItem.categoryId) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Por favor, completa el nombre y la categoría.' });
             return;
         }
-        onAddItem(newItem);
-        onClose();
+        setIsLoading(true);
+        const result = await createInventoryItem(newItem);
+        setIsLoading(false);
+
+        if (result.error) {
+             toast({ variant: 'destructive', title: 'Error', description: result.error });
+        } else {
+            toast({ title: "Artículo Agregado", description: `${newItem.name} ha sido añadido al inventario.` });
+            onItemAdded();
+            onClose();
+        }
     };
+    
+    const categoryOptions = categories.map(c => ({ label: c.name, value: c.id }));
 
     return (
          <Dialog open={isOpen} onOpenChange={onClose}>
@@ -102,47 +135,73 @@ const NewItemForm = ({
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2"><Label htmlFor="name">Nombre</Label><Input id="name" value={newItem.name} onChange={handleChange} /></div>
-                        <div className="grid gap-2"><Label htmlFor="category">Categoría</Label><Input id="category" value={newItem.category} onChange={handleChange} /></div>
+                        <div className="grid gap-2"><Label htmlFor="name">Nombre <span className="text-red-500">*</span></Label><Input id="name" value={newItem.name} onChange={handleChange} /></div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="category">Categoría <span className="text-red-500">*</span></Label>
+                            <CreatableCombobox 
+                                options={categoryOptions}
+                                value={newItem.categoryId}
+                                onChange={handleCategoryChange}
+                                onCreate={handleCategoryCreate}
+                                placeholder="Seleccionar o crear..."
+                                emptyMessage="No se encontraron categorías."
+                                createText="Crear nueva categoría"
+                            />
+                        </div>
                     </div>
                     <div className="grid gap-2"><Label htmlFor="provider">Proveedor</Label><Input id="provider" value={newItem.provider} onChange={handleChange} /></div>
                      <div className="grid grid-cols-3 gap-4">
                         <div className="grid gap-2"><Label htmlFor="stock">Cantidad Inicial</Label><Input id="stock" type="number" value={newItem.stock} onChange={handleChange} /></div>
-                        <div className="grid gap-2"><Label htmlFor="minStock">Cantidad Mínima</Label><Input id="minStock" type="number" value={newItem.minStock} onChange={handleChange} /></div>
+                        <div className="grid gap-2"><Label htmlFor="minStock">Alerta de Stock</Label><Input id="minStock" type="number" value={newItem.minStock} onChange={handleChange} /></div>
                         <div className="grid gap-2"><Label htmlFor="price">Precio Unitario ($)</Label><Input id="price" type="number" value={newItem.price} onChange={handleChange} /></div>
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>Cancelar</Button>
-                    <Button onClick={handleSubmit}>Guardar Artículo</Button>
+                    <Button variant="outline" onClick={onClose} disabled={isLoading}>Cancelar</Button>
+                    <Button onClick={handleSubmit} disabled={isLoading}>{isLoading ? 'Guardando...' : 'Guardar Artículo'}</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     );
 };
 
-const InventoryActionsModal = ({
+const AdjustStockModal = ({
     isOpen,
     onClose,
     item,
-    onUpdateStock,
-    onEdit
+    onStockUpdated
 }: {
     isOpen: boolean;
     onClose: () => void;
     item: InventoryItem | null;
-    onUpdateStock: (itemId: string, amount: number) => void;
-    onEdit: (item: InventoryItem) => void;
+    onStockUpdated: () => void;
 }) => {
+    const { toast } = useToast();
+    const [isLoading, setIsLoading] = React.useState(false);
     const [amount, setAmount] = React.useState(1);
+    const [notes, setNotes] = React.useState('');
+
     if (!item) return null;
+    
+    const handleUpdateStock = async (change: number) => {
+        setIsLoading(true);
+        const result = await adjustStock({ itemId: item.id, change, notes });
+        setIsLoading(false);
+        if (result.error) {
+            toast({ variant: 'destructive', title: 'Error al ajustar stock', description: result.error });
+        } else {
+            toast({ title: 'Stock Actualizado', description: `Se ${change > 0 ? 'añadieron' : 'restaron'} ${Math.abs(change)} unidad(es).`});
+            onStockUpdated();
+        }
+    };
+
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>{item.name}</DialogTitle>
-                    <DialogDescription>Gestionar el stock o editar la información del artículo.</DialogDescription>
+                    <DialogDescription>Ajusta el stock del artículo. Cada movimiento quedará registrado.</DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-6">
                     <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -151,13 +210,17 @@ const InventoryActionsModal = ({
                             <p className="text-2xl font-bold">{item.stock} unidades</p>
                         </div>
                         <div className="flex items-center gap-2">
-                             <Button size="icon" variant="outline" onClick={() => onUpdateStock(item.id, -amount)} disabled={item.stock < amount}><Minus className="h-4 w-4" /></Button>
+                             <Button size="icon" variant="outline" onClick={() => handleUpdateStock(-amount)} disabled={item.stock < amount || isLoading}><Minus className="h-4 w-4" /></Button>
                              <Input type="number" value={amount} onChange={(e) => setAmount(Math.max(1, parseInt(e.target.value) || 1))} className="w-16 text-center" />
-                             <Button size="icon" variant="outline" onClick={() => onUpdateStock(item.id, amount)}><Plus className="h-4 w-4" /></Button>
+                             <Button size="icon" variant="outline" onClick={() => handleUpdateStock(amount)} disabled={isLoading}><Plus className="h-4 w-4" /></Button>
                         </div>
                     </div>
-                     <Button variant="outline" className="w-full" onClick={() => { onEdit(item); onClose(); }}>
-                        <Edit className="w-4 h-4 mr-2" /> Editar Información
+                     <div className="grid gap-2">
+                        <Label htmlFor="notes">Notas del Ajuste (Opcional)</Label>
+                        <Input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ej: Conteo físico, producto dañado..." />
+                    </div>
+                     <Button variant="outline" className="w-full" disabled>
+                        <Edit className="w-4 h-4 mr-2" /> Editar Información (Próximamente)
                     </Button>
                 </div>
                 <DialogFooter>
@@ -169,95 +232,76 @@ const InventoryActionsModal = ({
 }
 
 export default function InventoryPage() {
-    const { toast } = useToast();
-    const [inventory, setInventory] = React.useState<InventoryItem[]>([]); // Data will be fetched from Supabase
+    const [inventory, setInventory] = React.useState<InventoryItem[]>([]);
+    const [categories, setCategories] = React.useState<InventoryCategory[]>([]);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [searchTerm, setSearchTerm] = React.useState('');
+
     const [selectedItem, setSelectedItem] = React.useState<InventoryItem | null>(null);
     const [isNewItemModalOpen, setIsNewItemModalOpen] = React.useState(false);
-    const [isActionsModalOpen, setIsActionsModalOpen] = React.useState(false);
+    const [isAdjustStockModalOpen, setIsAdjustStockModalOpen] = React.useState(false);
 
-    // TODO: Fetch inventory from Supabase
+    const fetchData = React.useCallback(async () => {
+        setIsLoading(true);
+        const [itemsData, categoriesData] = await Promise.all([
+            getInventoryItems(),
+            getInventoryCategories()
+        ]);
+        setInventory(itemsData as InventoryItem[]);
+        setCategories(categoriesData as InventoryCategory[]);
+        setIsLoading(false);
+    }, []);
+
+    React.useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
     const lowStockItems = inventory.filter(item => item.status === 'Low Stock' || item.status === 'Out of Stock');
 
-    const handleAddItem = (newItemData: Omit<InventoryItem, 'id' | 'status'>) => {
-        let status: 'In Stock' | 'Low Stock' | 'Out of Stock';
-        if (newItemData.stock <= 0) {
-            status = 'Out of Stock';
-        } else if (newItemData.stock <= newItemData.minStock) {
-            status = 'Low Stock';
-        } else {
-            status = 'In Stock';
-        }
-
-        // TODO: Implement Supabase insert
-        const newItem: InventoryItem = {
-            id: `INV${String(inventory.length + 1).padStart(3, '0')}`,
-            ...newItemData,
-            status: status
-        };
-
-        setInventory(prev => [...prev, newItem].sort((a,b) => a.name.localeCompare(b.name)));
-        toast({ title: "Artículo Agregado", description: `${newItem.name} ha sido añadido al inventario.` });
-    };
-
-    const handleUpdateStock = (itemId: string, amount: number) => {
-        // TODO: Implement Supabase update
-        setInventory(prev => prev.map(item => {
-            if (item.id === itemId) {
-                const newStock = Math.max(0, item.stock + amount);
-                let newStatus: 'In Stock' | 'Low Stock' | 'Out of Stock';
-                if (newStock <= 0) {
-                    newStatus = 'Out of Stock';
-                } else if (newStock <= item.minStock) {
-                    newStatus = 'Low Stock';
-                } else {
-                    newStatus = 'In Stock';
-                }
-                
-                const updatedItem = { ...item, stock: newStock, status: newStatus };
-
-                // Also update the selected item if it's the one being changed
-                if (selectedItem?.id === itemId) {
-                    setSelectedItem(updatedItem);
-                }
-
-                return updatedItem;
-            }
-            return item;
-        }));
-        toast({ title: 'Stock Actualizado', description: `El stock de ${amount > 0 ? 'añadió' : 'restó'} ${Math.abs(amount)} unidad(es).`});
-    };
-    
     const handleRowClick = (item: InventoryItem) => {
         setSelectedItem(item);
-        setIsActionsModalOpen(true);
+        setIsAdjustStockModalOpen(true);
     };
+    
+    const handleCategoryCreated = (newCategory: InventoryCategory) => {
+        setCategories(prev => [...prev, newCategory]);
+    };
+
+    const filteredInventory = inventory.filter(item => 
+        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.category.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
   return (
     <DashboardLayout>
-        {isNewItemModalOpen && (
-            <NewItemForm 
-                isOpen={isNewItemModalOpen} 
-                onClose={() => setIsNewItemModalOpen(false)} 
-                onAddItem={handleAddItem} 
-            />
-        )}
-        {isActionsModalOpen && (
-            <InventoryActionsModal
-                isOpen={isActionsModalOpen}
-                onClose={() => setIsActionsModalOpen(false)}
-                item={selectedItem}
-                onUpdateStock={handleUpdateStock}
-                onEdit={(item) => console.log('Editing', item)} // Replace with actual edit modal logic
-            />
-        )}
+        <NewItemForm
+            isOpen={isNewItemModalOpen} 
+            onClose={() => setIsNewItemModalOpen(false)} 
+            categories={categories}
+            onItemAdded={fetchData}
+            onCategoryCreated={handleCategoryCreated}
+        />
+        <AdjustStockModal
+            isOpen={isAdjustStockModalOpen}
+            onClose={() => setIsAdjustStockModalOpen(false)}
+            item={selectedItem}
+            onStockUpdated={() => {
+                fetchData();
+                // We need to update the selected item as well to reflect changes in the modal
+                if (selectedItem) {
+                    const updatedItem = inventory.find(i => i.id === selectedItem.id);
+                     if (updatedItem) setSelectedItem(updatedItem);
+                }
+            }}
+        />
+
       <div className="space-y-4">
-        {lowStockItems.length > 0 && (
+        {lowStockItems.length > 0 && !isLoading && (
              <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Alerta de Inventario</AlertTitle>
                 <AlertDescription>
-                   Hay {lowStockItems.length} artículo(s) con stock bajo o agotado. Es necesario reordenar pronto.
+                   Hay {lowStockItems.length} artículo(s) con stock bajo o agotado. Considera reordenar pronto.
                 </AlertDescription>
             </Alert>
         )}
@@ -270,10 +314,22 @@ export default function InventoryPage() {
                     Gestiona los materiales y productos de tu clínica.
                   </CardDescription>
                 </div>
-                <Button size="sm" className="h-9 gap-2" onClick={() => setIsNewItemModalOpen(true)}>
-                  <PlusCircle className="h-4 w-4" />
-                  <span>Agregar Artículo</span>
-                </Button>
+                 <div className="flex items-center gap-2">
+                     <div className="relative flex-1 max-w-xs">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            type="search" 
+                            placeholder="Buscar artículos..." 
+                            className="pl-8" 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <Button size="sm" className="h-9 gap-2" onClick={() => setIsNewItemModalOpen(true)}>
+                        <PlusCircle className="h-4 w-4" />
+                        <span>Agregar Artículo</span>
+                    </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -281,28 +337,40 @@ export default function InventoryPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Artículo</TableHead>
-                    <TableHead className="hidden md:table-cell">Categoría</TableHead>
-                    <TableHead>Stock</TableHead>
-                    <TableHead className="hidden sm:table-cell">Precio Unit.</TableHead>
-                    <TableHead className="hidden md:table-cell">Último Pedido</TableHead>
+                    <TableHead>Categoría</TableHead>
+                    <TableHead>Stock Actual</TableHead>
+                    <TableHead>Alerta de Stock</TableHead>
                     <TableHead>Estado</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {inventory.map((item) => (
-                    <TableRow key={item.id} onClick={() => handleRowClick(item)} className="cursor-pointer">
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell className="hidden md:table-cell">{item.category}</TableCell>
-                      <TableCell>{item.stock} unidades</TableCell>
-                       <TableCell className="hidden sm:table-cell">${item.price.toFixed(2)}</TableCell>
-                       <TableCell className="hidden md:table-cell">{new Date(item.lastOrdered.replace(/-/g, '/')).toLocaleDateString('es-MX')}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn(getStatusClass(item.status), 'capitalize')}>
-                          {item.status.replace(/-/g, ' ').toLowerCase()}
-                        </Badge>
-                      </TableCell>
+                  {isLoading ? (
+                      Array.from({length: 5}).map((_, i) => (
+                        <TableRow key={i}>
+                            <TableCell colSpan={5}><Skeleton className="h-5 w-full" /></TableCell>
+                        </TableRow>
+                      ))
+                  ) : filteredInventory.length > 0 ? (
+                    filteredInventory.map((item) => (
+                        <TableRow key={item.id} onClick={() => handleRowClick(item)} className="cursor-pointer">
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell>{item.category}</TableCell>
+                        <TableCell>{item.stock} unidades</TableCell>
+                        <TableCell>{item.min_stock} unidades</TableCell>
+                        <TableCell>
+                            <Badge variant="outline" className={cn(getStatusClass(item.status), 'capitalize')}>
+                            {item.status}
+                            </Badge>
+                        </TableCell>
+                        </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                        <TableCell colSpan={5} className="h-24 text-center">
+                           {searchTerm ? `No se encontraron artículos para "${searchTerm}"` : "No hay artículos en el inventario. ¡Agrega el primero!"}
+                        </TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -311,5 +379,3 @@ export default function InventoryPage() {
     </DashboardLayout>
   );
 }
-
-    
