@@ -390,7 +390,7 @@ const AdjustStockModal = ({
                         <Label htmlFor="notes">Notas del Ajuste (Opcional)</Label>
                         <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ej: Conteo físico, producto dañado..." />
                     </div>
-                    <Button variant="secondary" className="w-full" onClick={onEditClick}>
+                    <Button variant="outline" className="w-full" onClick={onEditClick}>
                         <Edit className="w-4 h-4 mr-2" /> Editar Información del Artículo
                     </Button>
                 </div>
