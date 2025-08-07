@@ -203,22 +203,34 @@ export default function AppointmentsCalendarPage() {
 
 
   const fetchVisibleAppointments = React.useCallback(async (date: Date) => {
+    if (!date) return;
+    
     setIsLoading(true);
     const firstDay = startOfMonth(date);
     const lastDay = endOfMonth(date);
     const start = format(startOfWeek(firstDay, { weekStartsOn: 1 }), 'yyyy-MM-dd');
     const end = format(endOfWeek(lastDay, { weekStartsOn: 1 }), 'yyyy-MM-dd');
     
-    const appointmentsData = await getAppointments({
-        startDate: start,
-        endDate: end,
-        patientId: patientFilter !== 'all' ? patientFilter : null,
-        doctorId: doctorFilter !== 'all' ? doctorFilter : null,
-        status: statusFilter !== 'all' ? statusFilter : null,
-    });
+    try {
+      const appointmentsData = await getAppointments({
+          startDate: start,
+          endDate: end,
+          patientId: patientFilter !== 'all' ? patientFilter : null,
+          doctorId: doctorFilter !== 'all' ? doctorFilter : null,
+          status: statusFilter !== 'all' ? statusFilter : null,
+      });
 
-    setAppointments(appointmentsData as Appointment[]);
-    setIsLoading(false);
+      setAppointments(appointmentsData as Appointment[]);
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      toast({ 
+        variant: 'destructive', 
+        title: 'Error', 
+        description: 'No se pudieron cargar las citas' 
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }, [patientFilter, doctorFilter, statusFilter]);
 
   // Set initial date on client to avoid hydration mismatch

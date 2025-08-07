@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { isBefore, subHours, format, startOfDay, endOfDay } from 'date-fns';
-import { createNotification } from "../notifications/actions";
+import { createAppointmentNotification } from "../notifications/actions";
 
 export async function autoCompleteAppointments(clinicId: string) {
     const supabase = await createClient();
@@ -124,19 +124,33 @@ export async function createAppointment(data: z.infer<typeof appointmentSchema>)
             return { error: `No se pudo crear la cita en la base de datos. Código: ${insertError.code}. Detalles: ${insertError.message}` };
         }
         
-        // --- Create Notification ---
+        // --- Create Notifications ---
         const { data: patient } = await supabase.from('patients').select('first_name, last_name').eq('id', patient_id).single();
         if (patient) {
-            await createNotification({
-                clinic_id: profile.clinic_id,
-                user_id: doctor_id, // Notify the doctor
-                title: 'Nueva Cita Agendada',
-                message: `Se te asignó una nueva cita con ${patient.first_name} ${patient.last_name} para el ${appointment_date} a las ${appointment_time}.`,
-                link_to: `/patients/${patient_id}`,
-                triggered_by: user.id
-            });
+            // Get doctor info
+            const { data: doctor } = await supabase
+                .from('profiles')
+                .select('first_name, last_name')
+                .eq('id', doctor_id)
+                .single();
+
+            // Create appointment notification with the helper function
+            await createAppointmentNotification(
+                'appointment_created',
+                {
+                    patientId: patient_id,
+                    patientName: `${patient.first_name} ${patient.last_name}`,
+                    doctorId: doctor_id,
+                    doctorName: doctor ? `Dr. ${doctor.first_name} ${doctor.last_name}` : 'Doctor no asignado',
+                    date: appointment_date,
+                    time: appointment_time,
+                    service: parsedData.data.service_description,
+                },
+                profile.clinic_id,
+                user.id
+            );
         }
-        // --- End Notification ---
+        // --- End Notifications ---
         
         revalidatePath('/appointments');
         revalidatePath('/dashboard');
@@ -174,6 +188,43 @@ export async function updateAppointment(data: z.infer<typeof updateAppointmentSc
     if (error) {
         console.error("Error updating appointment:", error);
         return { error: "No se pudo actualizar la cita." };
+    }
+
+    // Get appointment details for notification
+    const { data: appointment } = await supabase
+        .from('appointments')
+        .select(`
+            *,
+            patients (first_name, last_name),
+            profiles!doctor_id(first_name, last_name)
+        `)
+        .eq('id', id)
+        .single();
+
+    if (appointment) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('clinic_id')
+            .eq('id', user?.id)
+            .single();
+
+        if (profile && user) {
+            await createAppointmentNotification(
+                updateData.status === 'Canceled' ? 'appointment_cancelled' : 'appointment_updated',
+                {
+                    patientId: appointment.patient_id,
+                    patientName: `${appointment.patients.first_name} ${appointment.patients.last_name}`,
+                    doctorId: appointment.doctor_id,
+                    doctorName: `Dr. ${appointment.profiles.first_name} ${appointment.profiles.last_name}`,
+                    date: appointment.appointment_date,
+                    time: appointment.appointment_time,
+                    service: appointment.service_description,
+                },
+                profile.clinic_id,
+                user.id
+            );
+        }
     }
 
     revalidatePath('/appointments');

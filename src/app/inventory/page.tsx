@@ -50,6 +50,16 @@ export type InventoryCategory = {
     name: string;
 };
 
+// Add these types near the top of the file after other type definitions
+type FilterOptions = {
+    searchTerm: string;
+    status: string[];
+    stockRange: {
+        min: number | null;
+        max: number | null;
+    };
+    category: string[];
+};
 
 const getStatusClass = (status: string) => {
     switch (status) {
@@ -317,6 +327,124 @@ const EditItemForm = ({
 };
 
 
+const FilterDialog = ({
+    isOpen,
+    onClose,
+    filters,
+    setFilters,
+    categories
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    filters: FilterOptions;
+    setFilters: React.Dispatch<React.SetStateAction<FilterOptions>>;
+    categories: InventoryCategory[];
+}) => {
+    const statusOptions = ['In Stock', 'Low Stock', 'Out of Stock'];
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>Filtros de Búsqueda</DialogTitle>
+                    <DialogDescription>
+                        Ajusta los filtros para encontrar artículos específicos
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                        <Label>Estado</Label>
+                        <div className="flex flex-wrap gap-2">
+                            {statusOptions.map((status) => (
+                                <Badge
+                                    key={status}
+                                    variant={filters.status.includes(status) ? "default" : "outline"}
+                                    className="cursor-pointer"
+                                    onClick={() => {
+                                        setFilters(prev => ({
+                                            ...prev,
+                                            status: prev.status.includes(status)
+                                                ? prev.status.filter(s => s !== status)
+                                                : [...prev.status, status]
+                                        }));
+                                    }}
+                                >
+                                    {status}
+                                </Badge>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Rango de Stock</Label>
+                        <div className="flex items-center gap-2">
+                            <Input
+                                type="number"
+                                placeholder="Mín"
+                                value={filters.stockRange.min ?? ''}
+                                onChange={(e) => setFilters(prev => ({
+                                    ...prev,
+                                    stockRange: {
+                                        ...prev.stockRange,
+                                        min: e.target.value ? Number(e.target.value) : null
+                                    }
+                                }))}
+                            />
+                            <span>-</span>
+                            <Input
+                                type="number"
+                                placeholder="Máx"
+                                value={filters.stockRange.max ?? ''}
+                                onChange={(e) => setFilters(prev => ({
+                                    ...prev,
+                                    stockRange: {
+                                        ...prev.stockRange,
+                                        max: e.target.value ? Number(e.target.value) : null
+                                    }
+                                }))}
+                            />
+                        </div>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Categorías</Label>
+                        <div className="flex flex-wrap gap-2">
+                            {categories.map((category) => (
+                                <Badge
+                                    key={category.id}
+                                    variant={filters.category.includes(category.id) ? "default" : "outline"}
+                                    className="cursor-pointer"
+                                    onClick={() => {
+                                        setFilters(prev => ({
+                                            ...prev,
+                                            category: prev.category.includes(category.id)
+                                                ? prev.category.filter(c => c !== category.id)
+                                                : [...prev.category, category.id]
+                                        }));
+                                    }}
+                                >
+                                    {category.name}
+                                </Badge>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => {
+                        setFilters({
+                            searchTerm: '',
+                            status: [],
+                            stockRange: { min: null, max: null },
+                            category: []
+                        });
+                    }}>
+                        Limpiar Filtros
+                    </Button>
+                    <Button onClick={onClose}>Aplicar</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
 const AdjustStockModal = ({
     isOpen,
     onClose,
@@ -410,7 +538,16 @@ export default function InventoryPage() {
     const [inventory, setInventory] = React.useState<InventoryItem[]>([]);
     const [categories, setCategories] = React.useState<InventoryCategory[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
-    const [searchTerm, setSearchTerm] = React.useState('');
+    const [isFilterDialogOpen, setIsFilterDialogOpen] = React.useState(false);
+    const [filters, setFilters] = React.useState<FilterOptions>({
+        searchTerm: '',
+        status: [],
+        stockRange: {
+            min: null,
+            max: null
+        },
+        category: []
+    });
 
     const [selectedItem, setSelectedItem] = React.useState<InventoryItem | null>(null);
     const [isNewItemModalOpen, setIsNewItemModalOpen] = React.useState(false);
@@ -459,10 +596,27 @@ export default function InventoryPage() {
         setIsEditItemModalOpen(true);
     }
 
-    const filteredInventory = inventory.filter(item => 
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredInventory = inventory.filter(item => {
+        // Text search
+        const matchesSearch = 
+            item.name.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+            item.category.toLowerCase().includes(filters.searchTerm.toLowerCase());
+        
+        // Status filter
+        const matchesStatus = filters.status.length === 0 || 
+            filters.status.includes(item.status);
+        
+        // Stock range filter
+        const matchesStock = 
+            (!filters.stockRange.min || item.stock >= filters.stockRange.min) &&
+            (!filters.stockRange.max || item.stock <= filters.stockRange.max);
+        
+        // Category filter
+        const matchesCategory = filters.category.length === 0 ||
+            filters.category.includes(item.categoryId);
+
+        return matchesSearch && matchesStatus && matchesStock && matchesCategory;
+    });
 
   return (
     <DashboardLayout>
@@ -487,6 +641,13 @@ export default function InventoryPage() {
             categories={categories}
             onItemUpdated={handleItemUpdated}
         />
+        <FilterDialog
+            isOpen={isFilterDialogOpen}
+            onClose={() => setIsFilterDialogOpen(false)}
+            filters={filters}
+            setFilters={setFilters}
+            categories={categories}
+        />
 
       <div className="space-y-4">
         {lowStockItems.length > 0 && !isLoading && (
@@ -508,20 +669,34 @@ export default function InventoryPage() {
                   </CardDescription>
                 </div>
                  <div className="flex items-center gap-2">
-                     <div className="relative flex-1 max-w-xs">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            type="search" 
-                            placeholder="Buscar artículos..." 
-                            className="pl-8" 
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
+                     <div className="flex items-center gap-2">
+                        <div className="relative flex-1 max-w-xs">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                                type="search" 
+                                placeholder="Buscar artículos..." 
+                                className="pl-8" 
+                                value={filters.searchTerm}
+                                onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
+                            />
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setIsFilterDialogOpen(true)}
+                            className={cn(
+                                "h-9 w-9",
+                                (filters.status.length > 0 || filters.category.length > 0 || filters.stockRange.min || filters.stockRange.max) && 
+                                "bg-primary text-primary-foreground hover:bg-primary/90"
+                            )}
+                        >
+                            <Package className="h-4 w-4" />
+                        </Button>
+                        <Button size="sm" className="h-9 gap-2" onClick={() => setIsNewItemModalOpen(true)}>
+                            <PlusCircle className="h-4 w-4" />
+                            <span>Agregar Artículo</span>
+                        </Button>
                     </div>
-                    <Button size="sm" className="h-9 gap-2" onClick={() => setIsNewItemModalOpen(true)}>
-                        <PlusCircle className="h-4 w-4" />
-                        <span>Agregar Artículo</span>
-                    </Button>
                 </div>
               </div>
             </CardHeader>
@@ -560,7 +735,7 @@ export default function InventoryPage() {
                   ) : (
                     <TableRow>
                         <TableCell colSpan={5} className="h-24 text-center">
-                           {searchTerm ? `No se encontraron artículos para "${searchTerm}"` : "No hay artículos en el inventario. ¡Agrega el primero!"}
+                           {filters.searchTerm ? `No se encontraron artículos para "${filters.searchTerm}"` : "No hay artículos en el inventario. ¡Agrega el primero!"}
                         </TableCell>
                     </TableRow>
                   )}
