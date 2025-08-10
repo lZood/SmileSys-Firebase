@@ -133,29 +133,22 @@ export async function createAppointmentNotification(
 }
 
 // Función para obtener las notificaciones de un usuario
-export async function getUserNotifications() {
+export async function getUserNotifications(userId: string) {
     const supabase = await createClient();
     
-    try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return [];
+    const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(50);
 
-        const { data, error } = await supabase
-            .from('notifications')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false });
-
-        if (error) {
-            console.error("Error fetching notifications:", error);
-            return [];
-        }
-
-        return data;
-    } catch (error) {
+    if (error) {
         console.error("Error fetching notifications:", error);
         return [];
     }
+
+    return data;
 }
 
 // Función para marcar notificaciones como leídas
