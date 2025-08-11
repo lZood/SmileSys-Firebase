@@ -28,7 +28,15 @@ export const getUserData = cache(async () => {
 
     const { data: clinic, error: clinicError } = await supabase
         .from('clinics')
-        .select('*')
+        .select(`
+            *,
+            doctors:profiles(
+                id,
+                first_name,
+                last_name,
+                roles
+            )
+        `)
         .eq('id', profile.clinic_id)
         .single();
 

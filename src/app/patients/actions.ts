@@ -99,6 +99,21 @@ export async function getPatientById(id: string) {
     return data;
 }
 
+export async function getDoctorsForClinic(clinicId: string) {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name, roles')
+        .eq('clinic_id', clinicId)
+        .contains('roles', ['doctor']);
+
+    if (error) {
+        console.error('Error fetching doctors:', error);
+        return [];
+    }
+    return data;
+}
+
 export async function deletePatient(id: string) {
     const supabase = await createClient();
     const { error } = await supabase

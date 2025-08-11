@@ -120,7 +120,7 @@ export async function getTreatmentsForClinic() {
     
     return data.map(treatment => ({
         ...treatment,
-        total_paid: treatment.treatment_payments.reduce((sum, p) => sum + p.amount_paid, 0)
+        total_paid: treatment.treatment_payments.reduce((sum: number, p: { amount_paid: number }) => sum + p.amount_paid, 0)
     }));
 }
 
@@ -143,7 +143,7 @@ export async function getTreatmentsForPatient(patientId: string) {
 
     return data.map(treatment => ({
         ...treatment,
-        total_paid: treatment.treatment_payments.reduce((sum, p) => sum + p.amount_paid, 0)
+        total_paid: treatment.treatment_payments.reduce((sum: number, p: { amount_paid: number }) => sum + p.amount_paid, 0)
     }));
 }
 
@@ -165,12 +165,25 @@ export async function addPaymentToTreatment(data: z.infer<typeof paymentSchema>)
     }
     const { treatmentId, amount, paymentDate, paymentMethod, notes } = parsedData.data;
 
-    const { data: treatment } = await supabase.from('treatments').select('clinic_id, patient_id').eq('id', treatmentId).single();
+    const { data: treatment } = await supabase
+        .from('treatments')
+        .select('clinic_id, patient_id, total_cost, treatment_payments(amount_paid)')
+        .eq('id', treatmentId)
+        .single();
+
     if (!treatment) {
         return { error: 'Tratamiento no encontrado.' };
     }
 
-    const { error } = await supabase.from('treatment_payments').insert({
+    // Calcular el total pagado hasta ahora
+    const totalPaid = treatment.treatment_payments.reduce((sum, p) => sum + p.amount_paid, 0);
+    
+    // Verificar si el nuevo pago excede el costo total
+    if (totalPaid + amount > treatment.total_cost) {
+        return { error: `El monto excede el saldo restante. Máximo a pagar: $${(treatment.total_cost - totalPaid).toFixed(2)}` };
+    }
+
+    const { error: paymentError } = await supabase.from('treatment_payments').insert({
         treatment_id: treatmentId,
         clinic_id: treatment.clinic_id,
         amount_paid: amount,
@@ -179,10 +192,24 @@ export async function addPaymentToTreatment(data: z.infer<typeof paymentSchema>)
         notes: notes
     });
 
-    if (error) {
-        console.error("Error adding payment:", error);
-        return { error: `Error al registrar el pago: ${error.message}` };
+    if (paymentError) {
+        console.error("Error adding payment:", paymentError);
+        return { error: `Error al registrar el pago: ${paymentError.message}` };
     }
+
+    // Si con este pago se completa el total, actualizar el estado del tratamiento
+    if (totalPaid + amount >= treatment.total_cost) {
+        const { error: updateError } = await supabase
+            .from('treatments')
+            .update({ status: 'completed' })
+            .eq('id', treatmentId);
+        
+        if (updateError) {
+            console.error("Error updating treatment status:", updateError);
+        }
+    }
+
+    // No need to check for 'error' here, as paymentError is already handled above.
 
     revalidatePath('/billing');
     revalidatePath(`/patients/${treatment.patient_id}`);
@@ -258,8 +285,8 @@ export async function getPaymentsForPatient(patientId: string) {
     const [treatmentPaymentsRes, generalPaymentsRes] = await Promise.all([
         supabase
             .from('treatment_payments')
-            .select('*, treatments(description)')
-            .eq('patient_id', patientId),
+            .select('*, treatments(description, patient_id)')
+            .eq('treatments.patient_id', patientId),
         supabase
             .from('general_payments')
             .select('*')

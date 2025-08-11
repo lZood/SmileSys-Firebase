@@ -36,15 +36,25 @@ import { cn } from '@/lib/utils';
 import { DollarSign, Receipt, PlusCircle, FileText, TrendingUp, HandCoins } from 'lucide-react';
 import { getPaymentMethodIcon } from '@/components/icons/payment-method-icons';
 import { Progress } from '@/components/ui/progress';
-import { getTreatmentsForClinic, addPaymentToTreatment, getPaymentsForClinic, getPatientsForBilling, createGeneralPayment } from './actions';
+import { addPaymentToTreatment, getTreatmentsForClinic, getPaymentsForClinic, getPatientsForBilling, createGeneralPayment } from './actions';
+import { getQuotesForClinic, getQuoteDetails, updateQuoteStatus } from './quote-actions';
 import { getUserData } from '../user/actions';
 import { useRouter } from 'next/navigation';
 import { AddGeneralPaymentModal } from '@/components/add-general-payment-modal';
+import { AddTreatmentPaymentModal } from '@/components/add-treatment-payment-modal';
+import { CreateQuoteModal } from '@/components/create-quote-modal';
 import { DatePicker } from '@/components/ui/date-picker';
 import { format } from 'date-fns';
+import { ConsentForm } from '@/components/consent-form';
 
 // Types
-type Clinic = NonNullable<Awaited<ReturnType<typeof getUserData>>['clinic']>;
+type UserData = Awaited<ReturnType<typeof getUserData>>;
+type Clinic = {
+  id: string;
+  name: string;
+  // ...other clinic fields
+  doctors?: { id: string; first_name: string; last_name: string; roles: string[] }[];
+};
 type BillingPatient = { id: string; first_name: string; last_name: string };
 
 export type Payment = {
@@ -101,115 +111,99 @@ const getStatusClass = (status: any) => {
   }
 };
 
-const AddTreatmentPaymentModal = ({ 
-    treatment, 
-    isOpen, 
-    onClose, 
-    onPaymentAdded 
-}: { 
-    treatment: Treatment | null; 
-    isOpen: boolean;
-    onClose: () => void;
-    onPaymentAdded: () => void;
-}) => {
-    const { toast } = useToast();
-    const [amount, setAmount] = React.useState('');
-    const [paymentMethod, setPaymentMethod] = React.useState<'Card'|'Cash'|'Transfer'>();
-    const [notes, setNotes] = React.useState('');
-    const [paymentDate, setPaymentDate] = React.useState<Date | undefined>(new Date());
 
-    if (!treatment) return null;
+// Simulación de función para crear tratamiento desde presupuesto
+async function createTreatmentFromQuote(quote: Quote, signature: string) {
+    // Aquí deberías llamar a tu API o acción server para crear el tratamiento
+    // y guardar la firma digital
+    // Ejemplo:
+    // await createTreatment({ ...datos del quote, signature })
+    return { success: true };
+}
 
-    const handleSubmit = async () => {
-        if (!amount || parseFloat(amount) <= 0 || !paymentMethod || !paymentDate) {
-            toast({ variant: 'destructive', title: 'Campos Inválidos', description: 'Por favor, introduce un monto y método de pago válidos.' });
-            return;
-        }
-
-        const result = await addPaymentToTreatment({
-            treatmentId: treatment.id,
-            amount: parseFloat(amount),
-            paymentDate: format(paymentDate, 'yyyy-MM-dd'),
-            paymentMethod,
-            notes
-        });
-
-        if (result.error) {
-            toast({ variant: 'destructive', title: 'Error', description: result.error });
-        } else {
-            toast({ title: 'Pago Registrado', description: 'El pago ha sido añadido al tratamiento.' });
-            onPaymentAdded();
-            onClose();
-        }
-    };
-
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Registrar Pago para Tratamiento</DialogTitle>
-                    <DialogDescription>
-                        Paciente: {treatment.patients.first_name} {treatment.patients.last_name}
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="amount">Monto a Pagar ($)</Label>
-                        <Input id="amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder={String(treatment.total_cost - treatment.total_paid)} />
-                    </div>
-                     <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="paymentDate">Fecha de Pago</Label>
-                            <DatePicker date={paymentDate} setDate={setPaymentDate} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="paymentMethod">Método de Pago</Label>
-                            <Select onValueChange={(value: 'Card'|'Cash'|'Transfer') => setPaymentMethod(value)}>
-                                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Cash">Efectivo</SelectItem>
-                                    <SelectItem value="Card">Tarjeta</SelectItem>
-                                    <SelectItem value="Transfer">Transferencia</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                     <div className="grid gap-2">
-                        <Label htmlFor="notes">Notas (Opcional)</Label>
-                        <Input id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ej. Pago de la 3ra mensualidad" />
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>Cancelar</Button>
-                    <Button onClick={handleSubmit}>Guardar Pago</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-};
+// Removed old ConsentModal component
 
 
 export default function BillingPage() {
+    // Estado para modal de consentimiento digital y quote seleccionado
+    const [isConsentModalOpen, setIsConsentModalOpen] = React.useState(false);
+    const [selectedQuote, setSelectedQuote] = React.useState<Quote | null>(null);
+
+    const [quoteDetails, setQuoteDetails] = React.useState<any>(null);
+
+    const handleConvertQuote = async (quote: Quote) => {
+        const details = await getQuoteDetails(quote.id);
+        if (details) {
+            setQuoteDetails(details);
+            setSelectedQuote(quote);
+            setIsConsentModalOpen(true);
+        }
+    };
+
+    const { toast } = useToast();
+
+    const handleConsentCreated = async (wasSubmitted: boolean) => {
+        try {
+            if (wasSubmitted && selectedQuote) {
+                console.log('Actualizando estado del presupuesto...', selectedQuote.id);
+                const result = await updateQuoteStatus(selectedQuote.id, 'Accepted');
+                if (result.error) {
+                    console.error('Error al actualizar el estado:', result.error);
+                    toast({
+                        variant: 'destructive',
+                        title: 'Error',
+                        description: 'No se pudo actualizar el estado del presupuesto'
+                    });
+                } else {
+                    console.log('Estado actualizado correctamente');
+                }
+            }
+        } catch (error) {
+            console.error('Error en handleConsentCreated:', error);
+        }
+        
+        setIsConsentModalOpen(false);
+        setSelectedQuote(null);
+        fetchData(); // Refresca los datos
+    };
     const router = useRouter();
     const [payments, setPayments] = React.useState<Payment[]>([]);
-    const [quotes] = React.useState<Quote[]>([]);
+    const [quotes, setQuotes] = React.useState<Quote[]>([]);
     const [treatments, setTreatments] = React.useState<Treatment[]>([]);
     const [clinic, setClinic] = React.useState<Clinic | null>(null);
     const [billingPatients, setBillingPatients] = React.useState<BillingPatient[]>([]);
+
+    // Filtros para tratamientos
+    const [treatmentStatusFilter, setTreatmentStatusFilter] = React.useState<'all' | 'active' | 'completed' | 'cancelled'>('all');
+    const [treatmentPatientFilter, setTreatmentPatientFilter] = React.useState('all');
+    const [treatmentSearchTerm, setTreatmentSearchTerm] = React.useState('');
+
+    // Filtros para pagos
+    const [paymentStatusFilter, setPaymentStatusFilter] = React.useState<'all' | 'Paid' | 'Pending' | 'Canceled'>('all');
+    const [paymentPatientFilter, setPaymentPatientFilter] = React.useState('all');
+    const [paymentMethodFilter, setPaymentMethodFilter] = React.useState<'all' | 'Cash' | 'Card' | 'Transfer'>('all');
+    const [paymentSearchTerm, setPaymentSearchTerm] = React.useState('');
+
+    // Filtros para presupuestos
+    const [quoteStatusFilter, setQuoteStatusFilter] = React.useState<'all' | 'Draft' | 'Presented' | 'Accepted' | 'Expired'>('all');
+    const [quotePatientFilter, setQuotePatientFilter] = React.useState('all');
+    const [quoteSearchTerm, setQuoteSearchTerm] = React.useState('');
 
     const [isLoading, setIsLoading] = React.useState(true);
     const [selectedTreatment, setSelectedTreatment] = React.useState<Treatment | null>(null);
     const [isTreatmentPaymentModalOpen, setIsTreatmentPaymentModalOpen] = React.useState(false);
     const [isGeneralPaymentModalOpen, setIsGeneralPaymentModalOpen] = React.useState(false);
+    const [isNewQuoteModalOpen, setIsNewQuoteModalOpen] = React.useState(false);
 
     
     const fetchData = React.useCallback(async () => {
         setIsLoading(true);
-        const [treatmentsData, paymentsData, patientsData, userData] = await Promise.all([
+        const [treatmentsData, paymentsData, patientsData, userData, quotesData] = await Promise.all([
             getTreatmentsForClinic(),
             getPaymentsForClinic(),
             getPatientsForBilling(),
-            getUserData()
+            getUserData(),
+            getQuotesForClinic()
         ]);
         
         setTreatments(treatmentsData as Treatment[]);
@@ -220,6 +214,8 @@ export default function BillingPage() {
         if (userData?.clinic) {
             setClinic(userData.clinic);
         }
+        
+        setQuotes(quotesData || []);
 
         setIsLoading(false);
     }, []);
@@ -243,16 +239,41 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-6">
+        {isConsentModalOpen && selectedQuote && quoteDetails && (
+            <ConsentForm 
+                patientId={selectedQuote.patientId}
+                patientName={selectedQuote.patientName}
+                clinic={clinic!}
+                doctors={clinic?.doctors || []}
+                onClose={handleConsentCreated}
+                initialData={{
+                    treatments: quoteDetails.items.map((item: { description: string; cost: number }) => ({
+                        description: item.description,
+                        cost: item.cost.toString()
+                    })),
+                    totalCost: selectedQuote.total.toString(),
+                    paymentType: 'one_time'
+                }}
+            />
+        )}
         <AddTreatmentPaymentModal 
             treatment={selectedTreatment}
             isOpen={isTreatmentPaymentModalOpen}
             onClose={() => setIsTreatmentPaymentModalOpen(false)}
             onPaymentAdded={fetchData}
+            addPaymentToTreatment={addPaymentToTreatment}
         />
         <AddGeneralPaymentModal
             isOpen={isGeneralPaymentModalOpen}
             onClose={() => setIsGeneralPaymentModalOpen(false)}
             onPaymentAdded={fetchData}
+            patients={billingPatients}
+            clinic={clinic}
+        />
+        <CreateQuoteModal
+            isOpen={isNewQuoteModalOpen}
+            onClose={() => setIsNewQuoteModalOpen(false)}
+            onQuoteCreated={fetchData}
             patients={billingPatients}
             clinic={clinic}
         />
@@ -299,8 +320,48 @@ export default function BillingPage() {
         <TabsContent value="treatments">
             <Card>
                  <CardHeader>
-                    <CardTitle>Planes de Tratamiento</CardTitle>
-                    <CardDescription>Seguimiento de los planes de tratamiento activos y completados.</CardDescription>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <CardTitle>Planes de Tratamiento</CardTitle>
+                            <CardDescription>Seguimiento de los planes de tratamiento activos y completados.</CardDescription>
+                        </div>
+                        <div className="flex gap-2">
+                            <Select 
+                                onValueChange={(value) => setTreatmentStatusFilter(value as 'all' | 'active' | 'completed' | 'cancelled')}
+                            >
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Filtrar por estado" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos los estados</SelectItem>
+                                    <SelectItem value="active">Activos</SelectItem>
+                                    <SelectItem value="completed">Completados</SelectItem>
+                                    <SelectItem value="cancelled">Cancelados</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Select 
+                                onValueChange={(value) => setTreatmentPatientFilter(value)}
+                            >
+                                <SelectTrigger className="w-[200px]">
+                                    <SelectValue placeholder="Filtrar por paciente" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos los pacientes</SelectItem>
+                                    {billingPatients.map(patient => (
+                                        <SelectItem key={patient.id} value={patient.id}>
+                                            {patient.first_name} {patient.last_name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Input 
+                                placeholder="Buscar por descripción..." 
+                                className="w-[200px]"
+                                value={treatmentSearchTerm}
+                                onChange={(e) => setTreatmentSearchTerm(e.target.value)}
+                            />
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent className="p-0">
                     <Table>
@@ -317,7 +378,21 @@ export default function BillingPage() {
                             {isLoading ? (
                                 <TableRow><TableCell colSpan={5} className="h-24 text-center">Cargando tratamientos...</TableCell></TableRow>
                             ) : treatments.length > 0 ? (
-                                treatments.map((treatment) => {
+                                treatments
+                                .filter(treatment => {
+                                    if (treatmentStatusFilter !== 'all' && treatment.status !== treatmentStatusFilter) return false;
+                                    if (treatmentPatientFilter !== 'all' && treatment.patients.id !== treatmentPatientFilter) return false;
+                                    if (treatmentSearchTerm) {
+                                        const searchLower = treatmentSearchTerm.toLowerCase();
+                                        return (
+                                            treatment.description.toLowerCase().includes(searchLower) ||
+                                            treatment.patients.first_name.toLowerCase().includes(searchLower) ||
+                                            treatment.patients.last_name.toLowerCase().includes(searchLower)
+                                        );
+                                    }
+                                    return true;
+                                })
+                                .map((treatment) => {
                                     const progress = treatment.total_cost > 0 ? (treatment.total_paid / treatment.total_cost) * 100 : 0;
                                     return (
                                     <TableRow key={treatment.id}>
@@ -351,15 +426,72 @@ export default function BillingPage() {
         <TabsContent value="payments">
             <Card>
                 <CardHeader>
-                <div className="flex items-center justify-between">
-                    <div>
-                    <CardTitle>Historial de Pagos</CardTitle>
-                    <CardDescription>Un registro de todas las transacciones financieras.</CardDescription>
+                    <div className="flex flex-col space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle>Historial de Pagos</CardTitle>
+                                <CardDescription>Un registro de todas las transacciones financieras.</CardDescription>
+                            </div>
+                            <Button size="sm" className="h-9 gap-2" onClick={() => setIsGeneralPaymentModalOpen(true)}>
+                                <PlusCircle className="h-4 w-4" /> Registrar Pago General
+                            </Button>
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                            <Select
+                                value={paymentStatusFilter}
+                                onValueChange={(value: any) => setPaymentStatusFilter(value)}
+                            >
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Estado del pago" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos los estados</SelectItem>
+                                    <SelectItem value="Paid">Pagados</SelectItem>
+                                    <SelectItem value="Pending">Pendientes</SelectItem>
+                                    <SelectItem value="Canceled">Cancelados</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Select
+                                value={paymentMethodFilter}
+                                onValueChange={(value: any) => setPaymentMethodFilter(value)}
+                            >
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Método de pago" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos los métodos</SelectItem>
+                                    <SelectItem value="Cash">Efectivo</SelectItem>
+                                    <SelectItem value="Card">Tarjeta</SelectItem>
+                                    <SelectItem value="Transfer">Transferencia</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Select
+                                value={paymentPatientFilter}
+                                onValueChange={setPaymentPatientFilter}
+                            >
+                                <SelectTrigger className="w-[200px]">
+                                    <SelectValue placeholder="Filtrar por paciente" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos los pacientes</SelectItem>
+                                    {billingPatients.map(patient => (
+                                        <SelectItem key={patient.id} value={patient.id}>
+                                            {patient.first_name} {patient.last_name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            <Input
+                                placeholder="Buscar por concepto..."
+                                className="w-[200px]"
+                                value={paymentSearchTerm}
+                                onChange={(e) => setPaymentSearchTerm(e.target.value)}
+                            />
+                        </div>
                     </div>
-                    <Button size="sm" className="h-9 gap-2" onClick={() => setIsGeneralPaymentModalOpen(true)}>
-                        <PlusCircle className="h-4 w-4" /> Registrar Pago General
-                    </Button>
-                </div>
                 </CardHeader>
                 <CardContent className="p-0">
                 <Table>
@@ -377,7 +509,21 @@ export default function BillingPage() {
                     {isLoading ? (
                         <TableRow><TableCell colSpan={6} className="h-24 text-center">Cargando pagos...</TableCell></TableRow>
                     ) : payments.length > 0 ? (
-                        payments.map((payment) => (
+                        payments
+                        .filter(payment => {
+                            if (paymentStatusFilter !== 'all' && payment.status !== paymentStatusFilter) return false;
+                            if (paymentMethodFilter !== 'all' && payment.method !== paymentMethodFilter) return false;
+                            if (paymentPatientFilter !== 'all' && payment.patientId !== paymentPatientFilter) return false;
+                            if (paymentSearchTerm) {
+                                const searchLower = paymentSearchTerm.toLowerCase();
+                                return (
+                                    payment.concept.toLowerCase().includes(searchLower) ||
+                                    payment.patientName.toLowerCase().includes(searchLower)
+                                );
+                            }
+                            return true;
+                        })
+                        .map((payment) => (
                         <TableRow key={payment.id}>
                             <TableCell className="font-medium hover:underline cursor-pointer" onClick={() => router.push(`/patients/${payment.patientId}`)}>{payment.patientName}</TableCell>
                             <TableCell>{payment.concept}</TableCell>
@@ -402,12 +548,58 @@ export default function BillingPage() {
         <TabsContent value="quotes">
              <Card>
                 <CardHeader>
-                <div className="flex items-center justify-between">
-                    <div>
-                    <CardTitle>Presupuestos</CardTitle>
-                    <CardDescription>Planes de tratamiento y sus costos estimados.</CardDescription>
+                    <div className="flex flex-col space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle>Presupuestos</CardTitle>
+                                <CardDescription>Planes de tratamiento y sus costos estimados.</CardDescription>
+                            </div>
+                            <Button size="sm" className="h-9 gap-2" onClick={() => setIsNewQuoteModalOpen(true)}>
+                                <PlusCircle className="h-4 w-4" /> Crear Presupuesto
+                            </Button>
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                            <Select
+                                value={quoteStatusFilter}
+                                onValueChange={(value: any) => setQuoteStatusFilter(value)}
+                            >
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Estado del presupuesto" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos los estados</SelectItem>
+                                    <SelectItem value="Draft">Borrador</SelectItem>
+                                    <SelectItem value="Presented">Presentado</SelectItem>
+                                    <SelectItem value="Accepted">Aceptado</SelectItem>
+                                    <SelectItem value="Expired">Expirado</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Select
+                                value={quotePatientFilter}
+                                onValueChange={setQuotePatientFilter}
+                            >
+                                <SelectTrigger className="w-[200px]">
+                                    <SelectValue placeholder="Filtrar por paciente" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Todos los pacientes</SelectItem>
+                                    {billingPatients.map(patient => (
+                                        <SelectItem key={patient.id} value={patient.id}>
+                                            {patient.first_name} {patient.last_name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            <Input
+                                placeholder="Buscar..."
+                                className="w-[200px]"
+                                value={quoteSearchTerm}
+                                onChange={(e) => setQuoteSearchTerm(e.target.value)}
+                            />
+                        </div>
                     </div>
-                </div>
                 </CardHeader>
                 <CardContent className="p-0">
                 <Table>
@@ -421,11 +613,55 @@ export default function BillingPage() {
                     </TableRow>
                     </TableHeader>
                     <TableBody>
-                         <TableRow>
-                            <TableCell colSpan={5} className="h-24 text-center">
-                                No se encontraron presupuestos.
-                            </TableCell>
-                        </TableRow>
+                        {isLoading ? (
+                            <TableRow><TableCell colSpan={5} className="h-24 text-center">Cargando presupuestos...</TableCell></TableRow>
+                        ) : quotes.length > 0 ? (
+                            quotes
+                            .filter(quote => {
+                                if (quoteStatusFilter !== 'all' && quote.status !== quoteStatusFilter) return false;
+                                if (quotePatientFilter !== 'all' && quote.patientId !== quotePatientFilter) return false;
+                                if (quoteSearchTerm) {
+                                    const searchLower = quoteSearchTerm.toLowerCase();
+                                    return quote.patientName.toLowerCase().includes(searchLower);
+                                }
+                                return true;
+                            })
+                            .map(quote => (
+                                <TableRow key={quote.id}>
+                                    <TableCell className="font-medium hover:underline cursor-pointer" onClick={() => router.push(`/patients/${quote.patientId}`)}>
+                                        {quote.patientName}
+                                    </TableCell>
+                                    <TableCell>${quote.total.toFixed(2)}</TableCell>
+                                    <TableCell className="hidden md:table-cell">
+                                        {quote.createdAt ? new Date(quote.createdAt).toLocaleDateString('es-MX', { year: 'numeric', month: 'numeric', day: 'numeric' }) : ''}
+                                    </TableCell>
+                                    <TableCell className="hidden md:table-cell">
+                                        {new Date(quote.expiresAt.replace(/-/g, '/')).toLocaleDateString('es-MX')}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className={cn('capitalize', getStatusClass(quote.status))}>
+                                            {getStatusInSpanish(quote.status)}
+                                        </Badge>
+                                        <Button 
+                                            size="sm" 
+                                            className="ml-2" 
+                                            variant="secondary" 
+                                            onClick={() => handleConvertQuote(quote)}
+                                            disabled={quote.status === 'Accepted'}
+                                            title={quote.status === 'Accepted' ? 'Este presupuesto ya ha sido convertido a tratamiento' : 'Firmar y crear tratamiento'}
+                                        >
+                                            Firmar y Crear Tratamiento
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={5} className="h-24 text-center">
+                                    No se encontraron presupuestos.
+                                </TableCell>
+                            </TableRow>
+                        )}
                     </TableBody>
                 </Table>
                 </CardContent>

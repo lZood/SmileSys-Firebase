@@ -1,8 +1,6 @@
-
-
 'use client';
-
 import * as React from 'react';
+
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { notFound, useRouter, useSearchParams } from "next/navigation";
@@ -14,7 +12,7 @@ import { Odontogram, ToothState } from "@/components/odontogram";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import Link from "next/link";
 import { ConsentForm } from '@/components/consent-form';
-import { getPatientById, getConsentFormsForPatient, updatePatientDentalChart, getDentalUpdatesForPatient } from '../actions';
+import { getPatientById, getConsentFormsForPatient, updatePatientDentalChart, getDentalUpdatesForPatient, getDoctorsForClinic } from '../actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createClient } from '@/lib/supabase/client';
 import { getUserData } from '@/app/user/actions';
@@ -41,7 +39,7 @@ import { ToothIcon } from '@/components/icons/tooth-icon';
 
 
 type Patient = NonNullable<Awaited<ReturnType<typeof getPatientById>>>;
-type Clinic = NonNullable<Awaited<ReturnType<typeof getUserData>>['clinic']>;
+type Clinic = NonNullable<Awaited<ReturnType<typeof getUserData>>> extends { clinic: infer C } ? NonNullable<C> : never;
 type ConsentDocument = {
     id: string;
     file_path: string;
@@ -508,6 +506,7 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
   const [isConsentModalOpen, setIsConsentModalOpen] = React.useState(false);
   const [isGeneralPaymentModalOpen, setIsGeneralPaymentModalOpen] = React.useState(false);
   const [consentFormsLoading, setConsentFormsLoading] = React.useState(true);
+  const [doctors, setDoctors] = React.useState<any[]>([]);
   const [dentalChartState, setDentalChartState] = React.useState<ToothState | null>(null);
   const [isChartDirty, setIsChartDirty] = React.useState(false);
   
@@ -546,6 +545,9 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
     
     if(userData && userData.clinic?.id === patientData?.clinic_id) {
         setClinic(userData.clinic);
+        // Fetch doctors for the clinic
+        const clinicDoctors = await getDoctorsForClinic(userData.clinic.id);
+        setDoctors(clinicDoctors);
     }
 
     setTreatments(treatmentsData as Treatment[]);
@@ -691,7 +693,8 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
           <ConsentForm 
             patientId={patient.id}
             patientName={patientFullName}
-            clinic={clinic} 
+            clinic={clinic}
+            doctors={doctors}
             onClose={handleConsentModalClose}
           />
         )}
@@ -737,7 +740,13 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
                 </div>
                  <div className="flex justify-between">
                   <span>Última Visita:</span>
-                  <span className="font-medium text-foreground">{new Date(patient.created_at.replace(/-/g, '/')).toLocaleDateString('es-MX')}</span>
+                  <span className="font-medium text-foreground">
+                    {new Date(patient.created_at).toLocaleDateString('es-MX', {
+                      day: '2-digit',
+                      month: 'long',
+                      year: 'numeric'
+                    })}
+                  </span>
                 </div>
                  <div className="flex justify-between">
                   <span>Estado:</span>
@@ -766,7 +775,11 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
                       ) : consentForms.length > 0 ? (
                           consentForms.map(form => (
                               <div key={form.id} className="flex justify-between items-center p-2 rounded-md bg-muted">
-                                  <span>Consentimiento - {new Date(form.created_at.replace(/-/g, '/')).toLocaleDateString('es-MX')}</span>
+                                  <span>Consentimiento - {new Date(form.created_at).toLocaleDateString('es-MX', {
+                                    day: '2-digit',
+                                    month: 'long',
+                                    year: 'numeric'
+                                  })}</span>
                                    <Button asChild variant="ghost" size="icon">
                                       <a href={getPublicUrl(form.file_path)} target="_blank" rel="noopener noreferrer">
                                         <Download className="h-4 w-4" />
@@ -839,10 +852,11 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
   );
 }
 
-export default function PatientDetailPage({ params }: { params: { id: string } }) {
+export default async function PatientDetailPage({ params }: { params: { id: string } }) {
+  const resolvedParams = await params;
   return (
     <DashboardLayout>
-      <PatientDetailView patientId={params.id} />
+      <PatientDetailView patientId={resolvedParams.id} />
     </DashboardLayout>
   );
 }

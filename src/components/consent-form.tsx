@@ -18,6 +18,7 @@ import { Checkbox } from './ui/checkbox';
 import { ScrollArea } from './ui/scroll-area';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { Combobox } from '@/components/ui/combobox';
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -25,13 +26,24 @@ declare module 'jspdf' {
   }
 }
 
-type Clinic = NonNullable<Awaited<ReturnType<typeof getUserData>>['clinic']>;
+// Define the type for Clinic based on the actual structure returned by getUserData
+type UserData = NonNullable<Awaited<ReturnType<typeof getUserData>>>;
+type Clinic = NonNullable<UserData['clinic']>;
 
 type ConsentFormProps = {
     patientId: string;
     patientName: string;
     clinic: Clinic;
+    doctors: { id: string; first_name: string; last_name: string; roles: string[] }[];
     onClose: (wasSubmitted: boolean) => void;
+    initialData?: {
+        treatments: { description: string; cost: string; }[];
+        totalCost: string;
+        paymentType: 'one_time' | 'monthly';
+        duration?: string;
+        monthlyPayment?: string;
+        doctorId?: string;
+    };
 };
 
 // Helper function to fetch image as base64
@@ -46,18 +58,26 @@ const toBase64 = async (url: string) => {
     });
 };
 
-export const ConsentForm = ({ patientId, patientName, clinic, onClose }: ConsentFormProps) => {
+export const ConsentForm = ({ patientId, patientName, clinic, doctors, onClose, initialData }: ConsentFormProps) => {
+    type Treatment = {
+        description: string;
+        cost: string;
+    };
     const { toast } = useToast();
     const [isLoading, setIsLoading] = React.useState(false);
     const [acceptedTerms, setAcceptedTerms] = React.useState(false);
     const [showAddToBillingDialog, setShowAddToBillingDialog] = React.useState(false);
 
     const [formData, setFormData] = React.useState({
-        treatment: '',
-        duration: '',
-        totalCost: '',
-        monthlyPayment: '',
-        paymentType: 'one_time' as 'one_time' | 'monthly',
+        treatments: initialData?.treatments || [{ 
+            description: '',
+            cost: ''
+        }],
+        duration: initialData?.duration || '',
+        totalCost: initialData?.totalCost || '',
+        monthlyPayment: initialData?.monthlyPayment || '',
+        paymentType: initialData?.paymentType || 'one_time' as 'one_time' | 'monthly',
+        doctorId: initialData?.doctorId || '',
     });
     const patientSignatureRef = React.useRef<SignatureCanvas>(null);
     const doctorSignatureRef = React.useRef<SignatureCanvas>(null);
@@ -75,28 +95,209 @@ export const ConsentForm = ({ patientId, patientName, clinic, onClose }: Consent
 
     const handleSaveConsent = async () => {
         // Validation logic
-        if (!formData.treatment || !formData.totalCost) {
-             toast({ variant: "destructive", title: "Campos Incompletos", description: "Por favor, complete al menos la descripción y el costo total." });
+        const hasEmptyTreatments = formData.treatments.some(t => !t.description || !t.cost);
+        if (hasEmptyTreatments) {
+            toast({ variant: "destructive", title: "Tratamientos Incompletos", description: "Por favor, complete la descripción y el costo de todos los tratamientos." });
             return false;
         }
-         if (formData.paymentType === 'monthly' && (!formData.duration || !formData.monthlyPayment)) {
+        if (formData.paymentType === 'monthly' && (!formData.duration || !formData.monthlyPayment)) {
             toast({ variant: "destructive", title: "Campos de Plan Mensual Incompletos", description: "Por favor, complete la duración y el pago mensual." });
             return false;
         }
         if (patientSignatureRef.current?.isEmpty() || doctorSignatureRef.current?.isEmpty()) {
-             toast({ variant: "destructive", title: "Faltan Firmas", description: "Tanto el paciente como el doctor deben firmar el documento." });
+            toast({ variant: "destructive", title: "Faltan Firmas", description: "Tanto el paciente como el doctor deben firmar el documento." });
             return false;
         }
         if (!acceptedTerms) {
             toast({ variant: "destructive", title: "Términos no Aceptados", description: "El paciente debe aceptar los términos y condiciones para continuar." });
             return false;
         }
+        if (!formData.doctorId) {
+            toast({ variant: "destructive", title: "Doctor no Seleccionado", description: "Por favor, seleccione el profesional que realiza el tratamiento." });
+            return false;
+        }
 
         setIsLoading(true);
         try {
-            // PDF generation logic from previous step
             const doc = new jsPDF();
-            // ... (rest of the PDF generation code)
+            const pageWidth = doc.internal.pageSize.width;
+            const pageHeight = doc.internal.pageSize.height;
+            const margin = 20;
+            const currentDate = new Date().toLocaleDateString('es-ES', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric'
+            });
+
+            // Función helper para agregar texto con salto de línea automático
+            const addWrappedText = (text: string, x: number, y: number, maxWidth: number, lineHeight: number) => {
+                const lines = doc.splitTextToSize(text, maxWidth);
+                doc.text(lines, x, y);
+                return y + (lines.length * lineHeight);
+            };
+
+            // Header con logo y título
+            if (clinic.logo_url) {
+                try {
+                    const logoData = await toBase64(clinic.logo_url);
+                    doc.addImage(logoData as string, 'PNG', margin, margin, 40, 40);
+                } catch (error) {
+                    console.error('Error loading clinic logo:', error);
+                }
+            }
+
+            // Configuración inicial y título
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(20);
+            doc.text("Consentimiento Informado", pageWidth / 2, margin + 10, { align: "center" });
+
+            // Información de la clínica
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "normal");
+            let yPos = margin + 30;
+            
+            doc.text(`${clinic.name || 'Clínica Dental'}`, pageWidth - margin - 100, yPos);
+            yPos += 7;
+            doc.text(`${clinic.address || 'Dirección no especificada'}`, pageWidth - margin - 100, yPos);
+            yPos += 7;
+            doc.text(`Tel: ${clinic.phone || 'No especificado'}`, pageWidth - margin - 100, yPos);
+            yPos += 7;
+
+            // Información del paciente y fecha
+            doc.setFont("helvetica", "bold");
+            yPos = margin + 60;
+            doc.text("INFORMACIÓN DEL PACIENTE", margin, yPos);
+            doc.setFont("helvetica", "normal");
+            
+            doc.setFillColor(240, 240, 240);
+            doc.rect(margin, yPos + 5, pageWidth - (margin * 2), 30, 'F');
+            
+            yPos += 15;
+            doc.text(`Paciente: ${patientName}`, margin + 5, yPos);
+            doc.text(`Fecha: ${currentDate}`, pageWidth - margin - 80, yPos);
+            yPos += 10;
+            doc.text(`ID: ${patientId}`, margin + 5, yPos);
+
+            // Detalles del tratamiento
+            yPos += 20;
+            doc.setFont("helvetica", "bold");
+            doc.text("PLAN DE TRATAMIENTO", margin, yPos);
+            doc.setFont("helvetica", "normal");
+
+            // Tabla de tratamientos
+            const treatmentsTableData = formData.treatments
+                .filter(t => t.description.trim() && t.cost)
+                .map(t => [
+                    t.description,
+                    formData.paymentType === 'monthly' ? `${formData.duration} meses` : 'N/A',
+                    `$${parseFloat(t.cost).toFixed(2)}`,
+                    formData.paymentType === 'monthly' ? `$${(parseFloat(t.cost) / parseInt(formData.duration)).toFixed(2)}` : 'N/A'
+                ]);
+
+            doc.autoTable({
+                startY: yPos + 5,
+                head: [['Descripción del Tratamiento', 'Duración Estimada', 'Costo Total', 'Pago Mensual']],
+                body: treatmentsTableData,
+                theme: 'grid',
+                headStyles: { 
+                    fillColor: [66, 66, 66],
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold'
+                },
+                styles: {
+                    cellPadding: 5,
+                    fontSize: 10
+                },
+                columnStyles: {
+                    0: { cellWidth: 80 },
+                    1: { cellWidth: 30 },
+                    2: { cellWidth: 30 },
+                    3: { cellWidth: 30 }
+                },
+                margin: { left: margin, right: margin }
+            });
+
+            // Información de pago
+            const finalY = (doc as any).lastAutoTable.finalY + 10;
+            doc.setFont("helvetica", "bold");
+            doc.text("RESUMEN DE PAGO", margin, finalY);
+            doc.setFont("helvetica", "normal");
+            
+            doc.setFillColor(240, 240, 240);
+            doc.rect(margin, finalY + 5, pageWidth - (margin * 2), 40, 'F');
+            
+            let paymentY = finalY + 15;
+            doc.text(`Costo Total: $${formData.totalCost}`, margin + 5, paymentY);
+            paymentY += 10;
+            
+            if (formData.paymentType === 'monthly') {
+                doc.text(`Plan de Pagos Mensuales:`, margin + 5, paymentY);
+                paymentY += 10;
+                doc.text(`Duración: ${formData.duration} meses`, margin + 15, paymentY);
+                doc.text(`Pago Mensual: $${formData.monthlyPayment}`, margin + 120, paymentY);
+            } else {
+                doc.text(`Tipo de Pago: Pago Único`, margin + 5, paymentY);
+            }
+
+            // Términos y condiciones en nueva página
+            doc.addPage();
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(14);
+            doc.text("TÉRMINOS Y CONDICIONES", margin, margin);
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(10);
+
+            const terms = clinic.terms_and_conditions || 'No se han especificado términos y condiciones.';
+            const maxWidth = pageWidth - (margin * 2);
+            const lines = doc.splitTextToSize(terms, maxWidth);
+            
+            let currentY = margin + 10;
+            // Reducimos el espacio entre líneas a 5 puntos (antes era 12)
+            const lineSpacing = 5;
+            const linesPerPage = Math.floor((pageHeight - (margin * 2)) / lineSpacing);
+
+            // Dividir las líneas en páginas
+            for (let i = 0; i < lines.length; i += linesPerPage) {
+                if (i !== 0) {
+                    doc.addPage();
+                    currentY = margin;
+                }
+                const pageLines = lines.slice(i, i + linesPerPage);
+                // Dibujamos las líneas con menos espacio entre ellas
+                pageLines.forEach((line: string, index: number) => {
+                    doc.text(line, margin, currentY + (index * lineSpacing));
+                });
+            }
+
+            // Nueva página para las firmas
+            doc.addPage();
+            yPos = margin;
+
+            // Sección de firmas
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(12);
+            doc.text("FIRMAS DE CONFORMIDAD", margin, yPos);
+            yPos += 10;
+
+            // Firmas
+            if (patientSignatureRef.current) {
+                const patientSignatureData = patientSignatureRef.current.toDataURL();
+                doc.addImage(patientSignatureData, 'PNG', margin, yPos, 70, 30);
+                doc.setFont("helvetica", "normal");
+                doc.text("Firma del Paciente", margin, yPos + 40);
+                doc.text(patientName, margin, yPos + 47);
+            }
+
+            if (doctorSignatureRef.current) {
+                const doctorSignatureData = doctorSignatureRef.current.toDataURL();
+                doc.addImage(doctorSignatureData, 'PNG', pageWidth - margin - 70, yPos, 70, 30);
+                doc.setFont("helvetica", "normal");
+                doc.text("Firma del Profesional", pageWidth - margin - 70, yPos + 40);
+                const selectedDoctor = doctors.find(d => d.id === formData.doctorId);
+                const doctorName = selectedDoctor ? `Dr. ${selectedDoctor.first_name} ${selectedDoctor.last_name}` : "Dr./Dra.";
+                doc.text(doctorName, pageWidth - margin - 70, yPos + 47);
+            }
+
             const pdfBlob = doc.output('blob');
             const fileName = `consentimiento-${patientId}-${Date.now()}.pdf`;
             const { error } = await uploadConsentForm(patientId, clinic.id, pdfBlob, fileName);
@@ -121,26 +322,47 @@ export const ConsentForm = ({ patientId, patientName, clinic, onClose }: Consent
 
     const handleCreateTreatment = async () => {
         setIsLoading(true);
-        const treatmentData = {
-            patientId,
-            clinicId: clinic.id,
-            description: formData.treatment,
-            totalCost: parseFloat(formData.totalCost),
-            paymentType: formData.paymentType,
-            durationMonths: formData.paymentType === 'monthly' ? parseInt(formData.duration) : null,
-            monthlyPayment: formData.paymentType === 'monthly' ? parseFloat(formData.monthlyPayment) : null,
-        };
+        try {
+            // Filtrar los tratamientos válidos
+            const validTreatments = formData.treatments.filter(t => t.description.trim() && t.cost);
+            
+            // Calcular el pago mensual por tratamiento si es plan mensual
+            const totalCostSum = validTreatments.reduce((sum, t) => sum + parseFloat(t.cost), 0);
+            const monthlyPaymentPerTreatment = formData.paymentType === 'monthly' 
+                ? parseFloat(formData.monthlyPayment) / validTreatments.length 
+                : null;
+            
+            // Crear un tratamiento por cada uno en la lista
+            for (const treatment of validTreatments) {
+                const treatmentData = {
+                    patientId,
+                    clinicId: clinic.id,
+                    description: treatment.description,
+                    totalCost: parseFloat(treatment.cost),
+                    paymentType: formData.paymentType,
+                    durationMonths: formData.paymentType === 'monthly' ? parseInt(formData.duration) : null,
+                    monthlyPayment: monthlyPaymentPerTreatment,
+                };
 
-        const result = await createTreatment(treatmentData);
-
-        if (result.error) {
-            toast({ variant: 'destructive', title: 'Error al crear tratamiento', description: result.error });
-        } else {
-            toast({ title: 'Tratamiento Creado', description: 'El plan de tratamiento se ha añadido a la sección de facturación.' });
+                const result = await createTreatment(treatmentData);
+                if (result.error) throw new Error(result.error);
+            }
+            
+            toast({ 
+                title: 'Tratamientos Creados', 
+                description: `Se han añadido ${validTreatments.length} tratamiento(s) a la sección de facturación.` 
+            });
+            setShowAddToBillingDialog(false);
+            onClose(true);
+        } catch (error: any) {
+            toast({ 
+                variant: 'destructive', 
+                title: 'Error al crear tratamientos', 
+                description: error.message 
+            });
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
-        setShowAddToBillingDialog(false);
-        onClose(true); // Close the main modal
     };
 
     const handleCloseAll = () => {
@@ -162,9 +384,79 @@ export const ConsentForm = ({ patientId, patientName, clinic, onClose }: Consent
                     <div className="grid md:grid-cols-2 gap-8 py-4">
                         {/* Columna Izquierda: Formulario */}
                         <div className="space-y-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="treatment">Tratamiento</Label>
-                                <Textarea id="treatment" placeholder="Describa el tratamiento a realizar..." value={formData.treatment} onChange={handleChange} />
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <Label>Tratamientos</Label>
+                                    <Button 
+                                        type="button" 
+                                        variant="outline" 
+                                        size="sm"
+                                        onClick={() => setFormData(prev => ({
+                                            ...prev,
+                                            treatments: [...prev.treatments, { description: '', cost: '' }]
+                                        }))}
+                                    >
+                                        Agregar Tratamiento
+                                    </Button>
+                                </div>
+                                {formData.treatments.map((treatment, index) => (
+                                    <div key={index} className="grid gap-4 p-4 border rounded-lg">
+                                        <div className="flex justify-between items-start">
+                                            <Label>Tratamiento {index + 1}</Label>
+                                            {index > 0 && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            treatments: prev.treatments.filter((_, i) => i !== index)
+                                                        }))
+                                                    }}
+                                                >
+                                                    Eliminar
+                                                </Button>
+                                            )}
+                                        </div>
+                                        <div className="grid gap-4 md:grid-cols-2">
+                                            <div className="grid gap-2">
+                                                <Label htmlFor={`treatment-${index}`}>Descripción</Label>
+                                                <Textarea
+                                                    id={`treatment-${index}`}
+                                                    placeholder="Describa el tratamiento a realizar..."
+                                                    value={treatment.description}
+                                                    onChange={(e) => {
+                                                        const newTreatments = [...formData.treatments];
+                                                        newTreatments[index].description = e.target.value;
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            treatments: newTreatments
+                                                        }));
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label htmlFor={`cost-${index}`}>Costo ($)</Label>
+                                                <Input
+                                                    id={`cost-${index}`}
+                                                    type="number"
+                                                    placeholder="0.00"
+                                                    value={treatment.cost}
+                                                    onChange={(e) => {
+                                                        const newTreatments = [...formData.treatments];
+                                                        newTreatments[index].cost = e.target.value;
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            treatments: newTreatments,
+                                                            totalCost: newTreatments.reduce((sum, t) => sum + (parseFloat(t.cost) || 0), 0).toString()
+                                                        }));
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                             
                             <div className="grid gap-2">
@@ -186,6 +478,23 @@ export const ConsentForm = ({ patientId, patientName, clinic, onClose }: Consent
                                         <div className="grid gap-2"><Label htmlFor="monthlyPayment">Pago Mensual ($)</Label><Input id="monthlyPayment" type="number" placeholder="200" value={formData.monthlyPayment} onChange={handleChange} /></div>
                                     </>
                                 )}
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="doctor">Profesional que realiza el tratamiento</Label>
+                                <Combobox 
+                                    options={doctors
+                                        .filter(d => d.roles.includes('doctor'))
+                                        .map(d => ({
+                                            label: `Dr. ${d.first_name} ${d.last_name}`,
+                                            value: d.id,
+                                            data: d
+                                        }))}
+                                    value={formData.doctorId}
+                                    onChange={(value) => setFormData(prev => ({ ...prev, doctorId: value }))}
+                                    placeholder="Seleccionar doctor..."
+                                    emptyMessage="No se encontraron doctores."
+                                />
                             </div>
 
                             <div className="space-y-2">

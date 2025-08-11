@@ -221,8 +221,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
 
   const userRoles = userData?.profile?.roles || [];
-  const navItems = allNavItems.filter(item => 
-      userRoles.some(userRole => item.roles.includes(userRole))
+  interface NavItem {
+    href: string;
+    icon: React.ComponentType<{ className?: string }>;
+    label: string;
+    roles: string[];
+  }
+
+  const navItems: NavItem[] = allNavItems.filter((item: NavItem) =>
+    userRoles.some((userRole: string) => item.roles.includes(userRole))
   );
 
   const isNavItemActive = (href: string) => {
