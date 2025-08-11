@@ -38,7 +38,7 @@ import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { SmileSysLogo } from '../icons/smilesys-logo';
+import { SmileSysLogoDynamic } from '../icons/smilesys-logo-dynamic';
 import { useTheme } from 'next-themes';
 import { Switch } from '../ui/switch';
 import { createClient } from '@/lib/supabase/client';
@@ -221,15 +221,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
 
   const userRoles = userData?.profile?.roles || [];
-  interface NavItem {
-    href: string;
-    icon: React.ComponentType<{ className?: string }>;
-    label: string;
-    roles: string[];
-  }
-
-  const navItems: NavItem[] = allNavItems.filter((item: NavItem) =>
-    userRoles.some((userRole: string) => item.roles.includes(userRole))
+  const navItems = allNavItems.filter(item => 
+      userRoles.some((userRole: string) => item.roles.includes(userRole))
   );
 
   const isNavItemActive = (href: string) => {
@@ -374,11 +367,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               "flex items-center gap-2 font-semibold",
               !isExpanded && "justify-center"
             )}>
-              {userData?.clinic?.logo_url ? (
-                  <Image src={userData.clinic.logo_url} alt="Clinic Logo" width={32} height={32} className="h-8 w-8 rounded-md object-contain" />
-              ) : (
-                  <SmileSysLogo className={cn("h-8", isExpanded ? "w-8" : "w-8" )} />
-              )}
+              <SmileSysLogoDynamic size={32} className={cn("h-8 w-8", isExpanded ? "" : "")} />
               <span className={cn(isExpanded ? "block" : "hidden")}>SmileSys</span>
           </Link>
           <Button variant="ghost" size="icon" onClick={() => setIsExpanded(!isExpanded)} className={cn(!isExpanded && "absolute right-0 top-14 translate-x-1/2 bg-background border rounded-full ")}>
@@ -406,7 +395,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   href="/dashboard"
                   className="group flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-full bg-primary text-lg font-semibold text-primary-foreground md:text-base"
                 >
-                  <SmileSysLogo className="h-5 w-5 transition-all group-hover:scale-110" />
+                  <SmileSysLogoDynamic size={20} className="h-5 w-5 transition-all group-hover:scale-110" />
                   <span className="sr-only">SmileSys</span>
                 </Link>
                 <SidebarNav mobile={true} />

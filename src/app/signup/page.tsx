@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ToothIcon } from '@/components/icons/tooth-icon';
+import { SmileSysLogoDynamic } from '@/components/icons/smilesys-logo-dynamic';
 import { useToast } from '@/hooks/use-toast';
 import { signUpNewClinic } from '../admin/actions';
 import Link from 'next/link';
@@ -64,7 +64,7 @@ export default function SignupPage() {
       <Card className="mx-auto max-w-lg w-full">
         <CardHeader className="text-center">
           <div className="flex justify-center items-center mb-4">
-            <ToothIcon className="h-10 w-10 text-primary" />
+            <SmileSysLogoDynamic size={48} className="h-12 w-12" />
           </div>
           <CardTitle className="text-2xl font-bold font-headline">Crea tu Cuenta en SmileSys</CardTitle>
           <CardDescription>Empieza contándonos un poco sobre ti y tu clínica.</CardDescription>
