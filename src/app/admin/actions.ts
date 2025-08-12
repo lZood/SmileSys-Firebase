@@ -1,7 +1,7 @@
-
 'use server';
 
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseJsClient } from '@supabase/supabase-js';
 import { z } from "zod";
 
 const signUpSchema = z.object({
@@ -20,17 +20,20 @@ export async function signUpNewClinic(input: z.infer<typeof signUpSchema>) {
   }
 
   const { clinicName, adminEmail, password, firstName, lastName } = parsedInput.data;
-  const supabase = createClient();
+  const supabase = await createClient();
+  const supabaseAdmin = createSupabaseJsClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
-  // Step 1: Sign up the new user
-  const { data: authData, error: authError } = await supabase.auth.signUp({
+  // Step 1: Sign up the new user (usando admin API)
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email: adminEmail,
     password: password,
-    options: {
-      data: {
-        role: 'admin',
-        full_name: `${firstName} ${lastName}`
-      },
+    email_confirm: true,
+    user_metadata: {
+      roles: ['admin'],
+      full_name: `${firstName} ${lastName}`
     },
   });
 
@@ -55,25 +58,25 @@ export async function signUpNewClinic(input: z.infer<typeof signUpSchema>) {
   if (clinicError) {
     console.error('Error creating clinic:', clinicError);
     // Rollback user creation if clinic creation fails
-    await supabase.auth.admin.deleteUser(userId);
+    await supabaseAdmin.auth.admin.deleteUser(userId);
     return { error: 'Failed to create the clinic in the database.' };
   }
 
-  // Step 3: Create the user's profile
+  // Step 3: Create the profile for the admin user
   const { error: profileError } = await supabase
     .from('profiles')
     .insert({
       id: userId,
       clinic_id: clinic.id,
-      role: 'admin',
       first_name: firstName,
-      last_name: lastName
+      last_name: lastName,
+      roles: ['admin'],
     });
 
   if (profileError) {
     console.error('Error creating profile:', profileError);
     // Rollback: delete user and clinic
-    await supabase.auth.admin.deleteUser(userId);
+    await supabaseAdmin.auth.admin.deleteUser(userId);
     await supabase.from('clinics').delete().eq('id', clinic.id);
     return { error: 'User registered, but failed to create their profile.' };
   }

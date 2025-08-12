@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import * as React from 'react';
@@ -48,6 +46,7 @@ import { getAppointments } from '@/app/appointments/actions';
 import { startOfToday, format, differenceInMinutes, parse } from 'date-fns';
 import { Toaster, toast as hotToast } from 'react-hot-toast';
 import { useUserData } from '@/context/UserDataProvider';
+// import { useDebounce } from '@/hooks/use-mobile'; // reutilizamos hook simple si existe, si no, ignorar
 
 
 type DashboardLayoutProps = {
@@ -132,6 +131,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { userData, isLoading } = useUserData();
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [remindersToDismiss, setRemindersToDismiss] = React.useState<string[]>([]);
+  const [globalSearch, setGlobalSearch] = React.useState('');
+  const [searchResults, setSearchResults] = React.useState<any[]>([]);
+  const [isSearching, setIsSearching] = React.useState(false);
+  const [showResults, setShowResults] = React.useState(false);
+  const searchTimeout = React.useRef<NodeJS.Timeout | null>(null);
   
   // Real-time notifications and reminders
   React.useEffect(() => {
@@ -352,6 +356,34 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const unreadNotificationsCount = notifications.filter(n => !n.is_read).length;
 
+  React.useEffect(() => {
+    if (!globalSearch) {
+      setSearchResults([]);
+      return;
+    }
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(globalSearch)}`);
+        if (res.ok) {
+          const json = await res.json();
+          const flat = [
+            ...json.patients,
+            ...json.appointments,
+            ...json.inventory,
+          ];
+          setSearchResults(flat);
+          setShowResults(true);
+        }
+      } catch (e) {
+        // silent
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+  }, [globalSearch]);
+
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
        <Toaster position="bottom-right" />
@@ -409,7 +441,35 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               type="search"
               placeholder="Buscar..."
               className="w-full rounded-lg bg-background pl-8 md:w-[200px] lg:w-[320px]"
+              value={globalSearch}
+              onChange={(e) => setGlobalSearch(e.target.value)}
+              onFocus={() => { if (searchResults.length) setShowResults(true); }}
+              onBlur={() => setTimeout(()=> setShowResults(false), 150)}
             />
+            {showResults && (globalSearch || isSearching) && (
+              <div className="absolute mt-1 w-full rounded-md border bg-popover shadow z-50 max-h-80 overflow-auto text-sm">
+                {isSearching && (
+                  <div className="p-3 text-muted-foreground">Buscando...</div>
+                )}
+                {!isSearching && searchResults.length === 0 && (
+                  <div className="p-3 text-muted-foreground">Sin resultados</div>
+                )}
+                {!isSearching && searchResults.map(item => (
+                  <Link
+                    key={`${item.type}-${item.id}`}
+                    href={item.type === 'patient' ? `/patients/${item.id}` : item.type === 'appointment' ? '/appointments' : '/inventory'}
+                    className="flex items-start gap-2 px-3 py-2 hover:bg-accent"
+                  >
+                    <span className="font-medium capitalize w-20 shrink-0 text-xs text-muted-foreground">{item.type}</span>
+                    <span className="flex-1 truncate">
+                      {item.type === 'patient' && item.name}
+                      {item.type === 'appointment' && item.summary}
+                      {item.type === 'inventory' && `${item.name} (${item.sku || ''})`}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -482,4 +542,3 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   );
 }
 
-    

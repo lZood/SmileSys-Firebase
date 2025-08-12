@@ -1,5 +1,3 @@
-
-
 'use server';
 
 import { createClient } from "@/lib/supabase/server";
@@ -21,9 +19,20 @@ export const getUserData = cache(async () => {
         .eq('id', user.id)
         .single();
     
+    // Helper para estado Google
+    const getGoogleConnected = async () => {
+        const { data } = await supabase
+            .from('google_integrations')
+            .select('id')
+            .eq('user_id', user.id)
+            .limit(1);
+        return !!(data && data.length > 0);
+    };
+
     if (profileError || !profile) {
         console.error('Error fetching profile:', profileError?.message);
-        return { user, profile: null, clinic: null, teamMembers: [] };
+        const isGoogleCalendarConnected = await getGoogleConnected();
+        return { user, profile: null, clinic: null, teamMembers: [], isGoogleCalendarConnected } as any;
     }
 
     const { data: clinic, error: clinicError } = await supabase
@@ -52,7 +61,8 @@ export const getUserData = cache(async () => {
 
     if (profilesError) {
         console.error('Error fetching profiles for clinic:', profilesError.message);
-        return { user, profile, clinic, teamMembers: [] };
+        const isGoogleCalendarConnected = await getGoogleConnected();
+        return { user, profile, clinic, teamMembers: [], isGoogleCalendarConnected } as any;
     }
 
     // Fetch all users from auth.users (requires service_role key)
@@ -60,7 +70,8 @@ export const getUserData = cache(async () => {
     
     if (authUsersError) {
         console.error('Error fetching auth users:', authUsersError.message);
-         return { user, profile, clinic, teamMembers: [] };
+        const isGoogleCalendarConnected = await getGoogleConnected();
+        return { user, profile, clinic, teamMembers: [], isGoogleCalendarConnected } as any;
     }
 
     // Join profiles with auth users in code
@@ -71,12 +82,14 @@ export const getUserData = cache(async () => {
             user_email: authUser?.email || 'No disponible'
         };
     });
-    
 
+    const isGoogleCalendarConnected = await getGoogleConnected();
+    
     return {
       user,
       profile,
       clinic,
       teamMembers: teamMembers || [],
-    };
+      isGoogleCalendarConnected,
+    } as any;
 });

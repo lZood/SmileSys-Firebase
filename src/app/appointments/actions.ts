@@ -1,4 +1,3 @@
-
 'use server';
 
 import { createClient } from "@/lib/supabase/server";
@@ -6,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { isBefore, subHours, format, startOfDay, endOfDay } from 'date-fns';
 import { createAppointmentNotification } from "../notifications/actions";
+import { google } from 'googleapis';
 
 export async function autoCompleteAppointments(clinicId: string) {
     const supabase = await createClient();
@@ -151,6 +151,12 @@ export async function createAppointment(data: z.infer<typeof appointmentSchema>)
             );
         }
         // --- End Notifications ---
+        
+        // Llamar creación de evento Google Calendar (no bloquear flujo)
+        createGoogleCalendarEvent(parsedData.data.doctor_id, {
+          ...parsedData.data,
+          clinic_id: profile.clinic_id,
+        });
         
         revalidatePath('/appointments');
         revalidatePath('/dashboard');
@@ -376,4 +382,105 @@ export async function getDoctorAvailability(doctorId: string, date: string) {
     return { error: null, data: availableSlots };
 }
 
+export async function createGoogleCalendarEvent(doctorId: string, appointment: {
+  patient_id: string;
+  doctor_id: string;
+  service_description: string;
+  appointment_date: string; // YYYY-MM-DD
+  appointment_time: string; // HH:mm
+  clinic_id: string;
+}) {
+  try {
+    const supabase = await createClient();
     
+    // 1. Obtener refresh_token del doctor (sin cambios)
+    const { data: integration, error: integrationError } = await supabase
+      .from('google_integrations')
+      .select('refresh_token')
+      .eq('user_id', doctorId)
+      .single();
+
+    if (integrationError || !integration?.refresh_token) {
+      console.log(`[Google Calendar] No integration found for doctor ${doctorId}.`);
+      return;
+    }
+
+    // --- Configuración de OAuth2 (sin cambios) ---
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    );
+    oauth2Client.setCredentials({ refresh_token: integration.refresh_token });
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    // --- Obtener datos del Paciente y Doctor (sin cambios) ---
+    const { data: patient } = await supabase
+      .from('patients')
+      .select('first_name, last_name, email')
+      .eq('id', appointment.patient_id)
+      .single();
+
+    const { data: doctor } = await supabase
+      .from('profiles')
+      .select('first_name, last_name')
+      .eq('id', doctorId)
+      .single();
+      
+    // --- ✅ NUEVO: Obtener datos de la Clínica ---
+    const { data: clinic } = await supabase
+      .from('clinics')
+      .select('name, address, phone_number')
+      .eq('id', appointment.clinic_id)
+      .single();
+
+    // --- Preparación de Fechas y Título (sin cambios) ---
+    const startDateTime = new Date(`${appointment.appointment_date}T${appointment.appointment_time}:00`);
+    const endDateTime = new Date(startDateTime.getTime() + 30 * 60000); // +30 min
+    const summary = `Cita: ${appointment.service_description}${patient ? ` - ${patient.first_name} ${patient.last_name}` : ''}`;
+
+    // --- ✅ NUEVO: Construcción de la Descripción Mejorada ---
+    let description = `Cita creada desde SmileSys.\n`;
+    if (doctor) {
+        description += `Doctor: Dr. ${doctor.first_name} ${doctor.last_name}\n`;
+    }
+    if (clinic) {
+        description += `\n-- Información de la Clínica --\n`;
+        description += `Clínica: ${clinic.name}\n`;
+        if (clinic.phone_number) {
+            description += `Teléfono: ${clinic.phone_number}`;
+        }
+    }
+    
+    // --- ✅ NUEVO: Objeto de Evento Actualizado ---
+    const event = {
+      summary,
+      description,
+      // Se añade la dirección de la clínica en el campo 'location'
+      location: clinic?.address, 
+      start: {
+        dateTime: startDateTime.toISOString(),
+      },
+      end: {
+        dateTime: endDateTime.toISOString(),
+      },
+      attendees: patient?.email ? [{ email: patient.email }] : [],
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'email', minutes: 24 * 60 },
+          { method: 'popup', minutes: 24 * 60 },
+        ],
+      },
+    };
+
+    // --- Inserción del Evento (sin cambios) ---
+    await calendar.events.insert({
+      calendarId: 'primary',
+      requestBody: event,
+      sendUpdates: 'all', // Notifica a los asistentes sobre la creación y cambios
+    });
+
+  } catch (e) {
+    console.error('[createGoogleCalendarEvent] Error creando evento:', e);
+  }
+}

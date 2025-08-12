@@ -1,5 +1,3 @@
-
-
 'use server';
 
 import { createClient } from "@/lib/supabase/server";
@@ -287,4 +285,28 @@ export async function deleteMember(memberId: string) {
 
     revalidatePath('/settings');
     return { error: null };
+}
+
+export async function disconnectGoogleAccount() {
+    const supabase = await createClient();
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { error: 'Usuario no autenticado.' };
+
+        const { error } = await supabase
+            .from('google_integrations')
+            .delete()
+            .eq('user_id', user.id);
+
+        if (error) {
+            console.error('[disconnectGoogleAccount] Error:', error);
+            return { error: `No se pudo desconectar Google: ${error.message}` };
+        }
+
+        revalidatePath('/settings');
+        return { error: null };
+    } catch (e: any) {
+        console.error('[disconnectGoogleAccount] Unexpected:', e);
+        return { error: 'Error inesperado al desconectar Google.' };
+    }
 }

@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import * as React from 'react';
@@ -24,6 +22,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { getGoogleAuthUrl } from './google-actions';
+import { disconnectGoogleAccount } from './actions';
 
 
 type UserData = {
@@ -362,6 +362,50 @@ export default function SettingsPage() {
       }
   }
 
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const g = params.get('google-auth');
+      if (g === 'success') {
+        toast({ title: 'Google Calendar conectado', description: 'La integración se ha configurado correctamente.' });
+      } else if (g === 'error') {
+        toast({ variant: 'destructive', title: 'Error Google Calendar', description: 'No se pudo completar la autorización.' });
+      }
+    }
+  }, [toast]);
+
+  async function handleConnectGoogle() {
+    const { url, error } = await getGoogleAuthUrl();
+    if (error || !url) {
+      toast({ variant: 'destructive', title: 'Error', description: error || 'No se pudo iniciar la conexión con Google.' });
+      return;
+    }
+    window.location.href = url;
+  }
+
+  const user = userData && userData.user ? userData.user : null;
+  const profile = userData && userData.profile ? userData.profile : null;
+  const clinic = userData && userData.clinic ? userData.clinic : null;
+  const teamMembers = userData && userData.teamMembers ? userData.teamMembers : [];
+  const isAdmin = profile && profile.roles ? profile.roles.includes('admin') : false;
+  const canManageIntegrations = profile && profile.roles ? (profile.roles.includes('admin') || profile.roles.includes('doctor')) : false;
+  const isDoctor = profile && profile.roles ? profile.roles.includes('doctor') : false;
+  const isStaff = profile && profile.roles ? profile.roles.includes('staff') : false;
+  const tabsGridClass = isAdmin ? 'grid-cols-4' : canManageIntegrations ? 'grid-cols-2' : 'grid-cols-1';
+
+  // Add this line to determine if Google Calendar is connected
+  const isGoogleCalendarConnected = !!(profile && profile.google_calendar_connected);
+
+  async function handleDisconnectGoogle() {
+    const { error } = await disconnectGoogleAccount();
+    if (error) {
+      toast({ variant: 'destructive', title: 'Error', description: error });
+    } else {
+      toast({ title: 'Google desconectado', description: 'Se ha desconectado tu cuenta de Google Calendar.' });
+      await fetchUserData();
+    }
+  }
+
   if (isLoading) {
       return (
           <DashboardLayout>
@@ -389,12 +433,6 @@ export default function SettingsPage() {
       )
   }
 
-  const user = userData && userData.user ? userData.user : null;
-  const profile = userData && userData.profile ? userData.profile : null;
-  const clinic = userData && userData.clinic ? userData.clinic : null;
-  const teamMembers = userData && userData.teamMembers ? userData.teamMembers : [];
-  const isAdmin = profile && profile.roles ? profile.roles.includes('admin') : false;
-
   return (
     <DashboardLayout>
        {isInviteModalOpen && clinic && <InviteMemberForm clinicId={clinic.id} onClose={(s) => handleModalClose(s)}/>}
@@ -413,15 +451,15 @@ export default function SettingsPage() {
           </p>
         </div>
         <Tabs defaultValue="profile" className="flex-1">
-          <TabsList className={cn("grid w-full", isAdmin ? "grid-cols-4" : "grid-cols-1")}>
+          <TabsList className={cn("grid w-full", tabsGridClass)}>
             <TabsTrigger value="profile">Perfil</TabsTrigger>
             {isAdmin && (
                 <>
                     <TabsTrigger value="clinic">Clínica</TabsTrigger>
                     <TabsTrigger value="members">Miembros</TabsTrigger>
-                    <TabsTrigger value="integrations">Integraciones</TabsTrigger>
                 </>
             )}
+            {canManageIntegrations && <TabsTrigger value="integrations">Integraciones</TabsTrigger>}
           </TabsList>
           <TabsContent value="profile">
             <div className="space-y-6">
@@ -510,37 +548,49 @@ export default function SettingsPage() {
                         </CardContent>
                     </Card>
                 </TabsContent>
-                <TabsContent value="integrations">
-                    <Card>
-                    <CardHeader>
-                        <CardTitle>Integraciones</CardTitle>
-                        <CardDescription>
-                        Conecta SmileSys con otros servicios.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between">
-                                <div>
-                                    <CardTitle className="text-lg">Google Calendar</CardTitle>
-                                    <CardDescription>Sincroniza citas con tu calendario personal.</CardDescription>
-                                </div>
-                                <Button variant="outline">Conectar</Button>
-                            </CardHeader>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between">
-                                <div>
-                                    <CardTitle className="text-lg">Notificaciones por SMS (Twilio)</CardTitle>
-                                    <CardDescription>Envía recordatorios de citas por SMS.</CardDescription>
-                                </div>
-                                <Button variant="outline">Conectar</Button>
-                            </CardHeader>
-                        </Card>
-                    </CardContent>
-                    </Card>
-                </TabsContent>
             </>
+          )}
+          {canManageIntegrations && (
+            <TabsContent value="integrations">
+                <Card>
+                <CardHeader>
+                    <CardTitle>Integraciones</CardTitle>
+                    <CardDescription>
+                    Conecta SmileSys con otros servicios.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="text-lg">Google Calendar</CardTitle>
+                                <CardDescription>Sincroniza citas con tu calendario personal.</CardDescription>
+                            </div>
+                            {isGoogleCalendarConnected ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-green-600 flex items-center gap-1">
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-2.59a.75.75 0 1 0-1.22-.86l-3.303 4.69-1.64-1.64a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.09l3.893-5.37Z" clipRule="evenodd" /></svg>
+                                  Conectado
+                                </span>
+                                <Button variant="outline" onClick={handleDisconnectGoogle}>Desconectar</Button>
+                              </div>
+                            ) : (
+                              <Button variant="outline" onClick={handleConnectGoogle}>Conectar</Button>
+                            )}
+                        </CardHeader>
+                    </Card>
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="text-lg">Notificaciones por SMS (Twilio)</CardTitle>
+                                <CardDescription>Envía recordatorios de citas por SMS.</CardDescription>
+                            </div>
+                            <Button variant="outline">Conectar</Button>
+                        </CardHeader>
+                    </Card>
+                </CardContent>
+                </Card>
+            </TabsContent>
           )}
         </Tabs>
       </div>
