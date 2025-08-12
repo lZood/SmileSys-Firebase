@@ -26,10 +26,15 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Checkbox } from '@/components/ui/checkbox';
 
 
-type UserData = Awaited<ReturnType<typeof getUserData>>;
-type TeamMember = NonNullable<UserData>['teamMembers'][0];
+type UserData = {
+  user?: any | null;
+  profile?: any | null;
+  clinic?: any | null;
+  teamMembers?: any[];
+} | null;
+type TeamMember = any;
 
-const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: NonNullable<UserData['clinic']>, isAdmin: boolean }) => {
+const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: any, isAdmin: boolean }) => {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = React.useState(false);
     const [logoFile, setLogoFile] = React.useState<File | null>(null);
@@ -127,7 +132,7 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: NonNullable<UserData['cli
     );
 };
 
-const ProfileInfoForm = ({ profile }: { profile: NonNullable<UserData['profile']> }) => {
+const ProfileInfoForm = ({ profile }: { profile: any }) => {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = React.useState(false);
     const [formData, setFormData] = React.useState({
@@ -384,8 +389,11 @@ export default function SettingsPage() {
       )
   }
 
-  const { user, profile, clinic, teamMembers } = userData || {};
-  const isAdmin = profile?.roles?.includes('admin');
+  const user = userData && userData.user ? userData.user : null;
+  const profile = userData && userData.profile ? userData.profile : null;
+  const clinic = userData && userData.clinic ? userData.clinic : null;
+  const teamMembers = userData && userData.teamMembers ? userData.teamMembers : [];
+  const isAdmin = profile && profile.roles ? profile.roles.includes('admin') : false;
 
   return (
     <DashboardLayout>
@@ -417,7 +425,7 @@ export default function SettingsPage() {
           </TabsList>
           <TabsContent value="profile">
             <div className="space-y-6">
-                {profile && <ProfileInfoForm profile={{...profile, user_email: user?.email || ''}} />}
+                {profile ? <ProfileInfoForm profile={{...profile, user_email: user ? user.email : ''}} /> : null}
                 <PasswordForm />
             </div>
           </TabsContent>
@@ -431,7 +439,7 @@ export default function SettingsPage() {
                         Gestiona los detalles de tu clínica para la generación de PDF (solo Admin).
                         </CardDescription>
                     </CardHeader>
-                    {clinic && <ClinicInfoForm clinic={clinic} isAdmin={isAdmin} />}
+                    {clinic ? <ClinicInfoForm clinic={clinic} isAdmin={isAdmin} /> : null}
                     </Card>
                 </TabsContent>
                 <TabsContent value="members">
@@ -471,7 +479,7 @@ export default function SettingsPage() {
                                             <TableCell>
                                                 <AlertDialog>
                                                     <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" disabled={!isAdmin || member.id === user?.id}><MoreHorizontal className="w-4 h-4"/></Button></DropdownMenuTrigger>
+                                                        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" disabled={!isAdmin || (user ? member.id === user.id : false)}><MoreHorizontal className="w-4 h-4"/></Button></DropdownMenuTrigger>
                                                         <DropdownMenuContent>
                                                             <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                                                             <DropdownMenuSeparator />
