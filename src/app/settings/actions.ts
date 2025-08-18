@@ -120,10 +120,12 @@ export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
     }
     const { clinicId, firstName, lastName, jobTitle, email, password, roles } = parsedData.data;
 
-    const { data: newUser, error: authError } = await supabase.auth.admin.createUser({
+    // 1) Create Auth user
+    const { data: newUserData, error: authError } = await supabase.auth.admin.createUser({
         email,
         password,
-        email_confirm: true,
+        // do not auto-confirm so the user can receive email flows normally
+        email_confirm: false,
         user_metadata: {
             full_name: `${firstName} ${lastName}`,
             roles: roles,
@@ -134,25 +136,88 @@ export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
         console.error("Error creating user in Auth:", authError);
         return { error: `No se pudo crear el usuario: ${authError.message}` };
     }
-     if (!newUser.user) {
-        return { error: "No se pudo obtener el objeto de usuario después de la creación." };
+    if (!newUserData?.user) {
+        return { error: 'No se pudo crear el usuario.' };
     }
+    const newUser = newUserData.user;
 
+    // 2) Create profile row
     const { error: profileError } = await supabase
         .from('profiles')
         .insert({
-            id: newUser.user.id,
+            id: newUser.id,
             clinic_id: clinicId,
             first_name: firstName,
             last_name: lastName,
             roles: roles,
             job_title: jobTitle,
+            // flag to require password change on first login
+            must_change_password: true,
         });
 
     if (profileError) {
         console.error("Error creating user profile:", profileError);
-        await supabase.auth.admin.deleteUser(newUser.user.id);
+        // cleanup auth user
+        try { await supabase.auth.admin.deleteUser(newUser.id); } catch (e) { console.error('Rollback deleteUser failed', e); }
         return { error: `No se pudo crear el perfil del usuario: ${profileError.message}` };
+    }
+
+    // 3) Insert into members table so the clinic members table is consistent with profiles/auth
+    try {
+        const { error: membersError } = await supabase
+            .from('members')
+            .insert({
+                user_id: newUser.id,
+                clinic_id: clinicId,
+                job_title: jobTitle,
+                roles: roles,
+                is_active: true,
+                must_change_password: true,
+                created_at: new Date().toISOString()
+            });
+
+        if (membersError) {
+            console.error('Error inserting into members table:', membersError);
+            // rollback: delete profile and auth user
+            await supabase.from('profiles').delete().eq('id', newUser.id);
+            try { await supabase.auth.admin.deleteUser(newUser.id); } catch (e) { console.error('Rollback deleteUser failed', e); }
+            return { error: `No se pudo registrar el miembro: ${membersError.message}` };
+        }
+
+        // 4) Trigger password recovery email so the user can set their own password
+        try {
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+            const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+            if (!supabaseUrl || !serviceKey) {
+                console.warn('SUPABASE_SERVICE_ROLE_KEY or SUPABASE_URL missing; cannot send recovery email automatically.');
+            } else {
+                const resp = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/recover`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': serviceKey,
+                        'Authorization': `Bearer ${serviceKey}`
+                    },
+                    body: JSON.stringify({ email })
+                });
+
+                if (!resp.ok) {
+                    const body = await resp.text();
+                    console.warn('Failed to send recovery email:', resp.status, body);
+                } else {
+                    console.log('Recovery email sent to', email);
+                }
+            }
+        } catch (e: any) {
+            console.warn('Error triggering recovery email:', e?.message || e);
+        }
+
+    } catch (e: any) {
+        console.error('Unexpected error inserting members:', e);
+        // rollback
+        await supabase.from('profiles').delete().eq('id', newUser.id);
+        try { await supabase.auth.admin.deleteUser(newUser.id); } catch (er) { console.error('Rollback deleteUser failed', er); }
+        return { error: 'Error inesperado al registrar el miembro.' };
     }
 
     revalidatePath('/settings');
@@ -169,28 +234,99 @@ const updateUserPasswordSchema = z.object({
 
 
 export async function updateUserPassword(data: z.infer<typeof updateUserPasswordSchema>) {
-    const supabase = await createClient();
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-        return { error: 'Usuario no autenticado.' };
+     const supabase = await createClient();
+     
+     const { data: { user } } = await supabase.auth.getUser();
+     if (!user) {
+         return { error: 'Usuario no autenticado.' };
+     }
+
+     const parsedData = updateUserPasswordSchema.safeParse(data);
+     if (!parsedData.success) {
+         return { error: parsedData.error.errors.map(e => e.message).join(', ') };
+     }
+
+     const { error } = await supabase.auth.updateUser({
+       password: parsedData.data.newPassword
+     });
+
+     if (error) {
+         console.error("Error updating user password:", error);
+         return { error: `No se pudo actualizar la contraseña: ${error.message}` };
+     }
+
+    // Clear must_change_password flag on profile/members (best-effort).
+    // First try using the current server client (uses request cookies), then use a service-role client as fallback
+    let cleared = { profiles: false, members: false };
+    try {
+        const { error: pErr } = await supabase
+            .from('profiles')
+            .update({ must_change_password: false })
+            .eq('id', user.id);
+        if (!pErr) cleared.profiles = true;
+    } catch (e: any) {
+        console.warn('Could not clear must_change_password on profiles with server client:', e?.message || e);
     }
 
-    const parsedData = updateUserPasswordSchema.safeParse(data);
-    if (!parsedData.success) {
-        return { error: parsedData.error.errors.map(e => e.message).join(', ') };
+    try {
+        const { error: mErr } = await supabase
+            .from('members')
+            .update({ must_change_password: false })
+            .eq('user_id', user.id);
+        if (!mErr) cleared.members = true;
+    } catch (e: any) {
+        console.warn('Could not clear must_change_password on members with server client:', e?.message || e);
     }
 
-    const { error } = await supabase.auth.updateUser({
-      password: parsedData.data.newPassword
-    });
-
-    if (error) {
-        console.error("Error updating user password:", error);
-        return { error: `No se pudo actualizar la contraseña: ${error.message}` };
+    // If either update wasn't applied, try again using the service-role key (bypass RLS)
+    try {
+        // (no-op) proceed to fallback REST attempt below if needed
+    } catch (e) {
+        // ignore failure to import
     }
 
-    return { error: null };
+    try {
+        if (!cleared.profiles || !cleared.members) {
+            // use direct REST call to supabase REST API with service role key as fallback
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+            const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+            if (supabaseUrl && serviceKey) {
+                if (!cleared.profiles) {
+                    await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/profiles?id=eq.${user.id}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'apikey': serviceKey,
+                            'Authorization': `Bearer ${serviceKey}`,
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify({ must_change_password: false })
+                    });
+                    cleared.profiles = true;
+                }
+                if (!cleared.members) {
+                    await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/members?user_id=eq.${user.id}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'apikey': serviceKey,
+                            'Authorization': `Bearer ${serviceKey}`,
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify({ must_change_password: false })
+                    });
+                    cleared.members = true;
+                }
+            }
+        }
+    } catch (e: any) {
+        console.warn('Fallback attempt to clear must_change_password via REST failed:', e?.message || e);
+    }
+
+    // Revalidate any relevant paths to reduce cached responses
+    try { revalidatePath('/settings'); } catch (e) { /* ignore */ }
+
+    return { error: null, cleared };
 }
 
 const userProfileSchema = z.object({

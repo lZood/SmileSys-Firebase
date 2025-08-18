@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { cn } from '@/lib/utils';
 import { ThemeProvider } from '@/components/theme-provider';
 import { UserDataProvider } from '@/context/UserDataProvider';
+import { PasswordChangeGuard } from '@/components/password-change-guard';
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -38,7 +39,9 @@ export default function RootLayout({
             disableTransitionOnChange
         >
           <UserDataProvider>
-            {children}
+            <PasswordChangeGuard>
+              {children}
+            </PasswordChangeGuard>
           </UserDataProvider>
           <Toaster />
         </ThemeProvider>

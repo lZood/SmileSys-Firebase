@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -53,24 +52,21 @@ const toothNumbers = {
   lowerRightDeciduous: ['81', '82', '83', '84', '85'],
 };
 
-const Tooth = ({ id, condition, onConditionChange, isReadOnly }: { id: string; condition: Condition; onConditionChange: (id: string, condition: Condition) => void; isReadOnly: boolean; }) => {
+const Tooth = ({ id, condition, onConditionChange, isReadOnly, size }: { id: string; condition: Condition; onConditionChange: (id: string, condition: Condition) => void; isReadOnly: boolean; size: { w: number; h: number } }) => {
   const [isOpen, setIsOpen] = React.useState(false);
-
   const currentCondition = conditions.find(c => c.id === condition) || conditions[0];
-  
   const handleValueChange = (value: string) => {
     onConditionChange(id, value as Condition);
     setIsOpen(false);
   }
-
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild disabled={isReadOnly}>
-        <button className="flex flex-col items-center group disabled:cursor-not-allowed">
-            <svg width="40" height="50" viewBox="0 0 40 50" className="cursor-pointer">
+        <button className="flex flex-col items-center group disabled:cursor-not-allowed" style={{width: size.w + 4}}>
+            <svg width={size.w} height={size.h} viewBox="0 0 40 50" className="cursor-pointer">
               <path d="M10 10 C 10 0, 30 0, 30 10 L 30 30 C 30 45, 25 45, 25 45 L 23 30 L 17 30 L 15 45 C 15 45, 10 45, 10 30 Z" className={cn('stroke-gray-400 stroke-1 group-hover:stroke-primary transition-all', currentCondition.color)} />
             </svg>
-          <span className="text-xs font-semibold text-muted-foreground">{id}</span>
+          <span className="text-[10px] font-semibold text-muted-foreground leading-none mt-0.5">{id}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64">
@@ -102,6 +98,7 @@ type OdontogramProps = {
     initialData?: ToothState | null;
     onChange?: (newState: ToothState) => void;
     isReadOnly?: boolean;
+    compact?: boolean; // nuevo modo compacto para móvil
 };
 
 // Function to create an empty (all healthy) chart state
@@ -114,7 +111,7 @@ const createDefaultChartState = (): ToothState => {
     return initialState;
 }
 
-export function Odontogram({ initialData, onChange, isReadOnly = false }: OdontogramProps) {
+export function Odontogram({ initialData, onChange, isReadOnly = false, compact = false }: OdontogramProps) {
   const [toothState, setToothState] = React.useState<ToothState>(() => {
     return initialData && Object.keys(initialData).length > 0 ? initialData : createDefaultChartState();
   });
@@ -137,20 +134,20 @@ export function Odontogram({ initialData, onChange, isReadOnly = false }: Odonto
     }
   };
 
+  const toothSize = compact ? { w: 28, h: 36 } : { w: 40, h: 50 };
   const renderQuadrant = (quadrant: string[]) => {
     return (
-        <div className="flex justify-center space-x-1">
+        <div className="flex justify-center gap-1">
         {quadrant.map(num => (
-            <Tooth key={num} id={num} condition={toothState[num] || 'healthy'} onConditionChange={handleConditionChange} isReadOnly={isReadOnly} />
+            <Tooth key={num} id={num} condition={toothState[num] || 'healthy'} onConditionChange={handleConditionChange} isReadOnly={isReadOnly} size={toothSize} />
         ))}
         </div>
     );
   };
   
   return (
-    <div className="p-4 bg-card rounded-lg border w-full overflow-x-auto">
-      <div className="flex flex-col gap-4 min-w-max">
-        {/* Adult Teeth */}
+    <div className={cn('bg-card rounded-lg border w-full', compact ? 'p-2 overflow-x-auto' : 'p-4 overflow-x-auto')}>      
+      <div className={cn('flex flex-col min-w-max', compact ? 'gap-2 scale-[0.95]' : 'gap-4')}>        
         <div className="flex justify-between">
             {renderQuadrant(toothNumbers.upperRightAdult)}
             {renderQuadrant(toothNumbers.upperLeftAdult)}
@@ -160,7 +157,7 @@ export function Odontogram({ initialData, onChange, isReadOnly = false }: Odonto
             {renderQuadrant(toothNumbers.lowerLeftAdult)}
         </div>
 
-        <hr className="my-4 border-dashed" />
+        <hr className="my-2 border-dashed" />
 
         {/* Deciduous Teeth */}
          <div className="flex justify-between">

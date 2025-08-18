@@ -40,13 +40,28 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: any, isAdmin: boolean }) 
     const [logoFile, setLogoFile] = React.useState<File | null>(null);
     const [logoPreview, setLogoPreview] = React.useState<string | null>(clinic?.logo_url || null);
     
-    const [clinicData, setClinicData] = React.useState({
+    // Default empty schedule: no intervals for each weekday
+    const defaultSchedule = {
+        monday: [] as Array<{ start: string; end: string }> ,
+        tuesday: [] as Array<{ start: string; end: string }> ,
+        wednesday: [] as Array<{ start: string; end: string }> ,
+        thursday: [] as Array<{ start: string; end: string }> ,
+        friday: [] as Array<{ start: string; end: string }> ,
+        saturday: [] as Array<{ start: string; end: string }> ,
+        sunday: [] as Array<{ start: string; end: string }> ,
+    };
+
+    const [clinicData, setClinicData] = React.useState(() => ({
         name: clinic?.name || '',
         address: clinic?.address || '',
         phone: clinic?.phone || '',
         logo_url: clinic?.logo_url || '',
         terms_and_conditions: clinic?.terms_and_conditions || '',
-    });
+        // schedule comes from clinic.schedule if available, otherwise default
+        schedule: clinic?.schedule || defaultSchedule,
+        // reminder in minutes for Google Calendar notifications. Default 1 day = 1440
+        google_calendar_reminder_minutes: clinic?.google_calendar_reminder_minutes ?? 1440,
+    }));
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         setClinicData({ ...clinicData, [e.target.id]: e.target.value });
@@ -58,6 +73,28 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: any, isAdmin: boolean }) 
             setLogoFile(file);
             setLogoPreview(URL.createObjectURL(file));
         }
+    };
+
+    // Helpers to manage schedule intervals
+    const addInterval = (day: keyof typeof defaultSchedule) => {
+        const updated = { ...clinicData.schedule };
+        const newInterval = { start: '09:00', end: '17:00' };
+        updated[day] = [...(updated[day] || []), newInterval];
+        setClinicData({ ...clinicData, schedule: updated });
+    };
+
+    const removeInterval = (day: keyof typeof defaultSchedule, idx: number) => {
+        const updated = { ...clinicData.schedule };
+        updated[day] = [...(updated[day] || [])];
+        updated[day].splice(idx, 1);
+        setClinicData({ ...clinicData, schedule: updated });
+    };
+
+    const updateInterval = (day: keyof typeof defaultSchedule, idx: number, field: 'start' | 'end', value: string) => {
+        const updated = { ...clinicData.schedule };
+        updated[day] = [...(updated[day] || [])];
+        updated[day][idx] = { ...updated[day][idx], [field]: value };
+        setClinicData({ ...clinicData, schedule: updated });
     };
 
     const handleSave = async () => {
@@ -74,6 +111,23 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: any, isAdmin: boolean }) 
             finalLogoUrl = uploadResult.publicUrl!;
         }
 
+        // Optional: simple validation - ensure intervals have start < end
+        for (const day of Object.keys(clinicData.schedule)) {
+            const intervals = (clinicData.schedule as any)[day] as Array<{start:string,end:string}>;
+            for (const itv of intervals) {
+                if (!itv.start || !itv.end) {
+                    toast({ variant: 'destructive', title: 'Horario inválido', description: 'Todos los intervalos deben tener hora de inicio y fin.' });
+                    setIsLoading(false);
+                    return;
+                }
+                if (itv.start >= itv.end) {
+                    toast({ variant: 'destructive', title: 'Horario inválido', description: 'La hora de inicio debe ser anterior a la hora de fin.' });
+                    setIsLoading(false);
+                    return;
+                }
+            }
+        }
+
         const result = await updateClinicInfo({ 
             clinicId: clinic.id, 
             ...clinicData,
@@ -88,6 +142,16 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: any, isAdmin: boolean }) 
             toast({ title: 'Información Actualizada', description: 'Los datos de la clínica han sido guardados.' });
         }
     };
+
+    const weekdays = [
+        { key: 'monday', label: 'Lunes' },
+        { key: 'tuesday', label: 'Martes' },
+        { key: 'wednesday', label: 'Miércoles' },
+        { key: 'thursday', label: 'Jueves' },
+        { key: 'friday', label: 'Viernes' },
+        { key: 'saturday', label: 'Sábado' },
+        { key: 'sunday', label: 'Domingo' },
+    ] as const;
 
     return (
          <CardContent className="space-y-4">
@@ -127,6 +191,63 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: any, isAdmin: boolean }) 
                     disabled={!isAdmin || isLoading}
                 />
             </div>
+
+            {/* Schedule editor */}
+            <div className="grid gap-2">
+                <Label>Horario de Atención (intervalos por día)</Label>
+                <div className="space-y-4">
+                    {weekdays.map(d => (
+                        <div key={d.key} className="border rounded-md p-3">
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="font-medium">{d.label}</div>
+                                <div className="flex items-center gap-2">
+                                    <Button size="sm" variant="outline" onClick={() => addInterval(d.key as any)} disabled={!isAdmin || isLoading} className="h-8">Añadir</Button>
+                                    <div className="text-sm text-muted-foreground hidden md:block">{((clinicData.schedule as any)[d.key] || []).length} intervalo(s)</div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                {((clinicData.schedule as any)[d.key] || []).length === 0 && <div className="text-sm text-muted-foreground">Sin intervalos (cerrado)</div>}
+
+                                {/* Intervals: stacked on mobile, inline on md+ */}
+                                {((clinicData.schedule as any)[d.key] || []).map((itv: any, idx: number) => (
+                                    <div key={idx} className="flex flex-col md:flex-row md:items-center gap-2">
+                                        <div className="w-full md:w-auto grid gap-1">
+                                            <Label className="text-xs">Inicio</Label>
+                                            <Input type="time" value={itv.start} onChange={(e) => updateInterval(d.key as any, idx, 'start', e.target.value)} disabled={!isAdmin || isLoading} className="w-full md:w-40" />
+                                        </div>
+                                        <div className="w-full md:w-auto grid gap-1">
+                                            <Label className="text-xs">Fin</Label>
+                                            <Input type="time" value={itv.end} onChange={(e) => updateInterval(d.key as any, idx, 'end', e.target.value)} disabled={!isAdmin || isLoading} className="w-full md:w-40" />
+                                        </div>
+                                        <div className="flex items-center gap-2 ml-auto">
+                                            <div className="text-sm text-muted-foreground md:hidden">{itv.start} — {itv.end}</div>
+                                            <Button size="sm" variant="ghost" onClick={() => removeInterval(d.key as any, idx)} disabled={!isAdmin || isLoading}>Eliminar</Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* Google Calendar reminder setting (responsive) */}
+            <div className="grid gap-2 md:flex md:items-center md:gap-4">
+                <div className="md:w-48">
+                    <Label htmlFor="google_reminder">Recordatorio en Google Calendar</Label>
+                </div>
+                <div className="flex-1 md:flex md:items-center md:gap-4">
+                    <select id="google_reminder" value={String(clinicData.google_calendar_reminder_minutes)} onChange={(e) => setClinicData({...clinicData, google_calendar_reminder_minutes: Number(e.target.value)})} disabled={!isAdmin || isLoading} className="border rounded px-2 py-1 w-full md:w-56">
+                        <option value={15}>15 minutos antes</option>
+                        <option value={60}>1 hora antes</option>
+                        <option value={1440}>1 día antes</option>
+                        <option value={2880}>2 días antes</option>
+                    </select>
+                    <div className="text-sm text-muted-foreground hidden sm:block">Selecciona cuántos minutos antes debe recibir el paciente el recordatorio por Google Calendar. Por defecto: 1 día.</div>
+                </div>
+            </div>
+
             {isAdmin && <Button onClick={handleSave} disabled={isLoading}>{isLoading ? 'Guardando...' : 'Guardar Cambios'}</Button>}
         </CardContent>
     );
@@ -352,37 +473,6 @@ export default function SettingsPage() {
       setIsEditRolesModalOpen(true);
   };
 
-  const handleDeleteMember = async (memberId: string) => {
-      const { error } = await deleteMember(memberId);
-      if (error) {
-          toast({ variant: 'destructive', title: 'Error al eliminar', description: error });
-      } else {
-          toast({ title: 'Miembro Eliminado', description: 'El usuario ha sido eliminado exitosamente.' });
-          fetchUserData();
-      }
-  }
-
-  React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const g = params.get('google-auth');
-      if (g === 'success') {
-        toast({ title: 'Google Calendar conectado', description: 'La integración se ha configurado correctamente.' });
-      } else if (g === 'error') {
-        toast({ variant: 'destructive', title: 'Error Google Calendar', description: 'No se pudo completar la autorización.' });
-      }
-    }
-  }, [toast]);
-
-  async function handleConnectGoogle() {
-    const { url, error } = await getGoogleAuthUrl();
-    if (error || !url) {
-      toast({ variant: 'destructive', title: 'Error', description: error || 'No se pudo iniciar la conexión con Google.' });
-      return;
-    }
-    window.location.href = url;
-  }
-
   const user = userData && userData.user ? userData.user : null;
   const profile = userData && userData.profile ? userData.profile : null;
   const clinic = userData && userData.clinic ? userData.clinic : null;
@@ -393,16 +483,147 @@ export default function SettingsPage() {
   const isStaff = profile && profile.roles ? profile.roles.includes('staff') : false;
   const tabsGridClass = isAdmin ? 'grid-cols-4' : canManageIntegrations ? 'grid-cols-2' : 'grid-cols-1';
 
-  // Add this line to determine if Google Calendar is connected
-  const isGoogleCalendarConnected = !!(profile && profile.google_calendar_connected);
+  // Combine profile flag and optional top-level flag returned by server. Use safe any-cast for userData.
+  const isGoogleCalendarConnected = Boolean(
+    (profile && (profile.google_calendar_connected === true || profile.google_calendar_connected === 'true' || profile.google_calendar_connected === 1 || profile.google_calendar_connected === '1' || Boolean(profile.google_calendar_connected)))
+    || ((userData as any)?.isGoogleCalendarConnected === true || (userData as any)?.isGoogleCalendarConnected === 'true' || (userData as any)?.isGoogleCalendarConnected === 1 || (userData as any)?.isGoogleCalendarConnected === '1' || Boolean((userData as any)?.isGoogleCalendarConnected))
+  );
 
-  async function handleDisconnectGoogle() {
-    const { error } = await disconnectGoogleAccount();
-    if (error) {
-      toast({ variant: 'destructive', title: 'Error', description: error });
-    } else {
-      toast({ title: 'Google desconectado', description: 'Se ha desconectado tu cuenta de Google Calendar.' });
+  // --- Members UI state and helpers (search, filter, quick actions) ---
+  const [memberSearch, setMemberSearch] = React.useState<string>('');
+  const [memberRoleFilter, setMemberRoleFilter] = React.useState<string>('all');
+  const [membersActionLoading, setMembersActionLoading] = React.useState(false);
+
+  // Source members (compatibility: clinic.members or team_members) -> fall back to teamMembers
+  const rawMembers = (clinic && (clinic.members || clinic.team_members)) || teamMembers || [];
+
+  const filteredMembers = React.useMemo(() => {
+    const q = memberSearch.trim().toLowerCase();
+    return (rawMembers as any[]).filter(m => {
+      if (memberRoleFilter !== 'all') {
+        const rolesArr = m.role ? [m.role] : (m.roles || []);
+        const rolesLower = rolesArr.map((r:any) => String(r).toLowerCase());
+        if (!rolesLower.includes(memberRoleFilter.toLowerCase())) return false;
+      }
+      if (!q) return true;
+      const name = ((m.first_name || '') + ' ' + (m.last_name || '')).toLowerCase();
+      const email = (m.user_email || m.email || '').toLowerCase();
+      return name.includes(q) || email.includes(q);
+    });
+  }, [rawMembers, memberSearch, memberRoleFilter]);
+
+  async function handleChangeMemberRole(memberId: string, newRole: string) {
+    if (!isAdmin) {
+      toast({ variant: 'destructive', title: 'Permiso denegado', description: 'Solo administradores pueden cambiar roles.' });
+      return;
+    }
+    setMembersActionLoading(true);
+    try {
+      const res = await fetch('/api/members/update-role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberId, role: newRole })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || 'Error actualizando rol');
+      toast({ title: 'Rol actualizado', description: 'El rol del miembro se ha actualizado.' });
       await fetchUserData();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Error', description: err?.message || String(err) });
+    } finally {
+      setMembersActionLoading(false);
+    }
+  }
+
+  async function handleToggleMemberActive(memberId: string, currentActive: boolean) {
+    if (!isAdmin) {
+      toast({ variant: 'destructive', title: 'Permiso denegado', description: 'Solo administradores pueden cambiar el estado de miembros.' });
+      return;
+    }
+    setMembersActionLoading(true);
+    try {
+      const res = await fetch('/api/members/update-active', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memberId, is_active: !currentActive })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error || 'Error actualizando estado');
+      toast({ title: currentActive ? 'Miembro desactivado' : 'Miembro reactivado' });
+      await fetchUserData();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Error', description: err?.message || String(err) });
+    } finally {
+      setMembersActionLoading(false);
+    }
+  }
+
+  // Guarded delete: only admins
+  async function handleDeleteMemberGuarded(memberId: string) {
+    if (!isAdmin) {
+      toast({ variant: 'destructive', title: 'Permiso denegado', description: 'Solo administradores pueden eliminar miembros.' });
+      return;
+    }
+    await handleDeleteMember(memberId);
+  }
+
+  // Added: actual delete handler used by the guarded wrapper above
+  async function handleDeleteMember(memberId: string) {
+    setMembersActionLoading(true);
+    try {
+      // The server action may accept an object or a raw id. Try the object form first.
+      const res = await deleteMember({ memberId } as any);
+      if (res && (res as any).error) throw new Error((res as any).error);
+
+      toast({ title: 'Miembro eliminado', description: 'El miembro ha sido eliminado correctamente.' });
+      await fetchUserData();
+    } catch (err: any) {
+      // Fallback: try calling with raw id in case server action expects that signature
+      try {
+        const res2 = await deleteMember(memberId as any);
+        if (res2 && (res2 as any).error) throw new Error((res2 as any).error);
+        toast({ title: 'Miembro eliminado', description: 'El miembro ha sido eliminado correctamente.' });
+        await fetchUserData();
+      } catch (err2: any) {
+        toast({ variant: 'destructive', title: 'Error', description: err2?.message || String(err2) });
+      }
+    } finally {
+      setMembersActionLoading(false);
+    }
+  }
+
+  // Connect to Google Calendar: open OAuth URL returned by server
+  async function handleConnectGoogle() {
+    try {
+      const res = await getGoogleAuthUrl();
+      const url = typeof res === 'string' ? res : (res && (res as any).url) || (res && (res as any).authUrl);
+      if (url) {
+        // Redirect the browser to the OAuth URL
+        window.location.href = url;
+      } else {
+        throw new Error((res && (res as any).error) || 'No se obtuvo la URL de autorización.');
+      }
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Error', description: err?.message || String(err) });
+    }
+  }
+
+  // Disconnect Google Calendar account
+  async function handleDisconnectGoogle() {
+    if (!canManageIntegrations) {
+      toast({ variant: 'destructive', title: 'Permiso denegado', description: 'No tienes permisos para desconectar Google Calendar.' });
+      return;
+    }
+    setMembersActionLoading(true);
+    try {
+      const res = await disconnectGoogleAccount();
+      if (res && (res as any).error) throw new Error((res as any).error);
+      toast({ title: 'Desconectado', description: 'La cuenta de Google Calendar ha sido desconectada.' });
+      await fetchUserData();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Error', description: err?.message || String(err) });
+    } finally {
+      setMembersActionLoading(false);
     }
   }
 
@@ -490,40 +711,101 @@ export default function SettingsPage() {
                                 </div>
                                 <Button size="sm" className="h-8 gap-1" disabled={!isAdmin} onClick={() => setIsInviteModalOpen(true)}>
                                     <PlusCircle className="h-3.5 w-3.5" />
-                                    <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                                        Invitar Miembro
-                                    </span>
+                                    <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">Invitar Miembro</span>
                                 </Button>
                             </div>
                         </CardHeader>
                         <CardContent>
+                            {/* Search and filter controls */}
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+                                <div className="flex-1 min-w-[200px]">
+                                    <Label htmlFor="member-search">Buscar Miembro</Label>
+                                    <Input 
+                                        id="member-search" 
+                                        value={memberSearch} 
+                                        onChange={(e) => setMemberSearch(e.target.value)} 
+                                        placeholder="Nombre o email..." 
+                                        disabled={!isAdmin}
+                                    />
+                                </div>
+                                <div className="min-w-[150px]">
+                                    <Label htmlFor="role-filter">Filtrar por Rol</Label>
+                                    <select 
+                                        id="role-filter" 
+                                        value={memberRoleFilter} 
+                                        onChange={(e) => setMemberRoleFilter(e.target.value)} 
+                                        className="border rounded px-2 py-1 w-full"
+                                        disabled={!isAdmin}
+                                    >
+                                        <option value="all">Todos los Roles</option>
+                                        <option value="admin">Admin</option>
+                                        <option value="doctor">Doctor</option>
+                                        <option value="staff">Staff</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <Table>
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Nombre</TableHead>
                                         <TableHead>Email</TableHead>
                                         <TableHead>Puesto</TableHead>
-                                        <TableHead>Roles en App</TableHead>
+                                        <TableHead>Rol</TableHead>
+                                        <TableHead>Estado</TableHead>
                                         <TableHead><span className="sr-only">Acciones</span></TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {teamMembers && teamMembers.map(member => (
+                                    {filteredMembers.map((member: TeamMember) => (
                                         <TableRow key={member.id}>
                                             <TableCell className="font-medium">{member.first_name} {member.last_name}</TableCell>
-                                            <TableCell>{member.user_email}</TableCell>
+                                            <TableCell>{member.user_email || member.email || 'N/A'}</TableCell>
                                             <TableCell>{member.job_title || 'N/A'}</TableCell>
-                                            <TableCell className="capitalize">{member.roles?.join(', ') || 'N/A'}</TableCell>
+                                            {/* Role: inline select for admins, readonly text otherwise */}
+                                            <TableCell className="capitalize">
+                                                {isAdmin ? (
+                                                    <select
+                                                        value={member.role || (member.roles ? member.roles[0] : '')}
+                                                        onChange={(e) => handleChangeMemberRole(member.id, e.target.value)}
+                                                        disabled={membersActionLoading || (user ? ((member.user_id ? member.user_id === user.id : false) || (member.id === user.id)) : false)}
+                                                        className="border rounded px-2 py-1"
+                                                    >
+                                                        <option value="admin">Admin</option>
+                                                        <option value="doctor">Doctor</option>
+                                                        <option value="staff">Staff</option>
+                                                    </select>
+                                                ) : (
+                                                    <span>{member.role || (member.roles ? member.roles.join(', ') : 'N/A')}</span>
+                                                )}
+                                            </TableCell>
+
+                                            {/* Active state: toggle button for admins, label otherwise */}
+                                            <TableCell>
+                                                {isAdmin ? (
+                                                    <Button size="sm" variant={member.is_active === false ? 'ghost' : 'outline'} onClick={() => handleToggleMemberActive(member.id, !!member.is_active)} disabled={membersActionLoading || (user ? ((member.user_id ? member.user_id === user.id : false) || (member.id === user.id)) : false)}>
+                                                        {member.is_active === false ? 'Reactivar' : 'Desactivar'}
+                                                    </Button>
+                                                ) : (
+                                                    (member.is_active === false) ? <span className="text-muted-foreground">Inactivo</span> : <span className="text-green-600">Activo</span>
+                                                )}
+                                            </TableCell>
+
                                             <TableCell>
                                                 <AlertDialog>
                                                     <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" disabled={!isAdmin || (user ? member.id === user.id : false)}><MoreHorizontal className="w-4 h-4"/></Button></DropdownMenuTrigger>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="icon" disabled={!isAdmin || (user ? ((member.user_id ? member.user_id === user.id : false) || (member.id === user.id)) : false)}>
+                                                                <MoreHorizontal className="w-4 h-4"/>
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
                                                         <DropdownMenuContent>
                                                             <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                                                             <DropdownMenuSeparator />
-                                                            <DropdownMenuItem onClick={() => handleEditClick(member)}><Edit className="mr-2 h-4 w-4" />Editar Roles</DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => handleEditClick(member)} disabled={!isAdmin}><Edit className="mr-2 h-4 w-4" />Editar Roles</DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => handleToggleMemberActive(member.id, !!member.is_active)} disabled={!isAdmin}>{member.is_active === false ? 'Reactivar' : 'Desactivar'}</DropdownMenuItem>
                                                             <AlertDialogTrigger asChild>
-                                                                <DropdownMenuItem className="text-destructive"><Trash2 className="mr-2 h-4 w-4" />Eliminar</DropdownMenuItem>
+                                                                <DropdownMenuItem className="text-destructive" onClick={() => {}} disabled={!isAdmin}><Trash2 className="mr-2 h-4 w-4" />Eliminar</DropdownMenuItem>
                                                             </AlertDialogTrigger>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
@@ -536,7 +818,7 @@ export default function SettingsPage() {
                                                         </AlertDialogHeader>
                                                         <AlertDialogFooter>
                                                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => handleDeleteMember(member.id)}>Eliminar</AlertDialogAction>
+                                                            <AlertDialogAction onClick={() => handleDeleteMemberGuarded(member.id)}>Eliminar</AlertDialogAction>
                                                         </AlertDialogFooter>
                                                     </AlertDialogContent>
                                                 </AlertDialog>

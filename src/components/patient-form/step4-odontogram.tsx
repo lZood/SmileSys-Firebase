@@ -1,9 +1,8 @@
-
 import { Odontogram, ToothState } from '@/components/odontogram';
 import { Label } from '@/components/ui/label';
 import * as React from 'react';
 
-export const Step4Odontogram = ({ formData, setFormData }: { formData: any, setFormData: Function }) => {
+export const Step4Odontogram = ({ formData, setFormData, compact }: { formData: any, setFormData: Function, compact?: boolean }) => {
     
     const handleOdontogramChange = (toothState: ToothState) => {
         setFormData({ ...formData, dentalChart: toothState });
@@ -20,6 +19,7 @@ export const Step4Odontogram = ({ formData, setFormData }: { formData: any, setF
             <Odontogram 
                 onChange={handleOdontogramChange}
                 initialData={formData.dentalChart}
+                compact={compact}
             />
              <div className="text-xs text-center text-muted-foreground pt-4">
                 El estado del odontograma se guardará junto con el resto del formulario.

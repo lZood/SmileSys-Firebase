@@ -46,7 +46,6 @@ import { getAppointments } from '@/app/appointments/actions';
 import { startOfToday, format, differenceInMinutes, parse } from 'date-fns';
 import { Toaster, toast as hotToast } from 'react-hot-toast';
 import { useUserData } from '@/context/UserDataProvider';
-// import { useDebounce } from '@/hooks/use-mobile'; // reutilizamos hook simple si existe, si no, ignorar
 
 
 type DashboardLayoutProps = {
@@ -129,105 +128,39 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const [isExpanded, setIsExpanded] = React.useState(true);
   const { userData, isLoading } = useUserData();
+  React.useEffect(() => {
+    console.log('[DashboardLayout] userData changed:', userData);
+  }, [userData]);
+
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
   const [remindersToDismiss, setRemindersToDismiss] = React.useState<string[]>([]);
+
+  // Search state (was accidentally removed)
   const [globalSearch, setGlobalSearch] = React.useState('');
   const [searchResults, setSearchResults] = React.useState<any[]>([]);
   const [isSearching, setIsSearching] = React.useState(false);
   const [showResults, setShowResults] = React.useState(false);
   const searchTimeout = React.useRef<NodeJS.Timeout | null>(null);
-  
-  // Real-time notifications and reminders
+
+  // Normalize roles coming from the server (array or comma-separated string, trim and lowercase)
+  const rawRoles = userData?.profile?.roles ?? [];
+  const userRoles = React.useMemo(() => {
+    if (Array.isArray(rawRoles)) return rawRoles.map(r => String(r).trim().toLowerCase());
+    if (typeof rawRoles === 'string') return rawRoles.split(',').map(r => r.trim().toLowerCase());
+    return [] as string[];
+  }, [rawRoles]);
+
   React.useEffect(() => {
-    const supabase = createClient();
+    console.debug('[DashboardLayout] normalized userRoles:', userRoles);
+  }, [userRoles]);
 
-    // 1. Fetch initial notifications
-    const fetchNotifications = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            const { data, error } = await supabase
-                .from('notifications')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false });
-            
-            if (data) setNotifications(data);
-        }
-    };
-    fetchNotifications();
-
-    // 2. Listen for new notifications in real-time
-    const notificationsChannel = supabase
-      .channel('public:notifications')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, 
-        (payload) => {
-          // Check if the notification is for the current user
-          if ((payload.new as Notification).user_id === userData?.user?.id) {
-             setNotifications(currentNotifications => [
-                payload.new as Notification, 
-                ...currentNotifications
-             ]);
-          }
-        }
-      )
-      .subscribe();
-      
-    // 3. Reminder logic
-    let reminderInterval: NodeJS.Timeout;
-
-    const checkAppointmentsForReminders = async () => {
-        const today = startOfToday();
-        const todayString = format(today, 'yyyy-MM-dd');
-        const appointmentsToday = await getAppointments({
-            startDate: todayString,
-            endDate: todayString,
-        });
-
-        const now = new Date();
-        appointmentsToday.forEach(app => {
-             if (remindersToDismiss.includes(app.id)) return;
-
-            const appTime = parse(app.time, 'HH:mm', new Date(app.date.replace(/-/g, '/')));
-            const diff = differenceInMinutes(appTime, now);
-
-            if (diff > 0 && diff <= 5) {
-                const toastId = `reminder-${app.id}`;
-                 hotToast((t) => (
-                    <div className="flex items-center justify-between w-full">
-                        <div className="flex-1">
-                            <p className="font-bold">Recordatorio de Cita</p>
-                            <p>Tu cita con {app.patientName} empieza en {diff} minuto(s).</p>
-                        </div>
-                        <Button variant="ghost" size="icon" onClick={() => {
-                            setRemindersToDismiss(prev => [...prev, app.id]);
-                            hotToast.dismiss(t.id);
-                        }}><X className="h-4 w-4" /></Button>
-                    </div>
-                 ), {
-                    id: toastId, // Use a unique ID to prevent duplicates
-                    duration: 60000 // 1 minute
-                 });
-            }
-        });
-    };
-    
-    checkAppointmentsForReminders(); // Check immediately on load
-    reminderInterval = setInterval(checkAppointmentsForReminders, 60000);
-    
-    // Cleanup on unmount
-    return () => {
-      supabase.removeChannel(notificationsChannel);
-      clearInterval(reminderInterval);
-    };
-  }, [userData?.user?.id, remindersToDismiss]);
-
-
-
-
-  const userRoles = userData?.profile?.roles || [];
-  const navItems = allNavItems.filter(item => 
-      userRoles.some((userRole: string) => item.roles.includes(userRole))
-  );
+  // Compute nav items using normalized role strings (also normalize nav item roles)
+  const navItems = React.useMemo(() => {
+    return allNavItems.filter(item => {
+      const allowed = item.roles.map(r => r.toLowerCase());
+      return userRoles.some(ur => allowed.includes(ur));
+    });
+  }, [userRoles]);
 
   const isNavItemActive = (href: string) => {
     return pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
@@ -384,10 +317,27 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     }, 300);
   }, [globalSearch]);
 
+  const [smtpStatus, setSmtpStatus] = React.useState<any>(null);
+  
+  React.useEffect(() => {
+     const fetchStatus = async () => {
+       try {
+         const res = await fetch('/api/smtp/status');
+         if (res.ok) {
+           const data = await res.json();
+           setSmtpStatus(data);
+         }
+       } catch (e) {
+         console.warn('Could not fetch SMTP status', e);
+       }
+     };
+     fetchStatus();
+   }, []);
+
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40">
        <Toaster position="bottom-right" />
-      <aside className={cn(
+       <aside className={cn(
         "fixed inset-y-0 left-0 z-10 hidden flex-col border-r bg-background sm:flex transition-all duration-300",
         isExpanded ? 'w-56' : 'w-20'
         )}>
@@ -406,14 +356,17 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             {isExpanded ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </Button>
         </div>
+        { !userData && !isLoading && (
+          <div className="p-4 text-sm text-muted-foreground">No se han cargado datos de usuario. Revisa consola/server logs.</div>
+        )}
         <SidebarNav />
         <BottomNav />
       </aside>
       <div className={cn(
-        "flex flex-col sm:gap-4 sm:py-4 transition-all duration-300",
+        "flex flex-col sm:gap-4 sm:py-4 transition-all duration-300 w-full",
         isExpanded ? 'sm:pl-56' : 'sm:pl-20'
         )}>
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 w-full">
           <Sheet>
             <SheetTrigger asChild>
               <Button size="icon" variant="outline" className="sm:hidden">
@@ -507,16 +460,20 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 {isLoading ? (
                     <Skeleton className="h-8 w-8 rounded-full" />
                 ) : (
-                    <Avatar>
-                      {userData?.profile?.photo_url ? (
-                          <AvatarImage src={userData.profile.photo_url} alt="User Avatar" />
-                      ) : (
-                         <AvatarFallback>
-                            {userData?.profile?.first_name?.charAt(0)}
-                            {userData?.profile?.last_name?.charAt(0)}
-                          </AvatarFallback>
-                      )}
-                    </Avatar>
+                    userData?.profile ? (
+                      <Avatar>
+                        {userData.profile.photo_url ? (
+                            <AvatarImage src={userData.profile.photo_url} alt="User Avatar" />
+                        ) : (
+                           <AvatarFallback>
+                              {userData.profile.first_name?.charAt(0)}
+                              {userData.profile.last_name?.charAt(0)}
+                            </AvatarFallback>
+                        )}
+                      </Avatar>
+                    ) : (
+                      <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-sm text-muted-foreground">?</div>
+                    )
                 )}
               </Button>
             </DropdownMenuTrigger>
@@ -534,7 +491,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         </header>
-        <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
+        <main className="w-full px-4 md:px-6">
           {children}
         </main>
       </div>

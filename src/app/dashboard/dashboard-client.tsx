@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getUserData } from '../user/actions'; // Import for types
 import { getDashboardData } from './actions'; // Import for types
 import { createClient } from '@/lib/supabase/client'; // Import for real-time
+import { useRouter } from 'next/navigation';
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
@@ -112,6 +113,7 @@ export function DashboardClient({
     initialPatients: Patient[];
     initialDoctors: Doctor[];
 }) {
+    const router = useRouter();
     const [isWelcomeTourOpen, setIsWelcomeTourOpen] = React.useState(false);
 
     // Use initial data from props
@@ -127,7 +129,7 @@ export function DashboardClient({
     });
     const [notifications, setNotifications] = React.useState<Notification[]>([]);
     const [remindersToDismiss, setRemindersToDismiss] = React.useState<string[]>([]);
-
+    const { toast } = useToast();
 
     const openModal = (modal: 'appointment' | 'patient' | 'payment') => setModalState(prev => ({ ...prev, [modal]: true }));
     const closeModal = (modal: 'appointment' | 'patient' | 'payment') => setModalState(prev => ({ ...prev, [modal]: false }));
@@ -232,10 +234,28 @@ export function DashboardClient({
 
 
         const now = new Date();
-        appointmentsToday.forEach(app => {
+        // Helper to extract time and date from differing appointment shapes
+        const extractTimeAndDate = (a: any): { time: string | null; date: string | null } => {
+            if (!a) return { time: null, date: null };
+            // shape: { time, date }
+            if ('time' in a && 'date' in a) return { time: a.time, date: a.date };
+            // shape: { appointment_time, date }
+            if ('appointment_time' in a && 'date' in a) return { time: a.appointment_time, date: a.date };
+            // shape: { appointment_time, appointment_date }
+            if ('appointment_time' in a && 'appointment_date' in a) return { time: a.appointment_time, date: a.appointment_date };
+            // fallback guesses
+            return { time: a.time ?? a.appointment_time ?? null, date: a.date ?? a.appointment_date ?? null };
+        };
+
+        (appointmentsToday || []).forEach((app: any) => {
              if (remindersToDismiss.includes(app.id)) return;
 
-            const appTime = parse(app.time, 'HH:mm', new Date(app.date.replace(/-/g, '/')));
+            const { time, date } = extractTimeAndDate(app);
+            if (!time || !date) return; // can't compute reminder without both
+
+            // Normalize date string for parse
+            const normalizedDate = String(date).replace(/-/g, '/');
+            const appTime = parse(String(time), 'HH:mm', new Date(normalizedDate));
             const diff = differenceInMinutes(appTime, now);
 
             // Only show reminder if within 5 minutes AND appointment hasn't passed
@@ -303,7 +323,7 @@ export function DashboardClient({
                         Aquí tienes un resumen de la actividad de tu clínica hoy.
                     </p>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">Pacientes Totales</CardTitle>
@@ -353,7 +373,8 @@ export function DashboardClient({
                     <CardHeader>
                         <CardTitle>Acciones Rápidas</CardTitle>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* 2x2 layout on small screens, 3 columns on large */}
+                    <CardContent className="grid grid-cols-2 gap-4 lg:grid-cols-3">
                         <Button variant="outline" className="h-20 flex flex-col items-center justify-center gap-2" onClick={() => openModal('appointment')}>
                             <CalendarPlus className="h-6 w-6" />
                             <span className="text-base">Agendar Cita</span>
@@ -366,8 +387,54 @@ export function DashboardClient({
                             <FilePlus className="h-6 w-6" />
                             <span className="text-base">Registrar Pago</span>
                         </Button>
-                    </CardContent>
-                </Card>
+                        {/* Adjust inventory quick action: prompt for item and new qty */}
+                        <Button
+                            variant="outline"
+                            className="h-20 flex flex-col items-center justify-center gap-2"
+                            onClick={async () => {
+                                try {
+                                    const product = window.prompt('Producto (ej: cepillos):', 'cepillos');
+                                    if (!product) return;
+                                    const qtyStr = window.prompt(`Nueva cantidad para "${product}":`, '0');
+                                    if (qtyStr === null) return;
+                                    const quantity = Number(qtyStr);
+                                    if (Number.isNaN(quantity)) {
+                                        toast({ variant: 'destructive', title: 'Cantidad inválida', description: 'Introduce un número válido.' });
+                                        return;
+                                    }
+
+                                    // Try to call a backend endpoint; if not available, simulate success
+                                    let ok = false;
+                                    try {
+                                        const res = await fetch('/api/inventory/adjust', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ product, quantity }),
+                                        });
+                                        ok = res.ok;
+                                    } catch (e) {
+                                        ok = false;
+                                    }
+
+                                    if (ok) {
+                                        toast({ title: 'Stock actualizado', description: `Se actualizó ${product} a ${quantity}.` });
+                                        router.push('/inventory');
+                                    } else {
+                                        // Fallback: show simulated success and navigate to inventory page
+                                        toast({ title: 'Movimiento simulado', description: `Simulado: ${product} -> ${quantity}` });
+                                        router.push('/inventory');
+                                    }
+                                } catch (err) {
+                                    console.error('Error ajustando inventario', err);
+                                    toast({ variant: 'destructive', title: 'Error', description: 'No se pudo ajustar el inventario.' });
+                                }
+                            }}
+                        >
+                            <Package className="h-6 w-6" />
+                            <span className="text-base">Ajustar Stock</span>
+                        </Button>
+                     </CardContent>
+                 </Card>
 
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
                     <Card className="lg:col-span-4">

@@ -624,13 +624,15 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
   };
 
   const handleSaveChartChanges = async () => {
-      if (!patient || !dentalChartState || !clinic) return;
-
-      const { error } = await updatePatientDentalChart({
-          patientId: patient.id,
-          clinicId: clinic.id,
-          dentalChart: dentalChartState
-      });
+      // Safely extract clinicId (TS may not know clinic has 'id')
+      const clinicId = clinic && typeof clinic === 'object' && 'id' in clinic ? (clinic as any).id : undefined;
+      if (!patient || !dentalChartState || !clinicId) return;
+    
+          const { error } = await updatePatientDentalChart({
+              patientId: patient.id,
+              clinicId: clinicId,
+              dentalChart: dentalChartState
+          });
 
       if (error) {
           toast({ variant: 'destructive', title: 'Error', description: error });
@@ -714,8 +716,8 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
             </Link>
         </Button>
       </div>
-      <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-7">
-        <div className="lg:col-span-2 md:col-span-4">
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-3 lg:grid-cols-12">
+        <div className="md:col-span-1 lg:col-span-4">
           <Card>
             <CardHeader className="flex flex-col items-center text-center">
               <Avatar className="h-24 w-24 mb-4">
@@ -794,7 +796,7 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
               </CardContent>
             </Card>
         </div>
-        <div className="lg:col-span-5 md:col-span-4">
+        <div className="md:col-span-2 lg:col-span-8">
             <Tabs defaultValue={defaultTab}>
                 <TabsList>
                     <TabsTrigger value="odontogram">Odontograma</TabsTrigger>
@@ -818,7 +820,12 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <Odontogram initialData={dentalChartState} onChange={handleOdontogramChange} />
+                            {/* Make odontogram horizontally scrollable on very small screens */}
+                            <div className="w-full overflow-auto">
+                              <div className="max-w-full">
+                                <Odontogram initialData={dentalChartState} onChange={handleOdontogramChange} />
+                              </div>
+                            </div>
                             {isChartDirty && (
                                 <div className="flex justify-end gap-2 mt-4">
                                     <Button variant="outline" onClick={handleCancelChartChanges}>Cancelar</Button>

@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -20,6 +19,7 @@ import {
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   Dialog,
   DialogContent,
@@ -182,6 +182,7 @@ const AppointmentDetailsModal = ({
 }
 
 export default function AppointmentsCalendarPage() {
+  const isMobile = useIsMobile();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -396,8 +397,9 @@ export default function AppointmentsCalendarPage() {
 
   return (
     <div className="flex flex-col gap-6">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-             <Card>
+        <div className="hidden md:block px-4 pb-2">
+      <div className="flex gap-3 overflow-x-auto md:overflow-visible md:grid md:grid-cols-3">
+             <Card className="min-w-[45%] w-[45%] flex-shrink-0 md:min-w-0 md:w-auto">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Citas Pendientes Hoy</CardTitle>
                     <ListTodo className="h-4 w-4 text-muted-foreground" />
@@ -406,8 +408,8 @@ export default function AppointmentsCalendarPage() {
                     {isLoading ? <Skeleton className="h-7 w-12" /> : <div className="text-2xl font-bold">{pendingToday}</div>}
                     <p className="text-xs text-muted-foreground">Citas programadas o en progreso.</p>
                 </CardContent>
-            </Card>
-            <Card>
+             </Card>
+            <Card className="min-w-[45%] w-[45%] flex-shrink-0 md:min-w-0 md:w-auto">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium">Citas Restantes (Semana)</CardTitle>
                     <CalendarClock className="h-4 w-4 text-muted-foreground" />
@@ -416,18 +418,19 @@ export default function AppointmentsCalendarPage() {
                     {isLoading ? <Skeleton className="h-7 w-12" /> : <div className="text-2xl font-bold">{appointmentsThisWeek}</div>}
                     <p className="text-xs text-muted-foreground">Citas para el resto de la semana.</p>
                 </CardContent>
-            </Card>
-             <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Citas (Mes)</CardTitle>
-                    <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                    {isLoading ? <Skeleton className="h-7 w-12" /> : <div className="text-2xl font-bold">{appointmentsThisMonth}</div>}
-                     <p className="text-xs text-muted-foreground">En {format(currentDate, 'MMMM', { locale: es })}.</p>
-                </CardContent>
-            </Card>
+             </Card>
+             <Card className="hidden md:block">
+                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                     <CardTitle className="text-sm font-medium">Total Citas (Mes)</CardTitle>
+                     <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                 </CardHeader>
+                 <CardContent>
+                     {isLoading ? <Skeleton className="h-7 w-12" /> : <div className="text-2xl font-bold">{appointmentsThisMonth}</div>}
+                      <p className="text-xs text-muted-foreground">En {format(currentDate, 'MMMM', { locale: es })}.</p>
+                 </CardContent>
+             </Card>
         </div>
+      </div>
         <div className="bg-card p-4 sm:p-6 rounded-lg shadow-sm">
             {isFormModalOpen && (
                 <AppointmentForm 
@@ -501,11 +504,15 @@ export default function AppointmentsCalendarPage() {
 
 
           <div className="grid grid-cols-7 border-t border-l border-border">
-            {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((day) => (
-              <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground border-b border-r border-border">
-                {day}
-              </div>
-            ))}
+            {(() => {
+              const shortDays = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+              const fullDays = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+              return shortDays.map((d, i) => (
+                <div key={d} title={fullDays[i]} className="p-2 text-center text-sm font-medium text-muted-foreground border-b border-r border-border">
+                  {d}
+                </div>
+              ));
+            })()}
             {daysInMonth.map((day) => {
               const appointmentsForDay = getAppointmentsForDay(day);
               const maxVisible = 2;
@@ -535,23 +542,62 @@ export default function AppointmentsCalendarPage() {
                         Array.from({ length: 1 }).map((_, i) => <Skeleton key={i} className="h-4 w-full rounded-md" />)
                     ) : (
                         <>
-                            {appointmentsForDay.slice(0, maxVisible).map(app => (
-                            <div key={app.id} className="p-1 bg-primary/10 rounded-md text-primary-dark font-medium truncate flex items-center gap-2">
-                                <span className={cn("h-2 w-2 rounded-full", getAppointmentDotColor(app.status))}></span>
-                                <span className="flex-1 truncate">{app.time} - {app.patientName}</span>
-                            </div>
-                            ))}
-                            {hiddenCount > 0 && (
-                            <div className="text-muted-foreground font-medium pt-1">
-                                +{hiddenCount} más
-                            </div>
-                            )}
+                          {isMobile ? (
+                            // Mobile: compact first appointment + count badge
+                            appointmentsForDay.length === 0 ? null : (
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className={cn("h-2 w-2 rounded-full flex-shrink-0", getAppointmentDotColor(appointmentsForDay[0].status))} aria-hidden="true" />
+                                  <div className="text-xs font-medium truncate min-w-0">{appointmentsForDay[0].time} - {appointmentsForDay[0].patientName}</div>
+                                </div>
+                                <div className="ml-2 flex-shrink-0">
+                                  <span className="inline-flex items-center justify-center bg-primary/10 text-primary rounded-full px-2 py-0.5 text-xs font-semibold" aria-label={`${appointmentsForDay.length} citas`}>{appointmentsForDay.length}</span>
+                                </div>
+                              </div>
+                            )
+                          ) : (
+                            // Desktop: show up to maxVisible pills and +N more
+                            <>
+                              {appointmentsForDay.slice(0, maxVisible).map(app => (
+                                <div key={app.id} className="p-1 bg-primary/10 rounded-md text-primary-dark font-medium truncate flex items-center gap-2">
+                                  <span className={cn("h-2 w-2 rounded-full", getAppointmentDotColor(app.status))}></span>
+                                  <span className="flex-1 truncate">{app.time} - {app.patientName}</span>
+                                </div>
+                              ))}
+                              {hiddenCount > 0 && (
+                                <div className="text-muted-foreground font-medium pt-1">+{hiddenCount} más</div>
+                              )}
+                            </>
+                          )}
                         </>
                     )}
-                  </div>
+                   </div>
                 </div>
               );
             })}
+          </div>
+        </div>
+        {/* Mobile metrics: show two cards below the calendar, aligned with calendar width */}
+        <div className="block md:hidden px-4 mt-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Card>
+              <CardHeader className="flex items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Citas Pendientes Hoy</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? <Skeleton className="h-6 w-8" /> : <div className="text-xl font-bold">{pendingToday}</div>}
+                <p className="text-xs text-muted-foreground">Citas programadas o en progreso.</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Total Citas (Mes)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? <Skeleton className="h-6 w-8" /> : <div className="text-xl font-bold">{appointmentsThisMonth}</div>}
+                <p className="text-xs text-muted-foreground">En {format(currentDate, 'MMMM', { locale: es })}.</p>
+              </CardContent>
+            </Card>
           </div>
         </div>
     </div>

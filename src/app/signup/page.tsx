@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -20,7 +19,6 @@ export default function SignupPage() {
       lastName: '',
       clinicName: '',
       email: '',
-      password: '',
   });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -32,28 +30,37 @@ export default function SignupPage() {
     event.preventDefault();
     setIsLoading(true);
 
-    const { error } = await signUpNewClinic({
+    const result = await signUpNewClinic({
         firstName: formData.firstName,
         lastName: formData.lastName,
         clinicName: formData.clinicName,
         adminEmail: formData.email,
-        password: formData.password,
     });
 
-    if (error) {
+    // Handle backend validation / creation errors
+    if (result?.error) {
         toast({
             variant: 'destructive',
             title: 'Error durante el registro',
-            description: error,
+            description: result.error,
         });
     } else {
+        // Success: show main toast
         toast({
             title: '¡Registro Exitoso!',
-            description: 'Por favor, revisa tu email para verificar tu cuenta antes de iniciar sesión.',
+            description: 'Revisa tu correo para activar la cuenta y crear tu contraseña.',
         });
-        // Redirect to a page that tells them to check their email
-        // For now, redirecting to login. In a real app, a dedicated page is better.
-        router.push('/');
+
+        // If backend returned a warning about email (rate limit), show it as info
+        if (result?.warning) {
+            toast({
+                title: 'Aviso',
+                description: result.warning,
+            });
+        }
+
+        // Redirect to plan selection or check-email page, include email as query param
+        router.push(`/select-plan?email=${encodeURIComponent(formData.email)}`);
     }
     
     setIsLoading(false);
@@ -89,10 +96,6 @@ export default function SignupPage() {
               <Label htmlFor="email">Email</Label>
               <Input id="email" type="email" value={formData.email} onChange={handleChange} required />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="password">Crea una Contraseña</Label>
-              <Input id="password" type="password" required value={formData.password} onChange={handleChange} />
-            </div>
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? 'Creando Cuenta...' : 'Continuar a la Selección de Plan'}
             </Button>
@@ -109,4 +112,3 @@ export default function SignupPage() {
   );
 }
 
-    

@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -21,16 +20,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
+import { cn } from '@/lib/utils';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getInventoryItems, getInventoryCategories, createInventoryItem, createInventoryCategory, adjustStock, updateInventoryItem } from './actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 // Updated type to reflect the new structure from Supabase
 export type InventoryItem = {
@@ -535,6 +535,7 @@ const AdjustStockModal = ({
 }
 
 export default function InventoryPage() {
+    const isMobile = useIsMobile();
     const [inventory, setInventory] = React.useState<InventoryItem[]>([]);
     const [categories, setCategories] = React.useState<InventoryCategory[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
@@ -661,87 +662,125 @@ export default function InventoryPage() {
         )}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Inventario</CardTitle>
-                  <CardDescription>
-                    Gestiona los materiales y productos de tu clínica.
-                  </CardDescription>
-                </div>
-                 <div className="flex items-center gap-2">
-                     <div className="flex items-center gap-2">
-                        <div className="relative flex-1 max-w-xs">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input 
-                                type="search" 
-                                placeholder="Buscar artículos..." 
-                                className="pl-8" 
-                                value={filters.searchTerm}
-                                onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
-                            />
-                        </div>
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => setIsFilterDialogOpen(true)}
-                            className={cn(
-                                "h-9 w-9",
-                                (filters.status.length > 0 || filters.category.length > 0 || filters.stockRange.min || filters.stockRange.max) && 
-                                "bg-primary text-primary-foreground hover:bg-primary/90"
-                            )}
-                        >
-                            <Package className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" className="h-9 gap-2" onClick={() => setIsNewItemModalOpen(true)}>
-                            <PlusCircle className="h-4 w-4" />
-                            <span>Agregar Artículo</span>
-                        </Button>
-                    </div>
-                </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Inventario</CardTitle>
+                <CardDescription className="hidden md:block">Gestiona los materiales y productos de tu clínica.</CardDescription>
               </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" className="h-9 gap-2" onClick={() => setIsNewItemModalOpen(true)}>
+                  <PlusCircle className="h-4 w-4" />
+                  <span>Agregar Artículo</span>
+                </Button>
+              </div>
+            </div>
+            {/* Search and filters in a separate row */}
+            <div className="mt-3 flex items-center gap-2">
+              <div className="relative flex-1 max-w-xs">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Buscar artículos..."
+                  className="pl-8"
+                  value={filters.searchTerm}
+                  onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setIsFilterDialogOpen(true)}
+                className={cn(
+                  "h-9 w-9",
+                  (filters.status.length > 0 || filters.category.length > 0 || filters.stockRange.min || filters.stockRange.max) &&
+                    "bg-primary text-primary-foreground hover:bg-primary/90"
+                )}
+              >
+                <Package className="h-4 w-4" />
+              </Button>
+            </div>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Artículo</TableHead>
-                    <TableHead>Categoría</TableHead>
-                    <TableHead>Stock Actual</TableHead>
-                    <TableHead>Alerta de Stock</TableHead>
-                    <TableHead>Estado</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              {isMobile ? (
+                <div className="divide-y">
                   {isLoading ? (
-                      Array.from({length: 5}).map((_, i) => (
-                        <TableRow key={i}>
-                            <TableCell colSpan={5}><Skeleton className="h-5 w-full" /></TableCell>
-                        </TableRow>
-                      ))
+                    Array.from({length: 5}).map((_, i) => (
+                      <div key={i} className="p-4">
+                        <Skeleton className="h-5 w-full" />
+                      </div>
+                    ))
                   ) : filteredInventory.length > 0 ? (
                     filteredInventory.map((item) => (
-                        <TableRow key={item.id} onClick={() => handleRowClick(item)} className="cursor-pointer">
-                        <TableCell className="font-medium">{item.name}</TableCell>
-                        <TableCell>{item.category}</TableCell>
-                        <TableCell>{item.stock} unidades</TableCell>
-                        <TableCell>{item.min_stock} unidades</TableCell>
-                        <TableCell>
-                            <Badge variant="outline" className={cn(getStatusClass(item.status), 'capitalize')}>
-                            {item.status}
-                            </Badge>
-                        </TableCell>
-                        </TableRow>
+                      <div key={item.id} className="p-4 cursor-pointer" onClick={() => handleRowClick(item)}>
+                        <div className="flex items-start justify-between">
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{item.name}</div>
+                            <div className="text-sm text-muted-foreground truncate">{item.category}</div>
+                          </div>
+                          <div className="text-right ml-4">
+                            <div className="text-lg font-bold">{item.stock}</div>
+                            <div className="text-xs text-muted-foreground">unidades</div>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between">
+                          <div className="text-sm text-muted-foreground">Alerta: {item.min_stock}</div>
+                          <Badge variant="outline" className={cn(getStatusClass(item.status), 'capitalize')}>{item.status}</Badge>
+                        </div>
+                      </div>
                     ))
                   ) : (
-                    <TableRow>
-                        <TableCell colSpan={5} className="h-24 text-center">
-                           {filters.searchTerm ? `No se encontraron artículos para "${filters.searchTerm}"` : "No hay artículos en el inventario. ¡Agrega el primero!"}
-                        </TableCell>
-                    </TableRow>
+                    <div className="p-4 text-center">
+                      {filters.searchTerm ? `No se encontraron artículos para "${filters.searchTerm}"` : "No hay artículos en el inventario. ¡Agrega el primero!"}
+                    </div>
                   )}
-                </TableBody>
-              </Table>
-            </CardContent>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <div className="min-w-[640px]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Artículo</TableHead>
+                          <TableHead>Categoría</TableHead>
+                          <TableHead>Stock Actual</TableHead>
+                          <TableHead>Alerta de Stock</TableHead>
+                          <TableHead>Estado</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {isLoading ? (
+                          Array.from({length: 5}).map((_, i) => (
+                            <TableRow key={i}>
+                              <TableCell colSpan={5}><Skeleton className="h-5 w-full" /></TableCell>
+                            </TableRow>
+                          ))
+                        ) : filteredInventory.length > 0 ? (
+                          filteredInventory.map((item) => (
+                            <TableRow key={item.id} onClick={() => handleRowClick(item)} className="cursor-pointer">
+                              <TableCell className="font-medium">{item.name}</TableCell>
+                              <TableCell>{item.category}</TableCell>
+                              <TableCell>{item.stock} unidades</TableCell>
+                              <TableCell>{item.min_stock} unidades</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className={cn(getStatusClass(item.status), 'capitalize')}>
+                                  {item.status}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={5} className="h-24 text-center">
+                              {filters.searchTerm ? `No se encontraron artículos para "${filters.searchTerm}"` : "No hay artículos en el inventario. ¡Agrega el primero!"}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+             </CardContent>
           </Card>
       </div>
     </DashboardLayout>

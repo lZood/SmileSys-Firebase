@@ -68,4 +68,13 @@
   }
 }
 
-    
+/* Prevent horizontal scroll caused by small overflow from components */
+html, body, #__next {
+  overflow-x: hidden;
+}
+
+/* Use border-box everywhere to make sizing predictable */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
