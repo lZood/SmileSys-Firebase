@@ -342,145 +342,223 @@ export async function getAppointmentsForPatient(patientId: string) {
     return data;
 }
 
-export async function getDoctorAvailability(doctorId: string, date: string) {
-    if (!doctorId || !date) {
-        return { error: "Doctor y fecha son requeridos.", data: [] };
+export async function getDoctorAvailability(doctorId?: string, date?: string, patientId?: string) {
+    if (!date || (!doctorId && !patientId)) {
+        return { error: "Fecha y (doctor o paciente) son requeridos.", data: [] };
     }
 
     const supabase = await createClient();
-    
-    // 1. Define working hours and time slots
-    const workDayStart = 8; // 8 AM
-    const workDayEnd = 17; // 5 PM (17:00)
-    const slotDuration = 30; // in minutes
-    const allSlots: string[] = [];
 
-    for (let hour = workDayStart; hour <= workDayEnd; hour++) {
-        for (let minute = 0; minute < 60; minute += slotDuration) {
-             if (hour === workDayEnd && minute > 30) continue; // Don't add slots past 17:30
-            allSlots.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+    // 1. Get current user's clinic_id (we need clinic schedule)
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "No autorizado.", data: [] };
+    const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).single();
+    if (!profile?.clinic_id) return { error: "Perfil o clínica no encontrada.", data: [] };
+
+    // 2. Fetch clinic schedule
+    const { data: clinic, error: clinicErr } = await supabase.from('clinics').select('schedule').eq('id', profile.clinic_id).single();
+    if (clinicErr) {
+        console.error('Error fetching clinic schedule:', clinicErr);
+        return { error: 'No se pudo obtener el horario de la clínica.', data: [] };
+    }
+
+    const schedule = clinic?.schedule || {};
+
+    // helper: convert 'HH:mm' -> minutes since midnight
+    const timeToMinutes = (t: string) => {
+        const [h, m] = t.split(':').map(Number);
+        return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+    };
+    const minutesToTime = (mins: number) => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+
+    const slotDuration = 30; // minutes
+
+    // Map JS date -> schedule key (clinic schedule uses english keys like monday...)
+    const weekdays = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    const dayIndex = new Date(date + 'T00:00:00').getDay();
+    const dayKey = weekdays[dayIndex];
+
+    // Read intervals for the day and sanitize them. This handles malformed or ambiguous times
+    // saved previously (e.g. '03:00' that actually meant 15:00). We attempt to repair common cases
+    // without changing DB: parse times, reject invalid intervals, sort and apply heuristics.
+    const rawIntervals: any[] = Array.isArray(schedule?.[dayKey]) ? schedule[dayKey] : [];
+
+    const normalizeTimeString = (input: any) => {
+        if (!input) return '';
+        const s = String(input).trim();
+        // If already in HH:mm, keep it
+        const mm = s.match(/^(\d{1,2}):(\d{2})$/);
+        if (mm) {
+            const hh = String(Number(mm[1])).padStart(2, '0');
+            return `${hh}:${mm[2]}`;
+        }
+        // Handle forms like '08:00 a.m.' '3:00 pm' etc
+        const cleaned = s.replace(/\./g, '').toLowerCase();
+        const isAm = cleaned.includes('a');
+        const isPm = cleaned.includes('p');
+        const digits = cleaned.replace(/[^0-9:]/g, '').trim();
+        const parts = digits.split(':');
+        let hr = Number(parts[0] || 0);
+        const mn = parts[1] || '00';
+        if (isPm && hr < 12) hr += 12;
+        if (isAm && hr === 12) hr = 0;
+        // Fallback: if we only have a single number like '9' treat as 09:00
+        return `${String(hr).padStart(2,'0')}:${String(mn).padStart(2,'0')}`;
+    };
+
+    // Parse and normalize
+    const parsedIntervals = rawIntervals.map(iv => {
+        return {
+            start: normalizeTimeString(iv?.start),
+            end: normalizeTimeString(iv?.end),
+        };
+    }).filter(iv => iv.start && iv.end);
+
+    // Convert to minutes and filter invalids
+    let intervalsMinutes = parsedIntervals.map(iv => {
+        const s = timeToMinutes(iv.start);
+        const e = timeToMinutes(iv.end);
+        return { startMin: s, endMin: e, orig: iv };
+    }).filter(iv => iv.endMin > iv.startMin);
+
+    // Heuristic fix: if an interval spans an excessively long period (likely due to AM/PM mis-parse)
+    // and there exists another (short) interval in the morning, then assume this long interval's
+    // start was intended as PM and add 12h to start (e.g. '03:00-19:00' -> '15:00-19:00').
+    const hasMorningShortInterval = intervalsMinutes.some(iv => {
+        const dur = iv.endMin - iv.startMin;
+        return iv.startMin >= 8 * 60 && iv.startMin <= 12 * 60 && dur <= 6 * 60;
+    });
+
+    intervalsMinutes = intervalsMinutes.map(iv => {
+        const dur = iv.endMin - iv.startMin;
+        if (dur > 10 * 60 && iv.startMin < 7 * 60 && hasMorningShortInterval) {
+            // bump start by 12 hours
+            return { ...iv, startMin: iv.startMin + 12 * 60 };
+        }
+        return iv;
+    }).filter(iv => iv.endMin > iv.startMin);
+
+    // Sort by start
+    intervalsMinutes.sort((a, b) => a.startMin - b.startMin);
+
+    // Build all possible slots from sanitized intervals
+    const allSlots: string[] = [];
+    for (const intv of intervalsMinutes) {
+        for (let t = intv.startMin; t + slotDuration <= intv.endMin; t += slotDuration) {
+            allSlots.push(minutesToTime(t));
         }
     }
-    
-    // 2. Fetch existing appointments for the doctor on that day
-    const { data: existingAppointments, error } = await supabase
+
+    // Remove duplicates and ensure chronological order (handles overlapping/duplicate intervals)
+    const uniqueAllSlots = Array.from(new Set(allSlots)).sort();
+
+    // If clinic has no intervals for that day, return empty (closed)
+    if (uniqueAllSlots.length === 0) {
+        return { error: null, data: [] };
+    }
+
+    // 2. Fetch existing appointments for the doctor and/or the patient on that day and remove booked slots
+    let appointmentQuery: any = supabase
         .from('appointments')
-        .select('appointment_time')
-        .eq('doctor_id', doctorId)
+        .select('appointment_time, doctor_id, patient_id')
         .eq('appointment_date', date)
         .in('status', ['Scheduled', 'In-progress']);
+
+    if (doctorId && patientId) {
+        // Find appointments where doctor OR patient matches
+        appointmentQuery = appointmentQuery.or(`doctor_id.eq.${doctorId},patient_id.eq.${patientId}`);
+    } else if (doctorId) {
+        appointmentQuery = appointmentQuery.eq('doctor_id', doctorId);
+    } else if (patientId) {
+        appointmentQuery = appointmentQuery.eq('patient_id', patientId);
+    }
+
+    const { data: existingAppointments, error } = await appointmentQuery;
 
     if (error) {
         console.error("Error fetching doctor's appointments:", error);
         return { error: "No se pudo obtener la disponibilidad del doctor.", data: [] };
     }
 
-    // 3. Filter out booked slots
-    const bookedSlots = existingAppointments.map(app => app.appointment_time.substring(0, 5));
-    const availableSlots = allSlots.filter(slot => !bookedSlots.includes(slot));
-    
+    const bookedSlots = Array.from(new Set((existingAppointments || []).map((app: any) => (app.appointment_time || '').substring(0,5))));
+    const availableSlots = uniqueAllSlots.filter(slot => !bookedSlots.includes(slot));
+
     return { error: null, data: availableSlots };
 }
 
-export async function createGoogleCalendarEvent(doctorId: string, appointment: {
-  patient_id: string;
-  doctor_id: string;
-  service_description: string;
-  appointment_date: string; // YYYY-MM-DD
-  appointment_time: string; // HH:mm
-  clinic_id: string;
-}) {
-  try {
+async function createGoogleCalendarEvent(doctorId: string, appointmentData: any) {
     const supabase = await createClient();
-    
-    // 1. Obtener refresh_token del doctor (sin cambios)
-    const { data: integration, error: integrationError } = await supabase
-      .from('google_integrations')
-      .select('refresh_token')
-      .eq('user_id', doctorId)
-      .single();
 
-    if (integrationError || !integration?.refresh_token) {
-      console.log(`[Google Calendar] No integration found for doctor ${doctorId}.`);
-      return;
-    }
+    try {
+        // 1. Get doctor's Google integration (refresh token and optional calendar id)
+        const { data: integration, error: integrationError } = await supabase
+            .from('google_integrations')
+            .select('refresh_token, calendar_id')
+            .eq('user_id', doctorId)
+            .single();
 
-    // --- Configuración de OAuth2 (sin cambios) ---
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET
-    );
-    oauth2Client.setCredentials({ refresh_token: integration.refresh_token });
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
-    // --- Obtener datos del Paciente y Doctor (sin cambios) ---
-    const { data: patient } = await supabase
-      .from('patients')
-      .select('first_name, last_name, email')
-      .eq('id', appointment.patient_id)
-      .single();
-
-    const { data: doctor } = await supabase
-      .from('profiles')
-      .select('first_name, last_name')
-      .eq('id', doctorId)
-      .single();
-      
-    // --- ✅ NUEVO: Obtener datos de la Clínica ---
-    const { data: clinic } = await supabase
-      .from('clinics')
-      .select('name, address, phone_number')
-      .eq('id', appointment.clinic_id)
-      .single();
-
-    // --- Preparación de Fechas y Título (sin cambios) ---
-    const startDateTime = new Date(`${appointment.appointment_date}T${appointment.appointment_time}:00`);
-    const endDateTime = new Date(startDateTime.getTime() + 30 * 60000); // +30 min
-    const summary = `Cita: ${appointment.service_description}${patient ? ` - ${patient.first_name} ${patient.last_name}` : ''}`;
-
-    // --- ✅ NUEVO: Construcción de la Descripción Mejorada ---
-    let description = `Cita creada desde SmileSys.\n`;
-    if (doctor) {
-        description += `Doctor: Dr. ${doctor.first_name} ${doctor.last_name}\n`;
-    }
-    if (clinic) {
-        description += `\n-- Información de la Clínica --\n`;
-        description += `Clínica: ${clinic.name}\n`;
-        if (clinic.phone_number) {
-            description += `Teléfono: ${clinic.phone_number}`;
+        if (integrationError) {
+            console.error('[createGoogleCalendarEvent] Error fetching google_integrations:', integrationError);
+            return;
         }
+
+        if (!integration?.refresh_token) {
+            // Doctor hasn't connected Google Calendar
+            return;
+        }
+
+        // 2. Get patient info (name + email) to add as attendee and to build the summary
+        const { data: patient } = await supabase
+            .from('patients')
+            .select('first_name, last_name, email')
+            .eq('id', appointmentData.patient_id)
+            .single();
+
+        const patientName = patient ? `${patient.first_name} ${patient.last_name}` : 'Paciente';
+        const patientEmail = patient?.email;
+
+        // 3. Compute start and end datetimes
+        const startDateTime = `${appointmentData.appointment_date}T${appointmentData.appointment_time}:00`;
+        const start = new Date(startDateTime);
+        const end = new Date(start.getTime() + 30 * 60 * 1000); // +30 minutes
+        const startStr = format(start, "yyyy-MM-dd'T'HH:mm:ss");
+        const endStr = format(end, "yyyy-MM-dd'T'HH:mm:ss");
+
+        // 4. Build event object according to Google Calendar schema
+        const event: any = {
+            summary: `Cita con ${patientName}`,
+            description: appointmentData.service_description || appointmentData.service || '',
+            start: {
+                dateTime: startStr,
+                timeZone: 'America/New_York',
+            },
+            end: {
+                dateTime: endStr,
+                timeZone: 'America/New_York',
+            },
+            attendees: [
+                ...(patientEmail ? [{ email: patientEmail }] : []),
+            ],
+        };
+
+        // 5. Create an OAuth2 client and set credentials using the stored refresh token
+        const oauth2Client = new google.auth.OAuth2(
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET
+        );
+        oauth2Client.setCredentials({ refresh_token: integration.refresh_token });
+
+        const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+        // 6. Insert the event. Use `requestBody` (not `resource`) to match googleapis types.
+        await calendar.events.insert({
+            calendarId: integration.calendar_id || 'primary',
+            requestBody: event,
+            sendUpdates: 'all',
+        } as any);
+
+        console.log('[createGoogleCalendarEvent] Event created for doctor:', doctorId, event);
+    } catch (e) {
+        console.error('[createGoogleCalendarEvent] Error creating event:', e);
     }
-    
-    // --- ✅ NUEVO: Objeto de Evento Actualizado ---
-    const event = {
-      summary,
-      description,
-      // Se añade la dirección de la clínica en el campo 'location'
-      location: clinic?.address, 
-      start: {
-        dateTime: startDateTime.toISOString(),
-      },
-      end: {
-        dateTime: endDateTime.toISOString(),
-      },
-      attendees: patient?.email ? [{ email: patient.email }] : [],
-      reminders: {
-        useDefault: false,
-        overrides: [
-          { method: 'email', minutes: 24 * 60 },
-          { method: 'popup', minutes: 24 * 60 },
-        ],
-      },
-    };
-
-    // --- Inserción del Evento (sin cambios) ---
-    await calendar.events.insert({
-      calendarId: 'primary',
-      requestBody: event,
-      sendUpdates: 'all', // Notifica a los asistentes sobre la creación y cambios
-    });
-
-  } catch (e) {
-    console.error('[createGoogleCalendarEvent] Error creando evento:', e);
-  }
 }

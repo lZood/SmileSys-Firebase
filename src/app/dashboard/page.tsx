@@ -266,7 +266,7 @@ export default function DashboardPage() {
                  {isLoading ? (
                    <Skeleton className="h-8 w-48" />
                  ) : (
-                   `Hola, ${userData?.profile?.first_name || 'Usuario'}!`
+                   `Hola, ${contextUserData?.profile?.first_name ? `${contextUserData.profile.first_name}${contextUserData.profile.last_name ? ' ' + contextUserData.profile.last_name : ''}` : 'Usuario'}!`
                  )}
              </h1>
              <p className="text-muted-foreground">

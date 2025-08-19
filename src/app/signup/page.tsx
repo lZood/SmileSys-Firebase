@@ -52,10 +52,10 @@ export default function SignupPage() {
         });
 
         // If backend returned a warning about email (rate limit), show it as info
-        if (result?.warning) {
+        if ((result as any)?.warning) {
             toast({
                 title: 'Aviso',
-                description: result.warning,
+                description: (result as any).warning,
             });
         }
 

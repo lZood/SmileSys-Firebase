@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -99,28 +98,31 @@ export const AppointmentForm = ({
         .filter(d => d.roles.includes('doctor'))
         .map(d => ({ label: `Dr. ${d.first_name} ${d.last_name}`, value: d.id }));
 
-    // Effect to fetch availability
+    // Effect to fetch availability (when patient OR doctor is selected)
     React.useEffect(() => {
-        if (doctorId && appointmentDate) {
+        if ((doctorId || patientId) && appointmentDate) {
             setIsFetchingTimes(true);
             setAvailableTimes([]);
             setTime(''); // Reset time when date/doctor changes
             
             const dateString = format(appointmentDate, 'yyyy-MM-dd');
-            getDoctorAvailability(doctorId, dateString)
+            // Pass patientId so slots booked by the patient are also excluded
+            getDoctorAvailability(doctorId, dateString, patientId)
                 .then(result => {
                     if (result.error) {
                         toast({ variant: 'destructive', title: 'Error', description: result.error });
                         setAvailableTimes([]);
                     } else {
-                        setAvailableTimes(result.data);
+                        // Ensure uniqueness and deterministic order on the client as well
+                        const unique = Array.from(new Set(result.data || [])).sort();
+                        setAvailableTimes(unique);
                     }
                 })
                 .finally(() => setIsFetchingTimes(false));
         } else {
             setAvailableTimes([]);
         }
-    }, [doctorId, appointmentDate, toast]);
+    }, [doctorId, appointmentDate, toast, patientId]);
 
 
     // Effect to populate form when editing

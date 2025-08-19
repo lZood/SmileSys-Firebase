@@ -29,108 +29,55 @@ export async function signUpNewClinic(input: z.infer<typeof signUpSchema>) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Step 1: Sign up the new user (usando admin API)
-  // Create the user as UNCONFIRMED and with a temporary password so we can
-  // trigger the password-setup/recover email from the server.
-  const tempPassword = (password && password.length >= 8) ? password : (Math.random().toString(36).slice(-12) + 'A1!');
-  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-    email: adminEmail,
-    password: tempPassword,
-    email_confirm: false,
-    user_metadata: {
-      roles: ['admin'],
-      full_name: `${firstName} ${lastName}`
-    },
-  });
+  // NOTE: We no longer create the Auth user at initial signup.
+  // Instead we create the clinic and send an invite email so the admin
+  // can set their password from the invite link. This prevents duplicate
+  // user creation attempts when the invite is later accepted.
+  const userId = null
 
-  if (authError) {
-    console.error('Error signing up user:', authError);
-    return { error: authError.message };
-  }
-  
-  if (!authData.user) {
-      return { error: "User registration failed: No user object returned." };
-  }
-
-  const userId = authData.user.id;
-
-  // Step 2: Create the clinic (use service-role client to bypass RLS for admin flow)
-  const { data: clinic, error: clinicError } = await supabaseAdmin
-    .from('clinics')
-    .insert({ name: clinicName, subscription_status: 'pending_payment' })
-    .select()
-    .single();
+   // Step 2: Create the clinic (use service-role client to bypass RLS for admin flow)
+   const { data: clinic, error: clinicError } = await supabaseAdmin
+     .from('clinics')
+     .insert({ name: clinicName, subscription_status: 'pending_payment' })
+     .select()
+     .single();
 
   if (clinicError) {
     console.error('Error creating clinic:', clinicError);
     // Rollback user creation if clinic creation fails
-    await supabaseAdmin.auth.admin.deleteUser(userId);
+    if (userId) {
+      await supabaseAdmin.auth.admin.deleteUser(userId);
+    }
     return { error: 'Failed to create the clinic in the database.' };
   }
 
-  // Step 3: Create the profile for the admin user (mark must_change_password)
-  // Use service-role client for profile creation as well to avoid RLS blocking
-  const { error: profileError } = await supabaseAdmin
-    .from('profiles')
-    .insert({
-      id: userId,
-      clinic_id: clinic.id,
-      first_name: firstName,
-      last_name: lastName,
-      roles: ['admin'],
-      must_change_password: true,
-    });
-
-  if (profileError) {
-    console.error('Error creating profile:', profileError);
-    // Rollback: delete user and clinic
-    await supabaseAdmin.auth.admin.deleteUser(userId);
-    await supabase.from('clinics').delete().eq('id', clinic.id);
-    return { error: 'User registered, but failed to create their profile.' };
-  }
+  // We don't create the profile here because the Auth user does not exist yet.
+  // The profile will be created when the invite is accepted and the user record is available.
 
   // Step 4: Trigger a password-setup / recover email so the user can set their password
-  // We call the Auth recover endpoint using the SERVICE ROLE KEY (server-side only).
+  // Instead of relying only on Supabase recover, call our invites/create endpoint
+  // which will create an invite row and send the branded invite email via nodemailer.
   try {
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      // Use the admin generate_link endpoint with type 'signup' to trigger the
-      // "Confirm Signup" template in Supabase. The /recover endpoint always
-      // triggers the Reset Password template, which is why you were seeing that.
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      const genRes = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/generate_link`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
-        },
-        body: JSON.stringify({ type: 'signup', email: adminEmail, redirect_to: `${appUrl.replace(/\/$/, '')}/first-login` }),
-      });
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const inviteRes = await fetch(`${appUrl.replace(/\/$/, '')}/api/invites/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // inviterId is null because there is no user yet; backend will accept and record inviter_id as null
+      body: JSON.stringify({ email: adminEmail, clinicId: clinic.id, inviterId: null, role: 'admin', firstName, lastName }),
+    });
 
-      if (!genRes.ok) {
-        const bodyText = await genRes.text().catch(() => '');
-        try {
-          const parsed = JSON.parse(bodyText || '{}');
-          if (genRes.status === 429 || parsed?.code === 429 || parsed?.error_code === 'over_email_send_rate_limit') {
-            var recoverWarning = parsed?.msg || parsed?.error || 'Límite de envíos de correo alcanzado. Intenta más tarde.'
-          } else {
-            console.warn('Generate link returned non-ok:', bodyText);
-          }
-        } catch (e) {
-          console.warn('Generate link returned non-ok (non-json):', bodyText);
-        }
-      }
+    const inviteJson = await inviteRes.json().catch(() => null);
+    if (!inviteRes.ok) {
+      console.warn('Invites endpoint returned non-ok:', inviteRes.status, inviteJson);
     } else {
-      console.warn('SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_URL not set — cannot trigger confirmation email.');
+      console.log('Invites endpoint response:', inviteJson);
     }
   } catch (err) {
-    console.warn('Failed to call recover endpoint:', err);
+    console.warn('Failed to call invites endpoint:', err);
   }
-
-  // If recoverWarning was set above, return it so the frontend can inform the user
-  // without treating the whole operation as a fatal error.
-  // @ts-ignore
-  return { data: { clinic, user: authData.user }, error: null, warning: typeof recoverWarning === 'string' ? recoverWarning : null };
+ 
+  // Return clinic; user will be created when invite is accepted
+  return { data: { clinic }, error: null };
 }
 
 

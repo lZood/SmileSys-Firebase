@@ -127,7 +127,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [isExpanded, setIsExpanded] = React.useState(true);
-  const { userData, isLoading } = useUserData();
+  const { userData, isLoading, refetch } = useUserData();
   React.useEffect(() => {
     console.log('[DashboardLayout] userData changed:', userData);
   }, [userData]);
@@ -356,11 +356,23 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             {isExpanded ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </Button>
         </div>
-        { !userData && !isLoading && (
-          <div className="p-4 text-sm text-muted-foreground">No se han cargado datos de usuario. Revisa consola/server logs.</div>
+        { isLoading && (
+          <div className="p-4">
+            <Skeleton className="h-8 w-40" />
+          </div>
         )}
-        <SidebarNav />
-        <BottomNav />
+        {!isLoading && !userData && (
+          <div className="p-4 text-sm text-muted-foreground">
+            No se han cargado datos de usuario. <button className="ml-2 text-xs text-primary underline" onClick={() => refetch()}>Reintentar</button>
+          </div>
+        )}
+        {/* Render navs only when we have userData (avoids empty/disabled menu) */}
+        {userData ? (
+          <>
+            <SidebarNav />
+            <BottomNav />
+          </>
+        ) : null}
       </aside>
       <div className={cn(
         "flex flex-col sm:gap-4 sm:py-4 transition-all duration-300 w-full",
@@ -466,8 +478,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                             <AvatarImage src={userData.profile.photo_url} alt="User Avatar" />
                         ) : (
                            <AvatarFallback>
-                              {userData.profile.first_name?.charAt(0)}
-                              {userData.profile.last_name?.charAt(0)}
+                              {String(userData.profile.first_name || '').charAt(0).toUpperCase()}
+                              {String(userData.profile.last_name || '').charAt(0).toUpperCase()}
                             </AvatarFallback>
                         )}
                       </Avatar>

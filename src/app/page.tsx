@@ -16,12 +16,8 @@ export default function LoginPage() {
   const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showForgot, setShowForgot] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotLoading, setForgotLoading] = useState(false);
-  const [forgotStatus, setForgotStatus] = useState<'idle'|'sent'|'error'>('idle');
-  const [forgotError, setForgotError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [signupSuccess, setSignupSuccess] = useState(false)
   const supabase = createClient();
 
   // This effect will run once on component mount to check
@@ -66,6 +62,14 @@ export default function LoginPage() {
     processHash();
   }, [router, supabase]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('signup') === 'success') {
+        setSignupSuccess(true)
+      }
+    }
+  }, [])
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -107,6 +111,11 @@ export default function LoginPage() {
           <div className="flex justify-center items-center mb-4">
             <SmileSysLogo className="h-12 w-12" />
           </div>
+          {signupSuccess && (
+            <div className="mb-2 rounded bg-green-100 text-green-800 text-sm px-3 py-2 font-medium">
+              Your account was created successfully! Please sign in to continue.
+            </div>
+          )}
           <CardTitle className="text-2xl font-bold font-headline">Bienvenido a SmileSys</CardTitle>
           <CardDescription>Ingresa tus credenciales para acceder al panel de tu clínica.</CardDescription>
         </CardHeader>
@@ -119,51 +128,11 @@ export default function LoginPage() {
             <div className="grid gap-2">
               <div className="flex items-center">
                 <Label htmlFor="password">Contraseña</Label>
-                <button type="button" onClick={() => { setShowForgot(s => !s); setForgotEmail(email || ''); setForgotStatus('idle'); setForgotError(null); }} className="ml-auto inline-block text-sm underline text-sky-600">
+                <Link href="#" className="ml-auto inline-block text-sm underline">
                   ¿Olvidaste tu contraseña?
-                </button>
+                </Link>
               </div>
               <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-              {showForgot && (
-                <div className="mt-3 p-3 border rounded bg-white">
-                  <p className="text-sm text-gray-700 mb-2">Ingresa tu correo para recibir instrucciones para restablecer tu contraseña.</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
-                    <Input id="forgotEmail" type="email" placeholder="correo@ejemplo.com" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} />
-                    <div className="sm:col-span-2 flex gap-2">
-                      <Button className="ml-auto" onClick={async () => {
-                        setForgotLoading(true); setForgotStatus('idle'); setForgotError(null);
-                        try {
-                          const res = await fetch('/api/auth/resend-activation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: forgotEmail || email }) });
-                          const data = await res.json().catch(() => ({}));
-                          if (res.ok) {
-                            setForgotStatus('sent');
-                            setShowForgot(false);
-                            toast({ title: 'Enviado', description: 'Revisa tu correo para restablecer la contraseña.' });
-                          } else if (res.status === 429) {
-                            setForgotStatus('error');
-                            const msg429 = data?.detail || data?.error || data?.msg || 'Límite de envíos alcanzado. Intenta más tarde.';
-                            setForgotError(msg429);
-                            toast({ variant: 'destructive', title: 'Límite alcanzado', description: msg429 });
-                          } else {
-                             setForgotStatus('error');
-                             setForgotError(data?.error || 'Error al enviar correo');
-                             toast({ variant: 'destructive', title: 'Error', description: data?.error || 'No se pudo enviar el correo.' });
-                           }
-                        } catch (err) {
-                          setForgotStatus('error');
-                          setForgotError('Error de red');
-                          toast({ variant: 'destructive', title: 'Error', description: 'Error de red al intentar enviar el correo.' });
-                        } finally {
-                          setForgotLoading(false);
-                        }
-                      }} disabled={forgotLoading || !(forgotEmail || email)}>{forgotLoading ? 'Enviando...' : 'Enviar correo'}</Button>
-                      <Button variant="ghost" onClick={() => setShowForgot(false)}>Cancelar</Button>
-                    </div>
-                  </div>
-                  {forgotStatus === 'sent' && <p className="mt-2 text-sm text-green-600">Correo enviado. Revisa tu bandeja y carpeta de spam.</p>}
-                  {forgotStatus === 'error' && <p className="mt-2 text-sm text-red-600">{forgotError}</p>}
-                </div>
-              )}
             </div>
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? "Iniciando Sesión..." : "Iniciar Sesión"}
@@ -171,7 +140,7 @@ export default function LoginPage() {
           </form>
            <div className="mt-4 text-center text-sm">
             ¿No tienes una cuenta?{' '}
-            <Link href="/signup" className="underline">
+            <Link href="/signup-new" className="underline">
               Regístrate
             </Link>
           </div>
