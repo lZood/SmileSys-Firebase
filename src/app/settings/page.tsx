@@ -97,9 +97,65 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: any, isAdmin: boolean }) 
         setClinicData({ ...clinicData, schedule: updated });
     };
 
+    const copyPreviousDay = (day: keyof typeof defaultSchedule) => {
+        const daysOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+        const idx = daysOrder.indexOf(day as string);
+        if (idx <= 0) return;
+        const prev = daysOrder[idx - 1] as keyof typeof defaultSchedule;
+        setClinicData(cd => ({
+            ...cd,
+            schedule: {
+                ...cd.schedule,
+                [day]: Array.isArray(cd.schedule[prev]) ? cd.schedule[prev].map((iv: any) => ({ ...iv })) : []
+            }
+        }));
+    };
+
+    // Normalize and validate schedule before saving (times to HH:mm, remove invalid intervals, sort)
+    const normalizeSchedule = (rawSchedule: any) => {
+        const normalizeTime = (t: string) => {
+            if (!t) return t;
+            const hhmm = String(t).trim();
+            const m = hhmm.match(/^(\d{1,2}):(\d{2})$/);
+            if (m) {
+                const hh = String(Number(m[1])).padStart(2, '0');
+                return `${hh}:${m[2]}`;
+            }
+            const cleaned = hhmm.replace(/\./g, '').toLowerCase();
+            const am = cleaned.includes('a');
+            const pm = cleaned.includes('p');
+            const digits = cleaned.replace(/[^0-9:]/g, '').trim();
+            const parts = digits.split(':');
+            let hr = Number(parts[0] || 0);
+            const mn = parts[1] || '00';
+            if (pm && hr < 12) hr += 12;
+            if (am && hr === 12) hr = 0;
+            return `${String(hr).padStart(2, '0')}:${String(mn).padStart(2, '0')}`;
+        };
+
+        const days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+        const normalized: Record<string, Array<{start:string;end:string}>> = {};
+        for (const day of days) {
+            const arr = Array.isArray(rawSchedule?.[day]) ? rawSchedule[day] : [];
+            const converted = arr.map((iv: any) => ({ start: normalizeTime(String(iv.start || '')), end: normalizeTime(String(iv.end || '')) }))
+                .filter((iv: any) => {
+                    if (!iv.start || !iv.end) return false;
+                    const [sh, sm] = iv.start.split(':').map(Number);
+                    const [eh, em] = iv.end.split(':').map(Number);
+                    const smins = sh * 60 + sm;
+                    const emins = eh * 60 + em;
+                    return emins > smins;
+                })
+                .sort((a: any, b: any) => a.start.localeCompare(b.start));
+            normalized[day] = converted;
+        }
+        return normalized;
+    };
+
     const handleSave = async () => {
         setIsLoading(true);
-        let finalLogoUrl = clinicData.logo_url;
+        // Treat empty logo_url as null so validations that expect a URL/nullable field do not fail
+        let finalLogoUrl = clinicData.logo_url ? clinicData.logo_url : null;
 
         if (logoFile) {
             const uploadResult = await uploadClinicLogo(logoFile, clinic.id);
@@ -111,9 +167,12 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: any, isAdmin: boolean }) 
             finalLogoUrl = uploadResult.publicUrl!;
         }
 
-        // Optional: simple validation - ensure intervals have start < end
-        for (const day of Object.keys(clinicData.schedule)) {
-            const intervals = (clinicData.schedule as any)[day] as Array<{start:string,end:string}>;
+        // Normalize schedule (same logic as onboarding) and validate
+        const normalizedSchedule = normalizeSchedule(clinicData.schedule);
+        // If any day had intervals but normalization removed them due to invalid values, warn user
+        for (const day of Object.keys(normalizedSchedule)) {
+            const intervals = normalizedSchedule[day as any] as Array<{start:string,end:string}>;
+            if (!Array.isArray(intervals)) continue;
             for (const itv of intervals) {
                 if (!itv.start || !itv.end) {
                     toast({ variant: 'destructive', title: 'Horario inválido', description: 'Todos los intervalos deben tener hora de inicio y fin.' });
@@ -131,8 +190,10 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: any, isAdmin: boolean }) 
         const result = await updateClinicInfo({ 
             clinicId: clinic.id, 
             ...clinicData,
+            schedule: normalizedSchedule,
+            // ensure empty strings are not sent as URL
             logo_url: finalLogoUrl
-        });
+         });
 
         setIsLoading(false);
 
@@ -202,6 +263,9 @@ const ClinicInfoForm = ({ clinic, isAdmin }: { clinic: any, isAdmin: boolean }) 
                                 <div className="font-medium">{d.label}</div>
                                 <div className="flex items-center gap-2">
                                     <Button size="sm" variant="outline" onClick={() => addInterval(d.key as any)} disabled={!isAdmin || isLoading} className="h-8">Añadir</Button>
+                                    {d.key !== 'monday' && (
+                                        <Button size="sm" variant="ghost" onClick={() => copyPreviousDay(d.key as any)} disabled={!isAdmin || isLoading} className="h-8">Repetir horario del día anterior</Button>
+                                    )}
                                     <div className="text-sm text-muted-foreground hidden md:block">{((clinicData.schedule as any)[d.key] || []).length} intervalo(s)</div>
                                 </div>
                             </div>
@@ -764,25 +828,21 @@ export default function SettingsPage() {
                                             <TableCell>{member.job_title || 'N/A'}</TableCell>
                                             {/* Role: inline select for admins, readonly text otherwise */}
                                             <TableCell className="capitalize">
-                                                {isAdmin ? (
-                                                    <select
-                                                        value={member.role || (member.roles ? member.roles[0] : '')}
-                                                        onChange={(e) => handleChangeMemberRole(member.id, e.target.value)}
-                                                        disabled={membersActionLoading || (user ? ((member.user_id ? member.user_id === user.id : false) || (member.id === user.id)) : false)}
-                                                        className="border rounded px-2 py-1"
-                                                    >
-                                                        <option value="admin">Admin</option>
-                                                        <option value="doctor">Doctor</option>
-                                                        <option value="staff">Staff</option>
-                                                    </select>
-                                                ) : (
-                                                    <span>{member.role || (member.roles ? member.roles.join(', ') : 'N/A')}</span>
-                                                )}
-                                            </TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <span>{member.roles ? (Array.isArray(member.roles) ? member.roles.join(', ') : String(member.roles)) : (member.role || 'N/A')}</span>
+                                                    {isAdmin && (
+                                                        <Button size="sm" variant="ghost" onClick={() => handleEditClick(member)} disabled={membersActionLoading || (user ? ((member.user_id ? member.user_id === user.id : false) || (member.id === user.id)) : false)}>
+                                                            Editar
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                         </TableCell>
 
-                                            {/* Active state: toggle button for admins, label otherwise */}
+                                         {/* Active state: toggle button for admins, label otherwise */}
                                             <TableCell>
-                                                {isAdmin ? (
+                                                { (member.must_change_password === true || member.mustChangePassword === true || member.accepted === false || member.pending === true) ? (
+                                                    <span className="text-yellow-600">Pendiente de confirmar</span>
+                                                ) : isAdmin ? (
                                                     <Button size="sm" variant={member.is_active === false ? 'ghost' : 'outline'} onClick={() => handleToggleMemberActive(member.id, !!member.is_active)} disabled={membersActionLoading || (user ? ((member.user_id ? member.user_id === user.id : false) || (member.id === user.id)) : false)}>
                                                         {member.is_active === false ? 'Reactivar' : 'Desactivar'}
                                                     </Button>

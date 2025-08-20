@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import * as React from 'react';
@@ -26,7 +24,6 @@ export const InviteMemberForm = ({ clinicId, onClose }: { clinicId: string; onCl
         lastName: '',
         jobTitle: '',
         email: '',
-        password: '',
         roles: [] as string[],
     });
     
@@ -39,7 +36,7 @@ export const InviteMemberForm = ({ clinicId, onClose }: { clinicId: string; onCl
     const handleRoleChange = (role: string, checked: boolean) => {
         setFormData(prev => ({
             ...prev,
-            roles: checked ? [...prev.roles, role] : prev.roles.filter(r => r !== role)
+            roles: checked ? [...prev.roles, role] : prev.roles.filter((r: string) => r !== role)
         }));
     };
 
@@ -55,10 +52,18 @@ export const InviteMemberForm = ({ clinicId, onClose }: { clinicId: string; onCl
                 description: result.error,
             });
         } else {
-            toast({
-                title: 'Miembro Invitado',
-                description: `${formData.firstName} ha sido añadido a tu clínica.`,
-            });
+            // Show invitation sent message; if email wasn't sent, inform admin to notify user manually
+            if ((result as any).emailSent) {
+                toast({
+                    title: 'Invitación enviada',
+                    description: `Se ha enviado un correo a ${formData.email} para que cree su contraseña. Aparecerá como pendiente hasta que confirme su cuenta.`,
+                });
+            } else {
+                toast({
+                    title: 'Invitación creada',
+                    description: `${formData.firstName} ha sido añadido y aparece como pendiente. No se pudo enviar el correo automáticamente, por favor comparte el enlace de activación manualmente.`,
+                });
+            }
             onClose(true);
         }
     };
@@ -69,7 +74,7 @@ export const InviteMemberForm = ({ clinicId, onClose }: { clinicId: string; onCl
                 <DialogHeader>
                     <DialogTitle>Invitar Nuevo Miembro</DialogTitle>
                     <DialogDescription>
-                        Crea una cuenta para un nuevo miembro del equipo. Podrán iniciar sesión con el email y contraseña que definas.
+                        Se enviará un correo al usuario para que establezca su propia contraseña al activar la cuenta.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
@@ -92,10 +97,6 @@ export const InviteMemberForm = ({ clinicId, onClose }: { clinicId: string; onCl
                         <Input id="email" type="email" value={formData.email} onChange={handleChange} />
                     </div>
                      <div className="grid gap-2">
-                        <Label htmlFor="password">Contraseña Temporal</Label>
-                        <Input id="password" type="password" value={formData.password} onChange={handleChange} />
-                    </div>
-                     <div className="grid gap-2">
                         <Label>Roles en la Aplicación</Label>
                         <div className="flex flex-col space-y-2">
                             {allRoles.map(role => (
@@ -114,7 +115,7 @@ export const InviteMemberForm = ({ clinicId, onClose }: { clinicId: string; onCl
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onClose(false)}>Cancelar</Button>
                     <Button onClick={handleSubmit} disabled={isLoading}>
-                        {isLoading ? 'Creando...' : 'Crear y Añadir Miembro'}
+                        {isLoading ? 'Creando...' : 'Crear y Enviar Invitación'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

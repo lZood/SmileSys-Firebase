@@ -6,44 +6,49 @@ import { createServerClient } from '@supabase/ssr'
 // Skip for api, _next static, auth endpoints
 
 export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl
-  if (pathname.startsWith('/api') || pathname.startsWith('/_next') || pathname.startsWith('/onboarding')) {
-    return NextResponse.next()
-  }
-
-  // Only enforce after login pages
+  const res = NextResponse.next()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         get: (name: string) => req.cookies.get(name)?.value,
-        set: () => {},
-        remove: () => {},
+        set: (name: string, value: string, options?: any) => { res.cookies.set({ name, value, ...options }) },
+        remove: (name: string, options?: any) => { res.cookies.set({ name, value: '', ...options }) },
       }
     }
   ) as any
 
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.next()
+  if (!user) return res // not authenticated
 
-  // Fetch clinic flag via profile
-  try {
-    const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).maybeSingle()
-    if (profile?.clinic_id) {
-      const { data: clinic } = await supabase.from('clinics').select('first_setup_required').eq('id', profile.clinic_id).single()
-      if (clinic?.first_setup_required && pathname !== '/onboarding') {
-        const url = req.nextUrl.clone()
-        url.pathname = '/onboarding'
-        return NextResponse.redirect(url)
-      }
+  // Fetch profile + clinic flag
+  const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).maybeSingle()
+  if (!profile?.clinic_id) return res
+  const { data: clinic } = await supabase.from('clinics').select('first_setup_required').eq('id', profile.clinic_id).maybeSingle()
+  if (!clinic) return res
+
+  const pathname = req.nextUrl.pathname
+  if (clinic.first_setup_required) {
+    // Force onboarding for any route except allowed public/auth routes
+    const allow = ['/onboarding', '/api', '/first-login', '/logout', '/settings', '/favicon.ico']
+    if (!allow.some(p => pathname.startsWith(p)) && pathname !== '/') {
+      const url = req.nextUrl.clone()
+      url.pathname = '/onboarding'
+      return NextResponse.redirect(url)
     }
-  } catch (e) {
-    // ignore
+  } else if (pathname.startsWith('/onboarding')) {
+    // Prevent accessing onboarding again
+    const url = req.nextUrl.clone()
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
   }
-  return NextResponse.next()
+
+  return res
 }
 
 export const config = {
-  matcher: ['/((?!favicon.ico).*)'],
+  matcher: [
+    '/((?!_next|static|.*\.[^/]+$).*)'
+  ],
 }

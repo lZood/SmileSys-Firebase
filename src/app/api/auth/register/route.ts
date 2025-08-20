@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { encryptEphemeral } from '@/lib/crypto'
 import nodemailer from 'nodemailer'
 import bcrypt from 'bcryptjs'
+import { buildEmail } from '@/lib/email/template'
 
 const CODE_TTL_MINUTES = 15
 
@@ -59,7 +60,13 @@ export async function POST(req: Request) {
         auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
       })
 
-      const mailHtml = `<p>Tu código de verificación es:</p><p style="font-size:24px;font-weight:700;letter-spacing:4px;">${code}</p><p>Este código expira en ${CODE_TTL_MINUTES} minutos.</p>`
+      const mailHtml = buildEmail({
+        heading: 'Código de verificación',
+        intro: `Tu código de verificación es: <strong style="font-size:24px;display:block;margin-top:8px">${code}</strong>`,
+        ctaText: 'Usar código',
+        ctaUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+        ctaNote: `Este código expira en ${CODE_TTL_MINUTES} minutos.`
+      })
       await transporter.sendMail({
         from: process.env.EMAIL_FROM,
         to: email,

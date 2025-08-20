@@ -154,21 +154,14 @@ export default function FirstLoginPage() {
         throw new Error(data.error || 'No se pudo completar la invitación');
       }
 
-      // Try to sign in user (if created)
+      // Invitation completed successfully. Redirect user to login with a success message
       try {
-        const { data: signData, error: signError } = await supabase.auth.signInWithPassword({ email: inviteInfo.email, password: formData.newPassword });
-        if (signError) {
-          // still consider invite complete; redirect to plan selection
-          toast({ title: 'Invitación aceptada', description: 'Cuenta creada. Completa la selección de plan.' });
-          router.push(`/select-plan?email=${encodeURIComponent(inviteInfo.email)}`);
-          return;
-        }
-      } catch (e) {
-        console.warn('Sign-in after invite failed', e);
-      }
-
-      toast({ title: 'Cuenta activada', description: 'Bienvenido a SmileSys' });
-      router.replace(`/select-plan?email=${encodeURIComponent(inviteInfo.email)}`);
+        toast({ title: 'Cuenta creada', description: 'La cuenta se creó correctamente. Por favor, inicia sesión.' });
+      } catch (e) { /* ignore */ }
+      // Ensure any client session is cleared and redirect to login
+      try { await supabase.auth.signOut(); } catch (e) { /* ignore */ }
+      router.replace('/');
+      return;
     } catch (err: any) {
       setError(err.message || 'Error inesperado');
     } finally {

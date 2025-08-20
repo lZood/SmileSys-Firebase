@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 import { v4 as uuidv4 } from 'uuid'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { buildEmail } from '@/lib/email/template'
 
 export async function POST(req: Request) {
   try {
@@ -23,7 +24,12 @@ export async function POST(req: Request) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
     const link = `${appUrl.replace(/\/$/, '')}/first-login?invite=${token}`
-    const html = `<p>Te hemos invitado a SmileSys. Para activar tu cuenta y crear tu contraseña, sigue este enlace:</p><p><a href="${link}">Confirma tu cuenta</a></p>`
+    const html = buildEmail({
+      heading: 'Has sido invitado a SmileSys',
+      intro: `Para activar tu cuenta y crear tu contraseña haz clic en el siguiente enlace.`,
+      ctaText: 'Confirma tu cuenta',
+      ctaUrl: link,
+    })
 
     try {
       await transporter.sendMail({ from: process.env.EMAIL_FROM, to: email, subject: 'Invitación a SmileSys', html, text: link })

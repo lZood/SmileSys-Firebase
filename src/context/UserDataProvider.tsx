@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { getUserData } from '@/app/user/actions';
+import { createClient } from '@/lib/supabase/client';
 
 type UserData = Awaited<ReturnType<typeof getUserData>>;
 
@@ -21,6 +22,9 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
 
   const isFetchingRef = React.useRef(false);
   const mountedRef = React.useRef(true);
+
+  // Supabase client to listen for auth changes
+  const supabase = React.useMemo(() => createClient(), []);
 
   useEffect(() => {
     return () => { mountedRef.current = false; };
@@ -61,7 +65,28 @@ export function UserDataProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    // Initial load
     fetchUserData();
+
+    // Subscribe to auth state changes to clear/refetch cached user data
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      console.debug('[UserDataProvider] auth state changed', event);
+      if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
+        // Clear local context immediately
+        setUserData(null);
+        // Trigger a refetch to ensure fresh state (getUserData will return null/no-user)
+        fetchUserData();
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        // On sign in or token refresh, refetch user data for the new session
+        fetchUserData();
+      }
+    });
+
+    return () => {
+      // cleanup listener
+      try { data?.subscription?.unsubscribe(); } catch (e) { /* ignore */ }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

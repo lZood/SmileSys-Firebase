@@ -1,8 +1,23 @@
 'use server';
 
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import nodemailer from 'nodemailer';
+import { v4 as uuidv4 } from 'uuid';
+import { buildEmail } from '@/lib/email/template'
+
+const scheduleIntervalSchema = z.object({ start: z.string(), end: z.string() });
+const scheduleSchema = z.object({
+    monday: z.array(scheduleIntervalSchema).optional(),
+    tuesday: z.array(scheduleIntervalSchema).optional(),
+    wednesday: z.array(scheduleIntervalSchema).optional(),
+    thursday: z.array(scheduleIntervalSchema).optional(),
+    friday: z.array(scheduleIntervalSchema).optional(),
+    saturday: z.array(scheduleIntervalSchema).optional(),
+    sunday: z.array(scheduleIntervalSchema).optional(),
+}).optional();
 
 const clinicInfoSchema = z.object({
     clinicId: z.string().uuid(),
@@ -11,6 +26,8 @@ const clinicInfoSchema = z.object({
     phone: z.string().optional().nullable(),
     logo_url: z.string().url().optional().nullable(),
     terms_and_conditions: z.string().optional().nullable(),
+    schedule: scheduleSchema,
+    google_calendar_reminder_minutes: z.number().optional(),
 });
 
 export async function updateClinicInfo(data: z.infer<typeof clinicInfoSchema>) {
@@ -92,12 +109,12 @@ const inviteMemberSchema = z.object({
   lastName: z.string().min(2, "El apellido debe tener al menos 2 caracteres."),
   jobTitle: z.string().min(2, "El puesto es requerido."),
   email: z.string().email("Email inválido."),
-  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres."),
   roles: z.array(z.string()).min(1, "Debes seleccionar al menos un rol."),
 });
 
 export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
     const supabase = await createClient();
+    const adminAuth = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
     
     const { data: { user: adminUser } } = await supabase.auth.getUser();
     if (!adminUser) {
@@ -118,13 +135,15 @@ export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
     if (!parsedData.success) {
         return { error: `Datos inválidos: ${parsedData.error.errors.map(e => e.message).join(', ')}` };
     }
-    const { clinicId, firstName, lastName, jobTitle, email, password, roles } = parsedData.data;
+    const { clinicId, firstName, lastName, jobTitle, email, roles } = parsedData.data;
+
+    // generate random strong temp password (user will change on activation)
+    const tempPassword = `Tmp!${Math.random().toString(36).slice(2,10)}A1`;
 
     // 1) Create Auth user
-    const { data: newUserData, error: authError } = await supabase.auth.admin.createUser({
+    const { data: newUserData, error: authError } = await adminAuth.auth.admin.createUser({
         email,
-        password,
-        // do not auto-confirm so the user can receive email flows normally
+        password: tempPassword,
         email_confirm: false,
         user_metadata: {
             full_name: `${firstName} ${lastName}`,
@@ -141,8 +160,8 @@ export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
     }
     const newUser = newUserData.user;
 
-    // 2) Create profile row
-    const { error: profileError } = await supabase
+    // 2) Create profile row (use service-role to bypass RLS)
+    const { error: profileError } = await adminAuth
         .from('profiles')
         .insert({
             id: newUser.id,
@@ -151,20 +170,21 @@ export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
             last_name: lastName,
             roles: roles,
             job_title: jobTitle,
-            // flag to require password change on first login
             must_change_password: true,
         });
 
     if (profileError) {
         console.error("Error creating user profile:", profileError);
-        // cleanup auth user
-        try { await supabase.auth.admin.deleteUser(newUser.id); } catch (e) { console.error('Rollback deleteUser failed', e); }
+        try { await adminAuth.auth.admin.deleteUser(newUser.id); } catch (e) { console.error('Rollback deleteUser failed', e); }
         return { error: `No se pudo crear el perfil del usuario: ${profileError.message}` };
     }
 
-    // 3) Insert into members table so the clinic members table is consistent with profiles/auth
+    // Track whether invite email was sent
+    let emailSent = false;
+
+    // 3) Insert into members table (service-role)
     try {
-        const { error: membersError } = await supabase
+        const { error: membersError } = await adminAuth
             .from('members')
             .insert({
                 user_id: newUser.id,
@@ -177,51 +197,76 @@ export async function inviteMember(data: z.infer<typeof inviteMemberSchema>) {
             });
 
         if (membersError) {
+            // Special-case: some DB RLS policies may reference the members table and cause
+            // Postgres error 42P17 (infinite recursion detected in policy). In that case
+            // we should not rollback the whole invite; create the profile/auth user and
+            // allow an admin to reconcile the members table later.
             console.error('Error inserting into members table:', membersError);
-            // rollback: delete profile and auth user
-            await supabase.from('profiles').delete().eq('id', newUser.id);
-            try { await supabase.auth.admin.deleteUser(newUser.id); } catch (e) { console.error('Rollback deleteUser failed', e); }
-            return { error: `No se pudo registrar el miembro: ${membersError.message}` };
+            if ((membersError as any).code === '42P17') {
+                console.warn('Detected policy recursion (42P17). Skipping members insert to avoid blocking invite.');
+                // Do not rollback profile/auth; treat invite as successful but warn the admin to sync members.
+            } else {
+                console.error('members insert error will trigger rollback of profile and auth user');
+                await adminAuth.from('profiles').delete().eq('id', newUser.id);
+                try { await adminAuth.auth.admin.deleteUser(newUser.id); } catch (e) { console.error('Rollback deleteUser failed', e); }
+                return { error: `No se pudo registrar el miembro: ${membersError.message}` };
+            }
         }
 
-        // 4) Trigger password recovery email so the user can set their own password
+        // 4) Create an invite token and send an activation email with instructions to create a new password
         try {
-            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-            const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-            if (!supabaseUrl || !serviceKey) {
-                console.warn('SUPABASE_SERVICE_ROLE_KEY or SUPABASE_URL missing; cannot send recovery email automatically.');
-            } else {
-                const resp = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/recover`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'apikey': serviceKey,
-                        'Authorization': `Bearer ${serviceKey}`
-                    },
-                    body: JSON.stringify({ email })
-                });
+            const token = uuidv4();
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+            const link = `${appUrl.replace(/\/$/, '')}/first-login?invite=${token}`;
 
-                if (!resp.ok) {
-                    const body = await resp.text();
-                    console.warn('Failed to send recovery email:', resp.status, body);
-                } else {
-                    console.log('Recovery email sent to', email);
-                }
+            // insert into invites table for tracking
+            await supabase.from('invites').insert({
+                email,
+                token,
+                clinic_id: clinicId,
+                inviter_id: adminUser.id,
+                role: (roles && roles.length) ? roles[0] : 'member',
+                expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                accepted: false
+            });
+
+            // send email via nodemailer
+            const transporter = nodemailer.createTransport({
+                host: process.env.SMTP_HOST,
+                port: Number(process.env.SMTP_PORT || 587),
+                secure: process.env.SMTP_SECURE === 'true',
+                auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+            });
+
+            const html = buildEmail({
+                heading: 'Has sido invitado a SmileSys',
+                intro: `Para activar tu cuenta y crear tu contraseña haz clic en el siguiente enlace.`,
+                ctaText: 'Crear mi contraseña',
+                ctaUrl: link,
+                footerNote: '— El equipo de SmileSys'
+            })
+
+            try {
+                const info = await transporter.sendMail({ from: process.env.EMAIL_FROM, to: email, subject: 'Invitación a SmileSys — Crea tu nueva contraseña', html, text: link });
+                console.log('Invite email sent to', email, info && info.response ? info.response : info);
+                emailSent = true;
+            } catch (mailErr) {
+                console.error('Failed sending invite email', mailErr);
             }
         } catch (e: any) {
-            console.warn('Error triggering recovery email:', e?.message || e);
+            console.warn('Error creating invite token or sending email:', e?.message || e);
         }
 
     } catch (e: any) {
         console.error('Unexpected error inserting members:', e);
         // rollback
-        await supabase.from('profiles').delete().eq('id', newUser.id);
-        try { await supabase.auth.admin.deleteUser(newUser.id); } catch (er) { console.error('Rollback deleteUser failed', er); }
+        await adminAuth.from('profiles').delete().eq('id', newUser.id);
+        try { await adminAuth.auth.admin.deleteUser(newUser.id); } catch (er) { console.error('Rollback deleteUser failed', er); }
         return { error: 'Error inesperado al registrar el miembro.' };
     }
 
     revalidatePath('/settings');
-    return { error: null };
+    return { error: null, emailSent };
 }
 
 const updateUserPasswordSchema = z.object({
@@ -368,6 +413,7 @@ const updateMemberRolesSchema = z.object({
 
 export async function updateMemberRoles(data: z.infer<typeof updateMemberRolesSchema>) {
     const supabase = await createClient();
+    const adminAuth = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
     
     const parsedData = updateMemberRolesSchema.safeParse(data);
     if (!parsedData.success) {
@@ -385,42 +431,80 @@ export async function updateMemberRoles(data: z.infer<typeof updateMemberRolesSc
         return { error: `Error al actualizar roles en perfil: ${profileError.message}` };
     }
 
-    // 2. Update roles in auth.users user_metadata
-    const { error: authError } = await supabase.auth.admin.updateUserById(
-        memberId,
-        { user_metadata: { roles: roles } }
-    );
-    if (authError) {
-        return { error: `Error al actualizar metadata de usuario: ${authError.message}` };
+    // 2. Update roles in auth.users user_metadata (admin API)
+    try {
+        const { error: authError } = await adminAuth.auth.admin.updateUserById(
+            memberId,
+            { user_metadata: { roles: roles } }
+        );
+        if (authError) {
+            console.error('Error updating auth user metadata:', authError);
+            return { error: `Error al actualizar roles en Auth: ${authError.message}` };
+        }
+    } catch (e: any) {
+        console.error('Unexpected error updating auth user metadata:', e);
+        return { error: 'Error inesperado al actualizar roles en Auth.' };
     }
-    
-    revalidatePath('/settings');
+
+    try { revalidatePath('/settings'); } catch (e) { /* ignore */ }
     return { error: null };
 }
 
-export async function deleteMember(memberId: string) {
+export async function deleteMember(data: { memberId?: string } | string) {
     const supabase = await createClient();
+    const adminAuth = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    try {
+        const memberId = typeof data === 'string' ? data : (data && (data as any).memberId);
+        if (!memberId) return { error: 'memberId missing' };
 
-    // 1. Delete from profiles table (will be handled by CASCADE, but good to be explicit or have policies)
-    const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', memberId);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { error: 'No autorizado: Usuario no autenticado.' };
 
-    if (profileError) {
-        return { error: `Error al eliminar el perfil: ${profileError.message}` };
+        // Ensure caller is admin in the same clinic
+        const { data: profile } = await supabase.from('profiles').select('clinic_id, roles').eq('id', user.id).single();
+        if (!profile || !profile.roles || !profile.roles.includes('admin')) {
+            return { error: 'No autorizado: Solo administradores pueden eliminar miembros.' };
+        }
+
+        // Find member row by id
+        const { data: memberRow, error: fetchErr } = await supabase.from('members').select('*').eq('id', memberId).maybeSingle();
+        let targetUserId: string | null = null;
+        let targetClinicId: string | null = null;
+        if (memberRow) {
+            targetUserId = memberRow.user_id;
+            targetClinicId = memberRow.clinic_id;
+        }
+
+        // Delete from members table
+        const { error: deleteError } = await supabase.from('members').delete().eq('id', memberId);
+        if (deleteError) {
+            return { error: `Error al eliminar miembro: ${deleteError.message}` };
+        }
+
+        // Cleanup: delete user and profile if this was the last member in the clinic
+        if (targetUserId && targetClinicId) {
+            const { data: remainingMembers } = await supabase
+                .from('members')
+                .select('id')
+                .eq('user_id', targetUserId)
+                .neq('clinic_id', targetClinicId); // ensure we're not counting the current deletion
+
+            if (remainingMembers && remainingMembers.length === 0) {
+                try {
+                    await adminAuth.from('profiles').delete().eq('id', targetUserId);
+                    await adminAuth.auth.admin.deleteUser(targetUserId);
+                } catch (e) {
+                    console.error('Error cleaning up user/profile:', e);
+                }
+            }
+        }
+
+        revalidatePath('/settings');
+        return { error: null };
+    } catch (e: any) {
+        console.error('deleteMember error', e);
+        return { error: 'Error inesperado al eliminar el miembro.' };
     }
-
-    // 2. Delete from auth.users
-    const { error: authError } = await supabase.auth.admin.deleteUser(memberId);
-    if (authError) {
-        // This is problematic as the profile might be gone but auth user remains.
-        // A transaction would be ideal here if possible.
-        return { error: `Error al eliminar el usuario de autenticación: ${authError.message}` };
-    }
-
-    revalidatePath('/settings');
-    return { error: null };
 }
 
 export async function disconnectGoogleAccount() {
@@ -429,20 +513,24 @@ export async function disconnectGoogleAccount() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return { error: 'Usuario no autenticado.' };
 
-        const { error } = await supabase
-            .from('google_integrations')
-            .delete()
-            .eq('user_id', user.id);
-
-        if (error) {
-            console.error('[disconnectGoogleAccount] Error:', error);
-            return { error: `No se pudo desconectar Google: ${error.message}` };
+        // Delete any stored Google integration for this user
+        const { error: delErr } = await supabase.from('google_integrations').delete().eq('user_id', user.id);
+        if (delErr) {
+            console.error('Error deleting google_integrations for user:', delErr);
+            return { error: `No se pudo desconectar Google: ${delErr.message || delErr}` };
         }
 
-        revalidatePath('/settings');
+        // Clear any profile flag that indicates a connected Google Calendar
+        try {
+            await supabase.from('profiles').update({ google_calendar_connected: false }).eq('id', user.id);
+        } catch (e) {
+            console.warn('Could not clear google_calendar_connected flag on profile:', e);
+        }
+
+        try { revalidatePath('/settings'); } catch (e) { /* ignore */ }
         return { error: null };
     } catch (e: any) {
-        console.error('[disconnectGoogleAccount] Unexpected:', e);
+        console.error('disconnectGoogleAccount error', e);
         return { error: 'Error inesperado al desconectar Google.' };
     }
 }
