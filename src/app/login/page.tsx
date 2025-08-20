@@ -186,70 +186,83 @@ export default function LoginPage() {
   );
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background px-4">
-      <Card className="mx-auto max-w-md w-full">
-        <CardHeader className="text-center">
-          <div className="flex justify-center items-center mb-4">
-            <SmileSysLogo className="h-12 w-12" />
+    <div className="min-h-screen flex flex-col bg-background">
+      <div className="w-full max-w-6xl mx-auto flex-1 grid md:grid-cols-2 gap-0 md:gap-20 px-6 py-8 sm:py-10 md:py-14">
+        {/* IMAGE / ILLUSTRATION (mobile first) */}
+        <div className="order-first md:order-last flex items-start md:items-center mb-10 md:mb-0">
+          <div className="w-full md:w-auto md:flex-1 flex justify-center md:justify-end">
+            <div className="relative w-full max-w-sm sm:max-w-md md:max-w-none md:w-full h-52 xs:h-60 sm:h-72 md:h-[calc(100vh-8rem)] md:min-h-[520px] md:max-h-[760px] rounded-2xl overflow-hidden border bg-muted shadow-inner p-2 sm:p-4 flex items-center justify-center text-xs text-muted-foreground">
+              {/* IMAGE_PLACEHOLDER: Replace with <Image /> or <img className="object-cover w-full h-full" /> */}
+              Ilustración / Screenshot
+            </div>
           </div>
+        </div>
+
+        {/* FORM */}
+        <div className="flex flex-col justify-center max-w-md w-full mx-auto md:mx-0">
+          <div className="mb-8 sm:mb-10">
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight mb-3">Bienvenido de nuevo <span role="img" aria-label="saludo">👋</span></h1>
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+              Hoy es un nuevo día. Administra tu clínica, coordina al equipo y brinda una mejor experiencia a tus pacientes desde un solo lugar.
+            </p>
+          </div>
+
           {signupSuccess && (
-            <div className="mb-2 rounded bg-green-100 text-green-800 text-sm px-3 py-2 font-medium">
+            <div className="mb-6 rounded border border-green-300 bg-green-50 text-green-800 text-[11px] px-3 py-2 font-medium">
               ¡Tu cuenta se creó correctamente! Inicia sesión para continuar.
             </div>
           )}
-          <CardTitle className="text-2xl font-bold font-headline">Bienvenido a SmileSys</CardTitle>
-          <CardDescription>Ingresa tus credenciales para acceder al panel de tu clínica.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 mb-6">
-            <Button type="button" variant="outline" onClick={signInWithGoogle} disabled={isLoading} className="w-full font-medium">
-               <GoogleIcon /> Continuar con Google
-             </Button>
-             <div className="flex items-center gap-2">
-               <Separator className="flex-1" />
-               <span className="text-xs text-muted-foreground">o ingresa con email</span>
-               <Separator className="flex-1" />
-             </div>
-           </div>
-            <form onSubmit={handleLogin} className="grid gap-4">
-             <div className="grid gap-2">
-               <Label htmlFor="email">Email</Label>
-               <Input id="email" type="email" placeholder="m@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
-             </div>
-             <div className="grid gap-2">
-               <div className="flex items-center">
-                 <Label htmlFor="password">Contraseña</Label>
-                 <Link href="/forgot-password" className="ml-auto inline-block text-sm underline">
-                   ¿Olvidaste tu contraseña?
-                 </Link>
-               </div>
-               <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-             </div>
-             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Iniciando Sesión...' : 'Iniciar Sesión'}
+
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+              <Input id="email" type="email" placeholder="ejemplo@correo.com" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password" className="text-sm font-medium">Contraseña</Label>
+                <Link href="/forgot-password" className="text-xs font-medium text-primary hover:underline">¿Olvidaste tu contraseña?</Link>
+              </div>
+              <Input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <label className="inline-flex items-center gap-2 cursor-pointer select-none text-xs">
+                      <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="h-4 w-4 rounded border-muted-foreground/40" />
+                      <span>Mantener sesión</span>
+                    </label>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs text-xs">
+                    Guarda tu sesión usando almacenamiento persistente. Desmárcalo en dispositivos compartidos.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <Button type="submit" disabled={isLoading} className="w-full h-11 text-sm font-medium">
+              {isLoading ? 'Iniciando...' : 'Iniciar Sesión'}
             </Button>
-            <div className="mt-3 flex justify-center">
-             <TooltipProvider>
-               <Tooltip>
-                 <TooltipTrigger asChild>
-                   <label className="inline-flex items-center gap-2 cursor-pointer">
-                     <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="h-4 w-4" />
-                     <span className="text-sm">Mantener sesión</span>
-                   </label>
-                 </TooltipTrigger>
-                 <TooltipContent side="top" className="max-w-xs">
-                   Mantener sesión guarda tu preferencia (localStorage). Si no está activado, la sesión se guarda sólo por pestaña.
-                 </TooltipContent>
-               </Tooltip>
-             </TooltipProvider>
-           </div>
-           </form>
-           <div className="mt-4 text-center text-sm">
-            ¿No tienes una cuenta?{' '}
-            <Link href="/signup-new" className="underline">Regístrate</Link>
+          </form>
+
+          {/* Divider */}
+          <div className="flex items-center gap-4 my-8">
+            <div className="h-px bg-border flex-1" />
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground">o</span>
+            <div className="h-px bg-border flex-1" />
           </div>
-        </CardContent>
-      </Card>
+
+            <Button type="button" variant="outline" onClick={signInWithGoogle} disabled={isLoading} className="w-full justify-center font-medium text-sm h-11">
+              <GoogleIcon /> Iniciar con Google
+            </Button>
+
+          <p className="mt-10 text-xs text-muted-foreground text-center">
+            ¿No tienes una cuenta?{' '}
+            <Link href="/signup-new" className="text-primary hover:underline font-medium">Regístrate</Link>
+          </p>
+          <p className="mt-6 text-[10px] text-center text-muted-foreground">© {new Date().getFullYear()} SmileSys</p>
+        </div>
+      </div>
     </div>
   );
 }
