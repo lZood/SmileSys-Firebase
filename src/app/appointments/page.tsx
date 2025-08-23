@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Plus, Edit, Trash2, CalendarClock, ListTodo, CalendarDays, MoreVertical, FilterX, SlidersHorizontal } from 'lucide-react';
 import {
   eachDayOfInterval,
@@ -184,7 +184,9 @@ const AppointmentDetailsModal = ({
 export default function AppointmentsCalendarPage() {
   const isMobile = useIsMobile();
   const router = useRouter();
-  const searchParams = useSearchParams();
+
+  // Read filters from URL on client mount to avoid useSearchParams SSR issues
+  const [initialFiltersLoaded, setInitialFiltersLoaded] = React.useState(false);
 
   const [currentDate, setCurrentDate] = React.useState<Date | null>(null);
   const [appointments, setAppointments] = React.useState<Appointment[]>([]); 
@@ -197,9 +199,9 @@ export default function AppointmentsCalendarPage() {
   const [doctors, setDoctors] = React.useState<Doctor[]>([]);
   const { toast } = useToast();
 
-  const [patientFilter, setPatientFilter] = React.useState(searchParams.get('patientId') || 'all');
-  const [doctorFilter, setDoctorFilter] = React.useState('all');
-  const [statusFilter, setStatusFilter] = React.useState('all');
+  const [patientFilter, setPatientFilter] = React.useState<string>('all');
+  const [doctorFilter, setDoctorFilter] = React.useState<string>('all');
+  const [statusFilter, setStatusFilter] = React.useState<string>('all');
   const [showFilters, setShowFilters] = React.useState(false);
 
 
@@ -261,12 +263,26 @@ export default function AppointmentsCalendarPage() {
 
   // Update URL when filters change
   React.useEffect(() => {
-    const params = new URLSearchParams(searchParams);
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
     if (patientFilter !== 'all') params.set('patientId', patientFilter); else params.delete('patientId');
     if (doctorFilter !== 'all') params.set('doctorId', doctorFilter); else params.delete('doctorId');
     if (statusFilter !== 'all') params.set('status', statusFilter); else params.delete('status');
     router.push(`/appointments?${params.toString()}`, { scroll: false });
-  }, [patientFilter, doctorFilter, statusFilter, router, searchParams]);
+  }, [patientFilter, doctorFilter, statusFilter, router]);
+
+  // On mount, populate initial filters from URL (client-only)
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sp = new URLSearchParams(window.location.search);
+    const p = sp.get('patientId') || 'all';
+    const d = sp.get('doctorId') || 'all';
+    const s = sp.get('status') || 'all';
+    setPatientFilter(p);
+    setDoctorFilter(d);
+    setStatusFilter(s);
+    setInitialFiltersLoaded(true);
+  }, []);
   
   if (!currentDate) {
     return (
