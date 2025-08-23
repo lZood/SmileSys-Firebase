@@ -116,7 +116,9 @@ export async function getDashboardData(dateString: string) {
         return acc;
     }, {} as Record<string, number>);
 
-    const serviceStats = Object.entries(serviceCounts)
+    type ServiceStat = { name: string; count: number };
+    const serviceEntries = Object.entries(serviceCounts) as Array<[string, number]>;
+    const serviceStats: ServiceStat[] = serviceEntries
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 5); // Top 5 services

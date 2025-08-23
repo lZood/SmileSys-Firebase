@@ -535,6 +535,7 @@ const AdjustStockModal = ({
 }
 
 export default function InventoryPage() {
+    const { toast } = useToast();
     const isMobile = useIsMobile();
     const [inventory, setInventory] = React.useState<InventoryItem[]>([]);
     const [categories, setCategories] = React.useState<InventoryCategory[]>([]);
@@ -554,7 +555,7 @@ export default function InventoryPage() {
     const [isNewItemModalOpen, setIsNewItemModalOpen] = React.useState(false);
     const [isAdjustStockModalOpen, setIsAdjustStockModalOpen] = React.useState(false);
     const [isEditItemModalOpen, setIsEditItemModalOpen] = React.useState(false);
-
+    const [isRestricted, setIsRestricted] = React.useState(false);
 
     const fetchData = React.useCallback(async () => {
         setIsLoading(true);
@@ -570,6 +571,36 @@ export default function InventoryPage() {
     React.useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    React.useEffect(() => {
+        (async () => {
+            try {
+                const { getUserData } = await import('../user/actions');
+                const userData: any = await getUserData();
+                const roles: string[] = userData?.profile?.roles || [];
+                if (roles.includes('staff') && !roles.includes('admin')) {
+                    setIsRestricted(true);
+                    return; // no cargar inventario
+                }
+                // continuar con fetch existente si no está restringido
+            } catch (e) {
+                console.error('Error verificando roles inventory:', e);
+            }
+        })();
+    }, []);
+
+    if (isRestricted) {
+        return (
+            <div className="p-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Acceso Restringido</CardTitle>
+                        <CardDescription>No tienes permiso para usar esta área.</CardDescription>
+                    </CardHeader>
+                </Card>
+            </div>
+        );
+    }
 
     const lowStockItems = inventory.filter(item => item.status === 'Low Stock' || item.status === 'Out of Stock');
 

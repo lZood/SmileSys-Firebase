@@ -1,4 +1,3 @@
-
 'use server';
 
 import { createClient } from "@/lib/supabase/server";
@@ -15,12 +14,19 @@ export async function addPatient(formData: any) {
 
     const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('clinic_id')
+        .select('clinic_id, roles')
         .eq('id', user.id)
         .single();
     
     if (profileError || !profile) {
         return { error: 'No se pudo encontrar el perfil del usuario.' };
+    }
+
+    // Server-side enforcement: staff-only users cannot create full patients
+    const roles: string[] = Array.isArray((profile as any).roles) ? (profile as any).roles : [];
+    const isStaffOnly = roles.includes('staff') && !roles.includes('admin') && !roles.includes('doctor');
+    if (isStaffOnly) {
+        return { error: 'Tu rol solo permite crear pacientes temporales.' };
     }
 
     const patientData = {
@@ -41,7 +47,7 @@ export async function addPatient(formData: any) {
         temperature: formData.temperature,
         medical_diagnosis: formData.medicalDiagnosis,
         dental_chart: formData.dentalChart,
-        status: 'Active',
+        status: formData.status || 'Active',
     };
     
     const { error: insertError } = await supabase
@@ -53,6 +59,33 @@ export async function addPatient(formData: any) {
         return { error: `Error al guardar el paciente: ${insertError.message}` };
     }
     
+    revalidatePath('/patients');
+    return { error: null };
+}
+
+// Quick add a temporary (pending) patient with minimal data
+export async function addTemporaryPatient(data: { firstName: string; lastName: string; email?: string; phone?: string }) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'No autenticado' };
+    const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).single();
+    if (!profile) return { error: 'Perfil no encontrado' };
+    const insertData: any = {
+        clinic_id: profile.clinic_id,
+        first_name: data.firstName,
+        last_name: data.lastName,
+        email: data.email || null,
+        phone: data.phone || null,
+        status: 'Pending',
+        medical_diagnosis: 'Pendiente', // placeholder to satisfy NOT NULL
+        dental_chart: {},
+        medical_conditions: {},
+    };
+    const { error } = await supabase.from('patients').insert(insertData);
+    if (error) {
+        console.error('addTemporaryPatient error', error);
+        return { error: error.message };
+    }
     revalidatePath('/patients');
     return { error: null };
 }
@@ -82,6 +115,49 @@ export async function getPatients() {
     }
 
     return data;
+}
+
+// Paginated patients with optional search and status filters
+export async function getPatientsPaginated(params: { limit: number; offset: number; searchTerm?: string; status?: string }) {
+    const { limit, offset, searchTerm, status } = params;
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { items: [], total: 0 };
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('clinic_id')
+        .eq('id', user.id)
+        .single();
+    if (!profile) return { items: [], total: 0 };
+
+    let query = supabase
+        .from('patients')
+        .select('*', { count: 'exact' })
+        .eq('clinic_id', profile.clinic_id);
+
+    if (status && status !== 'all') {
+        query = query.eq('status', status);
+    }
+    if (searchTerm && searchTerm.trim().length > 0) {
+        const term = searchTerm.trim();
+        // ilike on first_name, last_name, email
+        query = query.or(`first_name.ilike.%${term}%,last_name.ilike.%${term}%,email.ilike.%${term}%`);
+    }
+
+    const from = Math.max(0, offset);
+    const to = Math.max(from, from + Math.max(1, limit) - 1);
+
+    const { data, error, count } = await query
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+    if (error) {
+        console.error('Error fetching patients paginated:', error);
+        return { items: [], total: 0, error: error.message } as any;
+    }
+
+    return { items: data || [], total: count || 0 };
 }
 
 export async function getPatientById(id: string) {
@@ -258,5 +334,82 @@ export async function getDentalUpdatesForPatient(patientId: string) {
     }
 
     return data;
+}
+
+export async function updatePatientStatus(id: string, status: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'No autenticado' };
+    const { data: profile } = await supabase.from('profiles').select('clinic_id').eq('id', user.id).single();
+    if (!profile) return { error: 'Perfil no encontrado' };
+    // Ensure patient belongs to same clinic
+    const { data: patient } = await supabase.from('patients').select('clinic_id').eq('id', id).single();
+    if (!patient || patient.clinic_id !== profile.clinic_id) return { error: 'Sin permiso' };
+    const { error } = await supabase.from('patients').update({ status }).eq('id', id);
+    if (error) {
+        console.error('updatePatientStatus error', error);
+        return { error: error.message };
+    }
+    revalidatePath('/patients');
+    return { error: null };
+}
+
+// Complete a pending patient by updating the existing record with full details
+export async function completePendingPatient(patientId: string, formData: any) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'No autenticado' };
+
+    // Fetch profile for clinic scoping (and potential role-based checks if needed)
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('clinic_id, roles')
+        .eq('id', user.id)
+        .single();
+    if (!profile) return { error: 'Perfil no encontrado' };
+
+    // Ensure patient belongs to same clinic and exists
+    const { data: patient, error: patientError } = await supabase
+        .from('patients')
+        .select('*')
+        .eq('id', patientId)
+        .single();
+    if (patientError || !patient) return { error: 'Paciente no encontrado' };
+    if (patient.clinic_id !== profile.clinic_id) return { error: 'Sin permiso' };
+
+    // Optional: enforce that only Pending can be completed
+    // if (patient.status !== 'Pending') return { error: 'Solo pacientes pendientes pueden completarse.' };
+
+    const updateData = {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        age: formData.age,
+        gender: formData.gender,
+        occupation: formData.occupation,
+        phone: formData.phone,
+        address: formData.address,
+        email: formData.email,
+        medical_conditions: formData.medicalConditions,
+        pregnancy_quarter: formData.pregnancyQuarter,
+        current_medications: formData.currentMedications,
+        blood_pressure: formData.bloodPressure,
+        pulse: formData.pulse,
+        temperature: formData.temperature,
+        medical_diagnosis: formData.medicalDiagnosis,
+        dental_chart: formData.dentalChart,
+        status: 'Active',
+    } as any;
+
+    const { error: updateError } = await supabase
+        .from('patients')
+        .update(updateData)
+        .eq('id', patientId);
+    if (updateError) {
+        console.error('completePendingPatient error', updateError);
+        return { error: updateError.message };
+    }
+
+    revalidatePath('/patients');
+    return { error: null };
 }
 

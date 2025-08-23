@@ -184,3 +184,23 @@ export async function createQuote(data: z.infer<typeof createQuoteSchema>) {
             expiresAt: q.expires_at
         }));
     }
+
+    export async function getQuotesForPatient(patientId: string) {
+        const supabase = await createClient();
+        const { data, error } = await supabase
+            .from('quotes')
+            .select(`id, total_amount, status, created_at, expires_at`)
+            .eq('patient_id', patientId)
+            .order('created_at', { ascending: false });
+        if (error) {
+            console.error('Error fetching patient quotes:', error);
+            return [];
+        }
+        return (data || []).map(q => ({
+            id: q.id,
+            total: (q as any).total_amount,
+            status: (q as any).status,
+            createdAt: (q as any).created_at,
+            expiresAt: (q as any).expires_at,
+        }));
+    }

@@ -1,12 +1,17 @@
-'use client'
+"use client"
 
 import React, { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 
 export default function SelectPlanPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const email = searchParams?.get('email') ?? ''
+  const [email, setEmail] = useState('')
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const sp = new URLSearchParams(window.location.search)
+    setEmail(sp.get('email') ?? '')
+  }, [])
 
   const [isLoading, setIsLoading] = useState(false)
   const [status, setStatus] = useState<'idle' | 'sent' | 'error'>('idle')

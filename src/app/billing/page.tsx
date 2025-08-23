@@ -177,18 +177,19 @@ export default function BillingPage() {
 
     // Filtros para tratamientos
     const [treatmentStatusFilter, setTreatmentStatusFilter] = React.useState<'all' | 'active' | 'completed' | 'cancelled'>('all');
-    const [treatmentPatientFilter, setTreatmentPatientFilter] = React.useState('all');
     const [treatmentSearchTerm, setTreatmentSearchTerm] = React.useState('');
+    const [treatmentSort, setTreatmentSort] = React.useState<'remaining_desc' | 'remaining_asc' | 'total_desc' | 'total_asc' | 'patient_asc' | 'status_asc'>('remaining_desc');
 
     // Filtros para pagos
     const [paymentStatusFilter, setPaymentStatusFilter] = React.useState<'all' | 'Paid' | 'Pending' | 'Canceled'>('all');
-    const [paymentPatientFilter, setPaymentPatientFilter] = React.useState('all');
     const [paymentMethodFilter, setPaymentMethodFilter] = React.useState<'all' | 'Cash' | 'Card' | 'Transfer'>('all');
     const [paymentSearchTerm, setPaymentSearchTerm] = React.useState('');
+    const [paymentSort, setPaymentSort] = React.useState<'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc' | 'status_asc'>('date_desc');
 
     // Filtros para presupuestos
     const [quoteStatusFilter, setQuoteStatusFilter] = React.useState<'all' | 'Draft' | 'Presented' | 'Accepted' | 'Expired'>('all');
-    const [quotePatientFilter, setQuotePatientFilter] = React.useState('all');
+    // Orden de presupuestos
+    const [quoteSort, setQuoteSort] = React.useState<'created_desc' | 'created_asc' | 'total_desc' | 'total_asc' | 'status_asc'>('created_desc');
     const [quoteSearchTerm, setQuoteSearchTerm] = React.useState('');
 
     const [isLoading, setIsLoading] = React.useState(true);
@@ -201,26 +202,30 @@ export default function BillingPage() {
     const [showPaymentFilters, setShowPaymentFilters] = React.useState(false);
     const [showQuoteFilters, setShowQuoteFilters] = React.useState(false);
 
+    const [isRestricted, setIsRestricted] = React.useState(false);
+
     
     const fetchData = React.useCallback(async () => {
         setIsLoading(true);
-        const [treatmentsData, paymentsData, patientsData, userData, quotesData] = await Promise.all([
+        // Obtener primero userData para validar acceso
+        const userData = await getUserData();
+        const roles: string[] = userData?.profile?.roles || [];
+        if (roles.includes('staff') && !roles.includes('admin')) {
+            setIsRestricted(true);
+            setIsLoading(false);
+            return; // No continuar cargando datos
+        }
+        const [treatmentsData, paymentsData, patientsData, quotesData] = await Promise.all([
             getTreatmentsForClinic(),
             getPaymentsForClinic(),
             getPatientsForBilling(),
-            getUserData(),
             getQuotesForClinic()
         ]);
         
         setTreatments(treatmentsData as Treatment[]);
-        if (paymentsData.data) {
-            setPayments(paymentsData.data as Payment[]);
-        }
+        if (paymentsData.data) setPayments(paymentsData.data as Payment[]);
         setBillingPatients(patientsData as BillingPatient[]);
-        if (userData?.clinic) {
-            setClinic(userData.clinic);
-        }
-        
+        if (userData?.clinic) setClinic(userData.clinic);
         setQuotes(quotesData || []);
 
         setIsLoading(false);
@@ -242,6 +247,98 @@ export default function BillingPage() {
             return paymentDate.getFullYear() === today.getFullYear() && paymentDate.getMonth() === today.getMonth();
         })
         .reduce((sum, p) => sum + p.amount, 0);
+
+  // Pre-cálculos de listas filtradas y ordenadas
+  const filteredSortedTreatments = React.useMemo(() => {
+    return [...treatments]
+      .filter(t => {
+        if (treatmentStatusFilter !== 'all' && t.status !== treatmentStatusFilter) return false;
+        if (treatmentSearchTerm) {
+          const s = treatmentSearchTerm.toLowerCase();
+            return (
+              t.description.toLowerCase().includes(s) ||
+              t.patients.first_name.toLowerCase().includes(s) ||
+              t.patients.last_name.toLowerCase().includes(s)
+            );
+        }
+        return true;
+      })
+      .sort((a,b) => {
+        const remainingA = a.total_cost - a.total_paid;
+        const remainingB = b.total_cost - b.total_paid;
+        switch (treatmentSort) {
+          case 'remaining_desc': return remainingB - remainingA;
+          case 'remaining_asc': return remainingA - remainingB;
+          case 'total_desc': return b.total_cost - a.total_cost;
+          case 'total_asc': return a.total_cost - b.total_cost;
+          case 'patient_asc': {
+            const nameA = `${a.patients.first_name} ${a.patients.last_name}`.toLowerCase();
+            const nameB = `${b.patients.first_name} ${b.patients.last_name}`.toLowerCase();
+            return nameA.localeCompare(nameB);
+          }
+          case 'status_asc': return a.status.localeCompare(b.status);
+          default: return 0;
+        }
+      });
+  }, [treatments, treatmentStatusFilter, treatmentSearchTerm, treatmentSort]);
+
+  const filteredSortedPayments = React.useMemo(() => {
+    return [...payments]
+      .filter(p => {
+        if (paymentStatusFilter !== 'all' && p.status !== paymentStatusFilter) return false;
+        if (paymentMethodFilter !== 'all' && p.method !== paymentMethodFilter) return false;
+        if (paymentSearchTerm) {
+          const s = paymentSearchTerm.toLowerCase();
+          return p.concept.toLowerCase().includes(s) || p.patientName.toLowerCase().includes(s);
+        }
+        return true;
+      })
+      .sort((a,b) => {
+        switch (paymentSort) {
+          case 'date_desc': return new Date(b.date).getTime() - new Date(a.date).getTime();
+          case 'date_asc': return new Date(a.date).getTime() - new Date(b.date).getTime();
+          case 'amount_desc': return b.amount - a.amount;
+            case 'amount_asc': return a.amount - b.amount;
+          case 'status_asc': return a.status.localeCompare(b.status);
+          default: return 0;
+        }
+      });
+  }, [payments, paymentStatusFilter, paymentMethodFilter, paymentSearchTerm, paymentSort]);
+
+  const filteredSortedQuotes = React.useMemo(() => {
+    return [...quotes]
+      .filter(q => {
+        if (quoteStatusFilter !== 'all' && q.status !== quoteStatusFilter) return false;
+        if (quoteSearchTerm) {
+          const s = quoteSearchTerm.toLowerCase();
+          return q.patientName.toLowerCase().includes(s);
+        }
+        return true;
+      })
+      .sort((a,b) => {
+        switch (quoteSort) {
+          case 'created_desc': return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          case 'created_asc': return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          case 'total_desc': return b.total - a.total;
+          case 'total_asc': return a.total - b.total;
+          case 'status_asc': return a.status.localeCompare(b.status);
+          default: return 0;
+        }
+      });
+  }, [quotes, quoteStatusFilter, quoteSearchTerm, quoteSort]);
+
+  if (isRestricted) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Acceso Restringido</CardTitle>
+            <CardDescription>No tienes permiso para usar esta área.</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 px-4 md:px-6">
@@ -314,169 +411,136 @@ export default function BillingPage() {
              <TabsTrigger value="quotes">{isMobile ? 'Presupuestos' : 'Presupuestos'}</TabsTrigger>
          </TabsList>
          <TabsContent value="treatments">
-             <Card>
-                 <CardHeader>
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <CardTitle>Planes de Tratamiento</CardTitle>
-                            <CardDescription className="hidden md:block">Seguimiento de los planes de tratamiento activos y completados.</CardDescription>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {/* espacio para botones a la derecha si necesario en el futuro */}
-                        </div>
-                    </div>
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle>Planes de Tratamiento</CardTitle>
+                  <CardDescription className="hidden md:block">Seguimiento de los planes de tratamiento activos y completados.</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  {/* espacio para botones a la derecha si necesario en el futuro */}
+                </div>
+              </div>
 
-                    {/* Fila separada: búsqueda + botón filtros */}
-                    <div className="mt-3 flex items-center gap-2">
-                      <Input 
-                        placeholder="Buscar por descripción..." 
-                        className="flex-1 md:w-[200px]" 
-                        value={treatmentSearchTerm}
-                        onChange={(e) => setTreatmentSearchTerm(e.target.value)}
-                      />
-                      <Button size="sm" className="h-9" onClick={() => setShowTreatmentFilters(prev => !prev)} aria-label="Abrir filtros">
-                        <SlidersHorizontal className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    {/* Panel de selects: visible en desktop, en móvil solo si showTreatmentFilters=true */}
-                    <div className={`mt-3 ${showTreatmentFilters ? 'flex flex-col space-y-2 md:flex md:space-y-0 md:gap-2' : 'hidden md:flex md:space-y-0 md:gap-2'}`}>
-                      <Select 
-                          onValueChange={(value) => setTreatmentStatusFilter(value as 'all' | 'active' | 'completed' | 'cancelled')}
-                      >
-                          <SelectTrigger className="w-[180px]">
-                              <SelectValue placeholder="Filtrar por estado" />
-                          </SelectTrigger>
-                          <SelectContent>
-                              <SelectItem value="all">Todos los estados</SelectItem>
-                              <SelectItem value="active">Activos</SelectItem>
-                              <SelectItem value="completed">Completados</SelectItem>
-                              <SelectItem value="cancelled">Cancelados</SelectItem>
-                          </SelectContent>
-                      </Select>
-                      <Select 
-                          onValueChange={(value) => setTreatmentPatientFilter(value)}
-                      >
-                          <SelectTrigger className="w-[200px]">
-                              <SelectValue placeholder="Filtrar por paciente" />
-                          </SelectTrigger>
-                          <SelectContent>
-                              <SelectItem value="all">Todos los pacientes</SelectItem>
-                              {billingPatients.map(patient => (
-                                  <SelectItem key={patient.id} value={patient.id}>
-                                      {patient.first_name} {patient.last_name}
-                                  </SelectItem>
-                              ))}
-                          </SelectContent>
-                      </Select>
-                    </div>
-                 </CardHeader>
-                <CardContent className="p-0">
-                  {isMobile ? (
-                    <div className="space-y-3 p-2">
-                      {isLoading ? (
-                        Array.from({ length: 3 }).map((_, i) => (
-                          <Card key={i}>
-                            <CardContent><Skeleton className="h-6 w-full" /></CardContent>
-                          </Card>
-                        ))
-                      ) : treatments.length > 0 ? (
-                        treatments
-                          .filter(treatment => {
-                              if (treatmentStatusFilter !== 'all' && treatment.status !== treatmentStatusFilter) return false;
-                              if (treatmentPatientFilter !== 'all' && treatment.patients.id !== treatmentPatientFilter) return false;
-                              if (treatmentSearchTerm) {
-                                  const searchLower = treatmentSearchTerm.toLowerCase();
-                                  return (
-                                      treatment.description.toLowerCase().includes(searchLower) ||
-                                      treatment.patients.first_name.toLowerCase().includes(searchLower) ||
-                                      treatment.patients.last_name.toLowerCase().includes(searchLower)
-                                  );
-                              }
-                              return true;
-                          })
-                          .map((treatment) => (
-                            <Card key={treatment.id} className="p-2 shadow-sm">
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="min-w-0 flex-1 pr-1">
-                                  <div className="font-medium text-sm truncate">{treatment.patients.first_name} {treatment.patients.last_name}</div>
-                                  <div className="text-xs text-muted-foreground truncate">{treatment.description}</div>
-                                  <div className="text-xs text-muted-foreground mt-1">${treatment.total_paid.toFixed(2)} / ${treatment.total_cost.toFixed(2)}</div>
-                                </div>
-                                <div className="flex flex-col items-end ml-2 space-y-1 w-20">
-                                  <div className="font-semibold text-sm">${Math.max(0, treatment.total_cost - treatment.total_paid).toFixed(2)}</div>
-                                  <Badge variant="outline" className={cn('capitalize text-xs', getStatusClass(treatment.status))}>{getStatusInSpanish(treatment.status)}</Badge>
-                                  <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => handleRegisterPaymentClick(treatment)}>
-                                    <HandCoins className="h-3 w-3 mr-1" /> Pago
-                                  </Button>
-                                </div>
-                              </div>
-                            </Card>
-                          ))
-                      ) : (
-                        <div className="p-4 text-center">No hay planes de tratamiento activos.</div>
-                      )}
-                    </div>
+              {/* Fila separada: búsqueda + botón filtros */}
+              <div className="mt-3 flex items-center gap-2">
+                <Input
+                  placeholder="Buscar por descripción..."
+                  className="flex-1 md:w-[200px]"
+                  value={treatmentSearchTerm}
+                  onChange={(e) => setTreatmentSearchTerm(e.target.value)}
+                />
+                <Button size="sm" className="h-9" onClick={() => setShowTreatmentFilters(prev => {
+                  const next = !prev;
+                  if (!next) {
+                    setTreatmentStatusFilter('all');
+                    setTreatmentSort('remaining_desc');
+                  }
+                  return next;
+                })} aria-label="Abrir filtros">
+                  <SlidersHorizontal className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className={`mt-3 space-y-2 flex flex-col md:flex-row md:space-y-0 md:gap-2 ${showTreatmentFilters ? '' : 'hidden'}`}>
+                <Select onValueChange={(value) => setTreatmentStatusFilter(value as 'all' | 'active' | 'completed' | 'cancelled')}>
+                  <SelectTrigger className="w-[180px]"><SelectValue placeholder="Estado" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los estados</SelectItem>
+                    <SelectItem value="active">Activos</SelectItem>
+                    <SelectItem value="completed">Completados</SelectItem>
+                    <SelectItem value="cancelled">Cancelados</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={treatmentSort} onValueChange={(v: any) => setTreatmentSort(v)}>
+                  <SelectTrigger className="w-[220px]"><SelectValue placeholder="Ordenar por" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="remaining_desc">Restante (mayor a menor)</SelectItem>
+                    <SelectItem value="remaining_asc">Restante (menor a mayor)</SelectItem>
+                    <SelectItem value="total_desc">Total (mayor a menor)</SelectItem>
+                    <SelectItem value="total_asc">Total (menor a mayor)</SelectItem>
+                    <SelectItem value="patient_asc">Paciente (A-Z)</SelectItem>
+                    <SelectItem value="status_asc">Estado (A-Z)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {isMobile ? (
+                <div className="space-y-3 p-2">
+                  {isLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <Card key={i}><CardContent><Skeleton className="h-6 w-full" /></CardContent></Card>
+                    ))
+                  ) : filteredSortedTreatments.length > 0 ? (
+                    filteredSortedTreatments.map(treatment => (
+                      <Card key={treatment.id} className="p-2 shadow-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1 pr-1">
+                            <div className="font-medium text-sm truncate">{treatment.patients.first_name} {treatment.patients.last_name}</div>
+                            <div className="text-xs text-muted-foreground truncate">{treatment.description}</div>
+                            <div className="text-xs text-muted-foreground mt-1">${treatment.total_paid.toFixed(2)} / ${treatment.total_cost.toFixed(2)}</div>
+                          </div>
+                          <div className="flex flex-col items-end ml-2 space-y-1 w-20">
+                            <div className="font-semibold text-sm">${Math.max(0, treatment.total_cost - treatment.total_paid).toFixed(2)}</div>
+                            <Badge variant="outline" className={cn('capitalize text-xs', getStatusClass(treatment.status))}>{getStatusInSpanish(treatment.status)}</Badge>
+                            <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => handleRegisterPaymentClick(treatment)}>
+                              <HandCoins className="h-3 w-3 mr-1" /> Pago
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    ))
                   ) : (
-                    <Table>
-                      <TableHeader>
-                          <TableRow>
-                              <TableHead>Paciente</TableHead>
-                              <TableHead>Descripción</TableHead>
-                              <TableHead>Progreso de Pago</TableHead>
-                              <TableHead>Estado</TableHead>
-                              <TableHead><span className="sr-only">Acciones</span></TableHead>
-                          </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {isLoading ? (
-                          <TableRow><TableCell colSpan={5} className="h-24 text-center">Cargando tratamientos...</TableCell></TableRow>
-                        ) : treatments.length > 0 ? (
-                          treatments
-                          .filter(treatment => {
-                              if (treatmentStatusFilter !== 'all' && treatment.status !== treatmentStatusFilter) return false;
-                              if (treatmentPatientFilter !== 'all' && treatment.patients.id !== treatmentPatientFilter) return false;
-                              if (treatmentSearchTerm) {
-                                  const searchLower = treatmentSearchTerm.toLowerCase();
-                                  return (
-                                      treatment.description.toLowerCase().includes(searchLower) ||
-                                      treatment.patients.first_name.toLowerCase().includes(searchLower) ||
-                                      treatment.patients.last_name.toLowerCase().includes(searchLower)
-                                  );
-                              }
-                              return true;
-                          })
-                          .map((treatment) => {
-                              const progress = treatment.total_cost > 0 ? (treatment.total_paid / treatment.total_cost) * 100 : 0;
-                              return (
-                              <TableRow key={treatment.id}>
-                                  <TableCell className="font-medium hover:underline cursor-pointer" onClick={() => router.push(`/patients/${treatment.patients.id}`)}>
-                                      {treatment.patients.first_name} {treatment.patients.last_name}
-                                  </TableCell>
-                                  <TableCell>{treatment.description}</TableCell>
-                                  <TableCell>
-                                      <div className="flex flex-col gap-1">
-                                          <span className="text-sm">${treatment.total_paid.toFixed(2)} / ${treatment.total_cost.toFixed(2)}</span>
-                                          <Progress value={progress} className="h-2" />
-                                      </div>
-                                  </TableCell>
-                                  <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(treatment.status))}>{getStatusInSpanish(treatment.status)}</Badge></TableCell>
-                                  <TableCell>
-                                      <Button variant="outline" size="sm" onClick={() => handleRegisterPaymentClick(treatment)}>
-                                          <HandCoins className="h-4 w-4 mr-2" /> Registrar Pago
-                                      </Button>
-                                  </TableCell>
-                              </TableRow>
-                              )
-                          })
-                        ) : (
-                          <TableRow><TableCell colSpan={5} className="h-24 text-center">No hay planes de tratamiento activos.</TableCell></TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
+                    <div className="p-4 text-center">No hay planes de tratamiento activos.</div>
                   )}
-                </CardContent>
-                 </Card>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Paciente</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead>Progreso de Pago</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead><span className="sr-only">Acciones</span></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      <TableRow><TableCell colSpan={5} className="h-24 text-center">Cargando tratamientos...</TableCell></TableRow>
+                    ) : filteredSortedTreatments.length > 0 ? (
+                      filteredSortedTreatments.map(treatment => {
+                        const progress = treatment.total_cost > 0 ? (treatment.total_paid / treatment.total_cost) * 100 : 0;
+                        return (
+                          <TableRow key={treatment.id}>
+                            <TableCell className="font-medium hover:underline cursor-pointer" onClick={() => router.push(`/patients/${treatment.patients.id}`)}>
+                              {treatment.patients.first_name} {treatment.patients.last_name}
+                            </TableCell>
+                            <TableCell>{treatment.description}</TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                <span className="text-sm">${treatment.total_paid.toFixed(2)} / ${treatment.total_cost.toFixed(2)}</span>
+                                <Progress value={progress} className="h-2" />
+                              </div>
+                            </TableCell>
+                            <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(treatment.status))}>{getStatusInSpanish(treatment.status)}</Badge></TableCell>
+                            <TableCell>
+                              <Button variant="outline" size="sm" onClick={() => handleRegisterPaymentClick(treatment)}>
+                                <HandCoins className="h-4 w-4 mr-2" /> Registrar Pago
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    ) : (
+                      <TableRow><TableCell colSpan={5} className="h-24 text-center">No hay planes de tratamiento activos.</TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
          </TabsContent>
         <TabsContent value="payments">
             <Card>
@@ -500,12 +564,20 @@ export default function BillingPage() {
                             value={paymentSearchTerm}
                             onChange={(e) => setPaymentSearchTerm(e.target.value)}
                         />
-                        <Button size="sm" className="h-9" onClick={() => setShowPaymentFilters(prev => !prev)} aria-label="Abrir filtros">
+                        <Button size="sm" className="h-9" onClick={() => setShowPaymentFilters(prev => {
+                          const next = !prev;
+                          if (!next) {
+                            setPaymentStatusFilter('all');
+                            setPaymentMethodFilter('all');
+                            setPaymentSort('date_desc');
+                          }
+                          return next;
+                        })} aria-label="Abrir filtros">
                           <SlidersHorizontal className="h-4 w-4" />
                         </Button>
                        </div>
 
-                       <div className={`mt-3 space-y-2 md:mt-0 md:space-y-0 md:flex md:gap-2 ${showPaymentFilters ? '' : 'hidden md:block'}`}>
+                       <div className={`mt-3 space-y-2 flex flex-col md:flex-row md:space-y-0 md:gap-2 ${showPaymentFilters ? '' : 'hidden'}`}>
                         <Select
                             value={paymentStatusFilter}
                             onValueChange={(value: any) => setPaymentStatusFilter(value)}
@@ -537,22 +609,21 @@ export default function BillingPage() {
                         </Select>
 
                         <Select
-                            value={paymentPatientFilter}
-                            onValueChange={setPaymentPatientFilter}
+                            value={paymentSort}
+                            onValueChange={(v: any) => setPaymentSort(v)}
                         >
                             <SelectTrigger className="w-[200px]">
-                                <SelectValue placeholder="Filtrar por paciente" />
+                                <SelectValue placeholder="Ordenar por" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">Todos los pacientes</SelectItem>
-                                {billingPatients.map(patient => (
-                                    <SelectItem key={patient.id} value={patient.id}>
-                                        {patient.first_name} {patient.last_name}
-                                    </SelectItem>
-                                ))}
+                                <SelectItem value="date_desc">Fecha (reciente)</SelectItem>
+                                <SelectItem value="date_asc">Fecha (antigua)</SelectItem>
+                                <SelectItem value="amount_desc">Monto (mayor a menor)</SelectItem>
+                                <SelectItem value="amount_asc">Monto (menor a mayor)</SelectItem>
+                                <SelectItem value="status_asc">Estado (A-Z)</SelectItem>
                             </SelectContent>
                         </Select>
-                      </div>
+                       </div>
                     </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -562,22 +633,8 @@ export default function BillingPage() {
                         Array.from({ length: 3 }).map((_, i) => (
                           <Card key={i}><CardContent><Skeleton className="h-6 w-full" /></CardContent></Card>
                         ))
-                      ) : payments.length > 0 ? (
-                        payments
-                          .filter(payment => {
-                            if (paymentStatusFilter !== 'all' && payment.status !== paymentStatusFilter) return false;
-                            if (paymentMethodFilter !== 'all' && payment.method !== paymentMethodFilter) return false;
-                            if (paymentPatientFilter !== 'all' && payment.patientId !== paymentPatientFilter) return false;
-                            if (paymentSearchTerm) {
-                                const searchLower = paymentSearchTerm.toLowerCase();
-                                return (
-                                    payment.concept.toLowerCase().includes(searchLower) ||
-                                    payment.patientName.toLowerCase().includes(searchLower)
-                                );
-                            }
-                            return true;
-                        })
-                        .map(payment => (
+                      ) : filteredSortedPayments.length > 0 ? (
+                        filteredSortedPayments.map(payment => (
                           <Card key={payment.id} className="p-3 cursor-pointer" onClick={() => router.push(`/patients/${payment.patientId}`)}>
                             <div className="flex justify-between">
                               <div className="min-w-0">
@@ -610,22 +667,8 @@ export default function BillingPage() {
                       <TableBody>
                       {isLoading ? (
                           <TableRow><TableCell colSpan={6} className="h-24 text-center">Cargando pagos...</TableCell></TableRow>
-                      ) : payments.length > 0 ? (
-                          payments
-                          .filter(payment => {
-                              if (paymentStatusFilter !== 'all' && payment.status !== paymentStatusFilter) return false;
-                              if (paymentMethodFilter !== 'all' && payment.method !== paymentMethodFilter) return false;
-                              if (paymentPatientFilter !== 'all' && payment.patientId !== paymentPatientFilter) return false;
-                              if (paymentSearchTerm) {
-                                  const searchLower = paymentSearchTerm.toLowerCase();
-                                  return (
-                                      payment.concept.toLowerCase().includes(searchLower) ||
-                                      payment.patientName.toLowerCase().includes(searchLower)
-                                  );
-                              }
-                              return true;
-                          })
-                          .map((payment) => (
+                      ) : filteredSortedPayments.length > 0 ? (
+                          filteredSortedPayments.map(payment => (
                           <TableRow key={payment.id}>
                               <TableCell className="font-medium hover:underline cursor-pointer" onClick={() => router.push(`/patients/${payment.patientId}`)}>{payment.patientName}</TableCell>
                               <TableCell>{payment.concept}</TableCell>
@@ -670,12 +713,19 @@ export default function BillingPage() {
                             value={quoteSearchTerm}
                             onChange={(e) => setQuoteSearchTerm(e.target.value)}
                         />
-                        <Button size="sm" className="h-9" onClick={() => setShowQuoteFilters(prev => !prev)} aria-label="Abrir filtros">
+                        <Button size="sm" className="h-9" onClick={() => setShowQuoteFilters(prev => {
+                          const next = !prev;
+                          if (!next) {
+                            setQuoteStatusFilter('all');
+                            setQuoteSort('created_desc');
+                          }
+                          return next;
+                        })} aria-label="Abrir filtros">
                           <SlidersHorizontal className="h-4 w-4" />
                         </Button>
                        </div>
 
-                       <div className={`mt-3 space-y-2 md:mt-0 md:space-y-0 md:flex md:gap-2 ${showQuoteFilters ? '' : 'hidden md:block'}`}>
+                       <div className={`mt-3 space-y-2 md:space-y-0 flex flex-col md:flex-row md:gap-2 ${showQuoteFilters ? '' : 'hidden'}`}>
                         <Select
                             value={quoteStatusFilter}
                             onValueChange={(value: any) => setQuoteStatusFilter(value)}
@@ -693,22 +743,21 @@ export default function BillingPage() {
                         </Select>
 
                         <Select
-                            value={quotePatientFilter}
-                            onValueChange={setQuotePatientFilter}
+                            value={quoteSort}
+                            onValueChange={(value: any) => setQuoteSort(value)}
                         >
                             <SelectTrigger className="w-[200px]">
-                                <SelectValue placeholder="Filtrar por paciente" />
+                                <SelectValue placeholder="Ordenar por" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">Todos los pacientes</SelectItem>
-                                {billingPatients.map(patient => (
-                                    <SelectItem key={patient.id} value={patient.id}>
-                                        {patient.first_name} {patient.last_name}
-                                    </SelectItem>
-                                ))}
+                                <SelectItem value="created_desc">Creación (reciente)</SelectItem>
+                                <SelectItem value="created_asc">Creación (antigua)</SelectItem>
+                                <SelectItem value="total_desc">Total (mayor a menor)</SelectItem>
+                                <SelectItem value="total_asc">Total (menor a mayor)</SelectItem>
+                                <SelectItem value="status_asc">Estado (A-Z)</SelectItem>
                             </SelectContent>
                         </Select>
-                      </div>
+                       </div>
                     </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -718,35 +767,25 @@ export default function BillingPage() {
                         Array.from({ length: 3 }).map((_, i) => (
                           <Card key={i}><CardContent><Skeleton className="h-6 w-full" /></CardContent></Card>
                         ))
-                      ) : quotes.length > 0 ? (
-                        quotes
-                          .filter(quote => {
-                              if (quoteStatusFilter !== 'all' && quote.status !== quoteStatusFilter) return false;
-                              if (quotePatientFilter !== 'all' && quote.patientId !== quotePatientFilter) return false;
-                              if (quoteSearchTerm) {
-                                  const searchLower = quoteSearchTerm.toLowerCase();
-                                  return quote.patientName.toLowerCase().includes(searchLower);
-                              }
-                              return true;
-                          })
-                          .map(quote => (
-                            <Card key={quote.id} className="p-3 cursor-pointer">
-                              <div className="flex justify-between">
-                                <div className="min-w-0">
-                                  <div className="font-medium truncate">{quote.patientName}</div>
-                                  <div className="text-sm text-muted-foreground">Total: ${quote.total.toFixed(2)}</div>
-                                </div>
-                                <div className="ml-3 text-right">
-                                  <Badge variant="outline" className={cn('capitalize', getStatusClass(quote.status))}>{getStatusInSpanish(quote.status)}</Badge>
-                                </div>
+                      ) : filteredSortedQuotes.length > 0 ? (
+                        filteredSortedQuotes.map(quote => (
+                          <Card key={quote.id} className="p-3 cursor-pointer">
+                            <div className="flex justify-between">
+                              <div className="min-w-0">
+                                <div className="font-medium truncate">{quote.patientName}</div>
+                                <div className="text-sm text-muted-foreground">Total: ${quote.total.toFixed(2)}</div>
                               </div>
-                              <div className="mt-2 flex justify-end">
-                                <Button size="sm" variant="secondary" onClick={() => handleConvertQuote(quote)} disabled={quote.status === 'Accepted'}>
-                                  Firmar y Crear
-                                </Button>
+                              <div className="ml-3 text-right">
+                                <Badge variant="outline" className={cn('capitalize', getStatusClass(quote.status))}>{getStatusInSpanish(quote.status)}</Badge>
                               </div>
-                            </Card>
-                          ))
+                            </div>
+                            <div className="mt-2 flex justify-end">
+                              <Button size="sm" variant="secondary" onClick={() => handleConvertQuote(quote)} disabled={quote.status === 'Accepted'}>
+                                Firmar y Crear
+                              </Button>
+                            </div>
+                          </Card>
+                        ))
                       ) : (
                         <div className="p-4 text-center">No se encontraron presupuestos.</div>
                       )}
@@ -765,18 +804,8 @@ export default function BillingPage() {
                       <TableBody>
                         {isLoading ? (
                             <TableRow><TableCell colSpan={5} className="h-24 text-center">Cargando presupuestos...</TableCell></TableRow>
-                        ) : quotes.length > 0 ? (
-                            quotes
-                            .filter(quote => {
-                                if (quoteStatusFilter !== 'all' && quote.status !== quoteStatusFilter) return false;
-                                if (quotePatientFilter !== 'all' && quote.patientId !== quotePatientFilter) return false;
-                                if (quoteSearchTerm) {
-                                    const searchLower = quoteSearchTerm.toLowerCase();
-                                    return quote.patientName.toLowerCase().includes(searchLower);
-                                }
-                                return true;
-                            })
-                            .map(quote => (
+                        ) : filteredSortedQuotes.length > 0 ? (
+                            filteredSortedQuotes.map(quote => (
                                 <TableRow key={quote.id}>
                                     <TableCell className="font-medium hover:underline cursor-pointer" onClick={() => router.push(`/patients/${quote.patientId}`)}>
                                         {quote.patientName}

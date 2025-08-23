@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { createClient } from '@/lib/supabase/client';
 import { getUserData } from '@/app/user/actions';
 import { getTreatmentsForPatient, getPaymentsForPatient, addPaymentToTreatment, deleteTreatment, updateTreatment } from '@/app/billing/actions';
+import { getQuotesForPatient } from '@/app/billing/quote-actions';
 import { getAppointmentsForPatient } from '@/app/appointments/actions';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
@@ -48,6 +49,7 @@ type ConsentDocument = {
 type Treatment = Awaited<ReturnType<typeof getTreatmentsForPatient>>[0];
 type Payment = Awaited<ReturnType<typeof getPaymentsForPatient>>[0];
 type Appointment = Awaited<ReturnType<typeof getAppointmentsForPatient>>[0];
+type PatientQuote = Awaited<ReturnType<typeof getQuotesForPatient>>[0];
 type DentalUpdate = Awaited<ReturnType<typeof getDentalUpdatesForPatient>>[0];
 
 type TimelineEvent = {
@@ -501,6 +503,7 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
   const [consentForms, setConsentForms] = React.useState<ConsentDocument[]>([]);
   const [treatments, setTreatments] = React.useState<Treatment[]>([]);
   const [payments, setPayments] = React.useState<Payment[]>([]);
+  const [quotes, setQuotes] = React.useState<PatientQuote[]>([]);
   const [timelineEvents, setTimelineEvents] = React.useState<TimelineEvent[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isConsentModalOpen, setIsConsentModalOpen] = React.useState(false);
@@ -509,9 +512,43 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
   const [doctors, setDoctors] = React.useState<any[]>([]);
   const [dentalChartState, setDentalChartState] = React.useState<ToothState | null>(null);
   const [isChartDirty, setIsChartDirty] = React.useState(false);
+  const [showMore, setShowMore] = React.useState(false);
   
   const supabase = createClient();
   const defaultTab = searchParams.get('tab') || 'odontogram';
+
+  // Tabs control state and refs (must be top-level hooks to preserve hook order)
+  const tabKeys = ['odontogram', 'history', 'billing'] as const;
+  const [activeTab, setActiveTab] = React.useState<string>(defaultTab);
+  const tabsRef = React.useRef<Array<HTMLButtonElement | null>>([]);
+  const listRef = React.useRef<HTMLDivElement | null>(null);
+  const [indicator, setIndicator] = React.useState({ left: 0, width: 0 });
+
+  React.useEffect(() => {
+      setActiveTab(defaultTab);
+  }, [defaultTab]);
+
+  React.useLayoutEffect(() => {
+      const idx = tabKeys.indexOf(activeTab as any);
+      const el = tabsRef.current[idx];
+      if (!el || !listRef.current) return;
+      const elRect = el.getBoundingClientRect();
+      const parentRect = listRef.current.getBoundingClientRect();
+      setIndicator({ left: elRect.left - parentRect.left + listRef.current.scrollLeft, width: elRect.width });
+  }, [activeTab]);
+
+  React.useEffect(() => {
+      const onResize = () => {
+          const idx = tabKeys.indexOf(activeTab as any);
+          const el = tabsRef.current[idx];
+          if (!el || !listRef.current) return;
+          const elRect = el.getBoundingClientRect();
+          const parentRect = listRef.current.getBoundingClientRect();
+          setIndicator({ left: elRect.left - parentRect.left + listRef.current.scrollLeft, width: elRect.width });
+      };
+      window.addEventListener('resize', onResize);
+      return () => window.removeEventListener('resize', onResize);
+  }, [activeTab]);
 
   useBeforeUnload(isChartDirty);
 
@@ -525,7 +562,8 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
         paymentsData,
         consentFormsData,
         appointmentsData,
-        dentalUpdatesData
+        dentalUpdatesData,
+        quotesData
     ] = await Promise.all([
         getPatientById(id),
         getUserData(),
@@ -533,7 +571,8 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
         getPaymentsForPatient(id),
         getConsentFormsForPatient(id),
         getAppointmentsForPatient(id),
-        getDentalUpdatesForPatient(id)
+        getDentalUpdatesForPatient(id),
+        getQuotesForPatient(id)
     ]);
     
     if (patientData) {
@@ -554,6 +593,7 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
     setPayments(paymentsData as Payment[]);
     setConsentForms(consentFormsData as ConsentDocument[]);
     setConsentFormsLoading(false);
+    setQuotes(quotesData as PatientQuote[]);
 
     // Process data for timeline
     const events: TimelineEvent[] = [];
@@ -732,34 +772,76 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
             <CardContent>
               <Separator />
               <div className="py-4 space-y-2 text-sm text-muted-foreground">
-                <div className="flex justify-between">
-                  <span>Email:</span>
-                  <span className="font-medium text-foreground">{patient.email || 'N/A'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Teléfono:</span>
-                  <span className="font-medium text-foreground">{patient.phone || 'N/A'}</span>
-                </div>
                  <div className="flex justify-between">
-                  <span>Última Visita:</span>
-                  <span className="font-medium text-foreground">
-                    {new Date(patient.created_at).toLocaleDateString('es-MX', {
-                      day: '2-digit',
-                      month: 'long',
-                      year: 'numeric'
-                    })}
-                  </span>
-                </div>
+                   <span>Email:</span>
+                   <span className="font-medium text-foreground">{patient.email || 'N/A'}</span>
+                 </div>
                  <div className="flex justify-between">
-                  <span>Estado:</span>
-                  <span className="font-medium text-foreground">{patient.status}</span>
+                   <span>Teléfono:</span>
+                   <span className="font-medium text-foreground">{patient.phone || 'N/A'}</span>
+                 </div>
+                  <div className="flex justify-between">
+                   <span>Última Visita:</span>
+                   <span className="font-medium text-foreground">
+                     {new Date(patient.created_at).toLocaleDateString('es-MX', {
+                       day: '2-digit',
+                       month: 'long',
+                       year: 'numeric'
+                     })}
+                   </span>
+                 </div>
+                  <div className="flex justify-between">
+                   <span>Estado:</span>
+                   <span className="font-medium text-foreground">{patient.status}</span>
+                 </div>
+                <div className="pt-2">
+                  <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setShowMore(v => !v)}>
+                    {showMore ? 'Ocultar datos adicionales' : 'Mostrar más datos del paciente'}
+                  </Button>
                 </div>
-              </div>
-              <Separator />
-               <div className="flex gap-2 pt-4">
-                  <Button variant="outline" className="w-full"><Pencil className="w-4 h-4 mr-2" /> Editar</Button>
-                  <Button variant="destructive" className="w-full"><Trash2 className="w-4 h-4 mr-2" /> Eliminar</Button>
-              </div>
+                {showMore && (
+                  <div className="mt-3 space-y-4 animate-in fade-in slide-in-from-top-1">
+                    <div>
+                      <p className="text-xs font-semibold tracking-wide text-foreground mb-1">Antecedentes Médicos</p>
+                      {Array.isArray(patient.medical_conditions) && patient.medical_conditions.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {patient.medical_conditions.map((c: string) => (
+                            <span key={c} className="px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">{c}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">Sin antecedentes registrados.</p>
+                      )}
+                      {patient.pregnancy_quarter && (
+                        <p className="mt-2 text-xs"><span className="font-medium">Trimestre de Embarazo:</span> {patient.pregnancy_quarter}</p>
+                      )}
+                      {patient.current_medications && (
+                        <p className="mt-1 text-xs"><span className="font-medium">Medicamentos:</span> {patient.current_medications}</p>
+                      )}
+                    </div>
+                    <Separator />
+                    <div>
+                      <p className="text-xs font-semibold tracking-wide text-foreground mb-1">Signos Vitales y Diagnóstico</p>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="space-y-1">
+                          <p><span className="font-medium">Presión:</span> {patient.blood_pressure || '—'}</p>
+                          <p><span className="font-medium">Pulso:</span> {patient.pulse ? `${patient.pulse} bpm` : '—'}</p>
+                          <p><span className="font-medium">Temp:</span> {patient.temperature ? `${patient.temperature} °C` : '—'}</p>
+                        </div>
+                        <div className="col-span-2">
+                          <p className="font-medium mb-0.5">Diagnóstico Médico</p>
+                          <p className="text-xs leading-snug whitespace-pre-line bg-muted/50 rounded p-2 border border-border/50 max-h-40 overflow-auto">{patient.medical_diagnosis || 'No registrado.'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+               </div>
+               <Separator />
+                <div className="flex gap-2 pt-4">
+                   <Button variant="outline" className="w-full"><Pencil className="w-4 h-4 mr-2" /> Editar</Button>
+                   <Button variant="destructive" className="w-full"><Trash2 className="w-4 h-4 mr-2" /> Eliminar</Button>
+               </div>
             </CardContent>
           </Card>
            <Card className="mt-4">
@@ -797,73 +879,153 @@ const PatientDetailView = ({ patientId }: { patientId: string }) => {
             </Card>
         </div>
         <div className="md:col-span-2 lg:col-span-8">
-            <Tabs defaultValue={defaultTab}>
-                <TabsList>
-                    <TabsTrigger value="odontogram">Odontograma</TabsTrigger>
-                    <TabsTrigger value="history">Historia Clínica</TabsTrigger>
-                    <TabsTrigger value="billing">Facturación</TabsTrigger>
-                </TabsList>
-                <TabsContent value="odontogram">
-                    <Card>
-                        <CardHeader>
-                            <div className="flex justify-between items-center">
-                                <div>
-                                    <CardTitle>Odontograma Interactivo</CardTitle>
-                                    <CardDescription>Representación gráfica de la dentición del paciente.</CardDescription>
-                                </div>
-                                {isChartDirty && (
-                                     <div className="flex items-center gap-2">
-                                        <AlertCircle className="w-5 h-5 text-yellow-500" />
-                                        <span className="text-sm text-yellow-600 font-medium">Cambios sin guardar</span>
-                                    </div>
-                                )}
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            {/* Make odontogram horizontally scrollable on very small screens */}
-                            <div className="w-full overflow-auto">
-                              <div className="max-w-full">
-                                <Odontogram initialData={dentalChartState} onChange={handleOdontogramChange} />
-                              </div>
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v)}>
+                <div ref={listRef} className="relative px-1">
+                    <div
+                        aria-hidden
+                        className="absolute inset-y-1 left-0 rounded-full bg-indigo-100 dark:bg-indigo-800 shadow-sm transition-all duration-300 ease-in-out pointer-events-none"
+                        style={{ transform: `translateX(${indicator.left}px)`, width: indicator.width }}
+                    />
+                    <TabsList className="tabs-list flex gap-2 w-full overflow-x-auto overflow-y-hidden py-1">
+                        <TabsTrigger
+                            value="odontogram"
+                            ref={(el: any) => (tabsRef.current[0] = el)}
+                            className="relative z-10 px-4 py-2 rounded-full text-sm transition-transform duration-200">
+                            Odontograma
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="history"
+                            ref={(el: any) => (tabsRef.current[1] = el)}
+                            className="relative z-10 px-4 py-2 rounded-full text-sm transition-transform duration-200">
+                            Historia Clínica
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="billing"
+                            ref={(el: any) => (tabsRef.current[2] = el)}
+                            className="relative z-10 px-4 py-2 rounded-full text-sm transition-transform duration-200">
+                            Facturación
+                        </TabsTrigger>
+                    </TabsList>
+                </div>
+                <style jsx global>{`
+                     [data-state="active"] {
+                         transform: translateY(-6px) scale(1.02) !important;
+                         box-shadow: 0 10px 20px rgba(16,24,40,0.12);
+                     }
+                     .tabs-trigger { z-index: 10; }
+                    /* Hide vertical scrollbar and style horizontal track for the tabs list */
+                    .tabs-list { -ms-overflow-style: none; scrollbar-width: thin; }
+                    .tabs-list::-webkit-scrollbar { height: 6px; }
+                    .tabs-list::-webkit-scrollbar-track { background: transparent; }
+                    .tabs-list::-webkit-scrollbar-thumb { background: rgba(15,23,42,0.06); border-radius: 9999px; }
+                 `}</style>
+            <TabsContent value="odontogram">
+                <Card>
+                    <CardHeader>
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <CardTitle>Odontograma Interactivo</CardTitle>
+                                <CardDescription>Representación gráfica de la dentición del paciente.</CardDescription>
                             </div>
                             {isChartDirty && (
-                                <div className="flex justify-end gap-2 mt-4">
-                                    <Button variant="outline" onClick={handleCancelChartChanges}>Cancelar</Button>
-                                    <Button onClick={handleSaveChartChanges}>Guardar Cambios</Button>
+                                 <div className="flex items-center gap-2">
+                                    <AlertCircle className="w-5 h-5 text-yellow-500" />
+                                    <span className="text-sm text-yellow-600 font-medium">Cambios sin guardar</span>
                                 </div>
                             )}
-                        </CardContent>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {/* Make odontogram horizontally scrollable on very small screens */}
+                        <div className="w-full overflow-auto">
+                          <div className="max-w-full">
+                            <Odontogram initialData={dentalChartState} onChange={handleOdontogramChange} />
+                          </div>
+                        </div>
+                        {isChartDirty && (
+                            <div className="flex justify-end gap-2 mt-4">
+                                <Button variant="outline" onClick={handleCancelChartChanges}>Cancelar</Button>
+                                <Button onClick={handleSaveChartChanges}>Guardar Cambios</Button>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </TabsContent>
+            <TabsContent value="history">
+                 <Card>
+                    <CardHeader>
+                    <CardTitle>Historia Clínica</CardTitle>
+                    <CardDescription>Cronología de todos los tratamientos, citas y actualizaciones.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                       <ClinicalHistoryTimeline events={timelineEvents} />
+                    </CardContent>
+                </Card>
+            </TabsContent>
+             <TabsContent value="billing">
+                  <div className="space-y-4">
+                     <TreatmentsList treatments={treatments} onRefetch={() => fetchAllData(patientId)} />
+                     <PaymentsHistory payments={payments} onAddPaymentClick={() => setIsGeneralPaymentModalOpen(true)} />
+                    <Card>
+                       <CardHeader>
+                         <CardTitle>Presupuestos</CardTitle>
+                         <CardDescription>Listado de presupuestos generados para este paciente.</CardDescription>
+                       </CardHeader>
+                       <CardContent>
+                         {quotes.length > 0 ? (
+                           <Table>
+                             <TableHeader>
+                               <TableRow>
+                                 <TableHead>ID</TableHead>
+                                 <TableHead>Fecha</TableHead>
+                                 <TableHead>Estado</TableHead>
+                                 <TableHead className="text-right">Total</TableHead>
+                               </TableRow>
+                             </TableHeader>
+                             <TableBody>
+                               {quotes.map(q => (
+                                 <TableRow key={q.id}>
+                                   <TableCell className="font-mono text-xs">{q.id.substring(0,8)}</TableCell>
+                                   <TableCell>{new Date(q.createdAt.replace(/-/g,'/')).toLocaleDateString('es-MX')}</TableCell>
+                                   <TableCell><Badge variant="outline" className={cn('capitalize', getStatusClass(q.status))}>{getStatusInSpanish(q.status)}</Badge></TableCell>
+                                   <TableCell className="text-right font-medium">${q.total.toFixed(2)}</TableCell>
+                                 </TableRow>
+                               ))}
+                             </TableBody>
+                           </Table>
+                         ) : (
+                           <div className="text-sm text-muted-foreground">No hay presupuestos para este paciente.</div>
+                         )}
+                       </CardContent>
                     </Card>
-                </TabsContent>
-                <TabsContent value="history">
-                     <Card>
-                        <CardHeader>
-                        <CardTitle>Historia Clínica</CardTitle>
-                        <CardDescription>Cronología de todos los tratamientos, citas y actualizaciones.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                           <ClinicalHistoryTimeline events={timelineEvents} />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-                 <TabsContent value="billing">
-                     <div className="space-y-4">
-                        <TreatmentsList treatments={treatments} onRefetch={() => fetchAllData(patientId)} />
-                        <PaymentsHistory payments={payments} onAddPaymentClick={() => setIsGeneralPaymentModalOpen(true)} />
-                     </div>
-                </TabsContent>
+                  </div>
+             </TabsContent>
             </Tabs>
-        </div>
-      </div>
-    </div>
-  );
-}
+         </div>
+       </div>
+     </div>
+   );
+ }
 
-export default async function PatientDetailPage({ params }: { params: { id: string } }) {
-  const resolvedParams = await params;
+export default function PatientDetailPage({ params }: { params: any }) {
+  // In Next.js params may be a Promise. Use the React `use` hook to unwrap if provided.
+  // React.use is the experimental unwrapping hook Next.js supports for route params.
+  // If React.use is not available in the environment, fall back to direct params access.
+  let resolvedParams: any = params;
+  try {
+    // @ts-ignore
+    if (typeof React.use === 'function') {
+      // @ts-ignore
+      resolvedParams = React.use(params);
+    }
+  } catch (e) {
+    resolvedParams = params;
+  }
+
+  const patientId = resolvedParams?.id;
   return (
     <DashboardLayout>
-      <PatientDetailView patientId={resolvedParams.id} />
+      <PatientDetailView patientId={patientId} />
     </DashboardLayout>
   );
 }

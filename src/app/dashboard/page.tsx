@@ -36,7 +36,8 @@ const QuickActionModals = ({
     onSuccess,
     patients,
     doctors,
-    clinic
+  clinic,
+  allowedModes
 }: {
     showAppointmentModal: boolean;
     showPatientModal: boolean;
@@ -45,7 +46,8 @@ const QuickActionModals = ({
     onSuccess: (modal: 'appointment' | 'patient' | 'payment') => void;
     patients: Patient[];
     doctors: Doctor[];
-    clinic: NonNullable<UserData['clinic']> | null;
+  clinic: NonNullable<UserData['clinic']> | null;
+  allowedModes: 'all' | 'temporary-only';
 }) => {
     const { toast } = useToast();
     
@@ -71,7 +73,7 @@ const QuickActionModals = ({
                     doctors={doctors}
                 />
             )}
-            {showPatientModal && <NewPatientForm onClose={(submitted) => {
+            {showPatientModal && <NewPatientForm allowedModes={allowedModes} onClose={(submitted) => {
                 onClose('patient');
                 if (submitted) onSuccess('patient');
             }} />}
@@ -245,6 +247,43 @@ export default function DashboardPage() {
     }
   };
 
+  // Export today's appointments to CSV
+  const exportAppointmentsCSV = () => {
+    const rows: string[] = [];
+    const headers = ['Hora', 'Paciente', 'Doctor', 'Estado'];
+    rows.push(headers.join(','));
+    const apps = (dashboardData as any)?.appointmentsToday || [];
+    apps.forEach((a: any) => {
+      const time = a.appointment_time || a.time || '';
+      const patient = a.patientName || a.patient_name || (a.patient && `${a.patient.first_name} ${a.patient.last_name}`) || '';
+      const doctor = a.doctorName || a.doctor_name || (a.doctor && `${a.doctor.first_name} ${a.doctor.last_name}`) || '';
+      const status = getStatusInSpanish(a.status || a.appointment_status || '');
+      rows.push([`"${time}"`, `"${patient}"`, `"${doctor}"`, `"${status}"`].join(','));
+    });
+    const csv = rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `citas_hoy_${format(new Date(), 'yyyy-MM-dd')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast({ title: 'Exportado', description: 'Citas de hoy exportadas como CSV.' });
+  };
+
+  // Show compact upcoming week summary
+  const showUpcomingWeekSummary = () => {
+    const next7 = (dashboardData as any)?.appointmentsNext7 || null;
+    if (!next7) {
+      toast({ title: 'Resumen semanal', description: 'No hay datos de la próxima semana disponibles.' });
+      return;
+    }
+    const total = next7.reduce((s: number, d: any) => s + (d.count || 0), 0);
+    toast({ title: 'Próxima semana', description: `Tienes ${total} citas programadas en los próximos 7 días.` });
+  };
+
   return (
     <DashboardLayout>
       <WelcomeTour isOpen={isWelcomeTourOpen} onClose={handleTourClose} />
@@ -257,6 +296,7 @@ export default function DashboardPage() {
             patients={patients}
             doctors={doctors}
             clinic={userData?.clinic || null}
+            allowedModes={(contextUserData?.profile?.roles || []).includes('staff') && !(contextUserData?.profile?.roles || []).includes('admin') && !(contextUserData?.profile?.roles || []).includes('doctor') ? 'temporary-only' : 'all'}
         />
       {/* Contenedor: usar ancho completo para aprovechar espacio en pantallas grandes */}
       <div className="w-full mx-auto px-4 sm:px-6 lg:px-8 overflow-x-hidden">
@@ -279,7 +319,7 @@ export default function DashboardPage() {
           <Card className="w-full min-w-0">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium break-words">Pacientes Totales</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
+              <Users className="h-5 w-5 text-emerald-500" />
             </CardHeader>
             <CardContent className="min-w-0">
               {isLoading ? <Skeleton className="h-8 w-12" /> : <div className="text-2xl font-bold">{dashboardData?.totalPatients}</div> }
@@ -290,7 +330,7 @@ export default function DashboardPage() {
           <Card className="w-full min-w-0">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium break-words">Citas para Hoy</CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
+              <Activity className="h-5 w-5 text-indigo-500" />
             </CardHeader>
             <CardContent className="min-w-0">
                {isLoading ? <Skeleton className="h-8 w-12" /> : <div className="text-2xl font-bold">+{dashboardData?.appointmentsTodayCount}</div> }
@@ -301,7 +341,7 @@ export default function DashboardPage() {
           <Card className="w-full min-w-0">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium break-words">Ingresos Mensuales</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <DollarSign className="h-5 w-5 text-amber-500" />
             </CardHeader>
             <CardContent className="min-w-0">
               {isLoading ? <Skeleton className="h-8 w-24" /> : <div className="text-2xl font-bold">${dashboardData?.totalIncomeThisMonth?.toFixed(2) || '0.00'}</div> }
@@ -312,7 +352,7 @@ export default function DashboardPage() {
           <Card className="w-full min-w-0">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium break-words">Alertas de Inventario</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
+              <Package className="h-5 w-5 text-rose-500" />
             </CardHeader>
             <CardContent className="min-w-0">
               {isLoading ? <Skeleton className="h-8 w-12" /> : <div className="text-2xl font-bold">0</div> }
@@ -326,28 +366,32 @@ export default function DashboardPage() {
                 <CardTitle>Acciones Rápidas</CardTitle>
             </CardHeader>
             {/* Móviles: 2x2 grid para acciones rápidas */}
-            <CardContent className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <CardContent className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <Button variant="outline" className="h-16 sm:h-20 w-full min-w-0 flex flex-col items-center justify-center gap-2 text-sm" onClick={() => openModal('appointment')}>
-                    <CalendarPlus className="h-6 w-6" />
+                    <span className="inline-flex items-center justify-center h-9 w-9 rounded-full bg-indigo-50 text-indigo-600"><CalendarPlus className="h-5 w-5" /></span>
                     <span className="text-base truncate">Agendar Cita</span>
                 </Button>
-                <Button variant="outline" className="h-16 sm:h-20 w-full min-w-0 flex flex-col items-center justify-center gap-2 text-sm" onClick={() => openModal('patient')}>
-                    <UserPlus className="h-6 w-6" />
+        <Button variant="outline" className="h-16 sm:h-20 w-full min-w-0 flex flex-col items-center justify-center gap-2 text-sm" onClick={() => openModal('patient')}>
+                    <span className="inline-flex items-center justify-center h-9 w-9 rounded-full bg-emerald-50 text-emerald-600"><UserPlus className="h-5 w-5" /></span>
                     <span className="text-base truncate">Registrar Paciente</span>
                 </Button>
-                <Button variant="outline" className="h-16 sm:h-20 w-full min-w-0 flex flex-col items-center justify-center gap-2 text-sm" onClick={() => openModal('payment')}>
-                    <FilePlus className="h-6 w-6" />
+        {((contextUserData?.profile?.roles || []).includes('staff') && !(contextUserData?.profile?.roles || []).includes('admin')) ? null : (
+        <Button variant="outline" className="h-16 sm:h-20 w-full min-w-0 flex flex-col items-center justify-center gap-2 text-sm" onClick={() => openModal('payment')}>
+                    <span className="inline-flex items-center justify-center h-9 w-9 rounded-full bg-amber-50 text-amber-600"><FilePlus className="h-5 w-5" /></span>
                     <span className="text-base truncate">Registrar Pago</span>
                 </Button>
-                <Button variant="outline" className="h-16 sm:h-20 w-full min-w-0 flex flex-col items-center justify-center gap-2 text-sm" onClick={handleAdjustStock}>
-                    <Package className="h-6 w-6" />
+        )}
+        {((contextUserData?.profile?.roles || []).includes('staff') && !(contextUserData?.profile?.roles || []).includes('admin')) ? null : (
+        <Button variant="outline" className="h-16 sm:h-20 w-full min-w-0 flex flex-col items-center justify-center gap-2 text-sm" onClick={handleAdjustStock}>
+                    <span className="inline-flex items-center justify-center h-9 w-9 rounded-full bg-rose-50 text-rose-600"><Package className="h-5 w-5" /></span>
                     <span className="text-base truncate">Ajustar Stock</span>
                 </Button>
+        )}
             </CardContent>
         </Card>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-8 w-full">
-           <Card className="lg:col-span-6">
+        <div className="grid gap-4 md:grid-cols-2 w-full">
+           <Card>
             <CardHeader>
               <CardTitle>Servicios del Mes</CardTitle>
               <CardDescription>Resumen de los servicios más realizados este mes.</CardDescription>
@@ -379,10 +423,16 @@ export default function DashboardPage() {
               </div>
              </CardContent>
            </Card>
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Citas para Hoy</CardTitle>
-              <CardDescription>Una lista de las citas programadas para el día.</CardDescription>
+          <Card>
+            <CardHeader className="flex items-center justify-between">
+              <div>
+                <CardTitle>Citas para Hoy</CardTitle>
+                <CardDescription>Una lista de las citas programadas para el día.</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="ghost" onClick={exportAppointmentsCSV}>Exportar CSV</Button>
+                <Button size="sm" variant="ghost" onClick={showUpcomingWeekSummary}>Resumen 7d</Button>
+              </div>
             </CardHeader>
             <CardContent>
               {/* Responsive: table for md+; stacked cards for mobile */}

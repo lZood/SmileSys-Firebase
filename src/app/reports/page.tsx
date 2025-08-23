@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -27,14 +26,41 @@ import {
 import { DollarSign, TrendingUp, Users, FileCheck2 } from 'lucide-react';
 import { DatePickerWithRange } from '../../components/ui/date-range-picker';
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
-import { getRevenueData, getMonthlyRevenue, getQuotesData, getNewPatientsCount, getAppointmentsByDoctor } from './actions';
 import { Payment, Quote, MonthlyRevenue, AppointmentsByDoctor, RevenueByTreatment } from './types';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
+// Helper to fetch reports API
+async function fetchApi(path: string, params?: Record<string, string | number>) {
+    const url = new URL(`/api/reports/${path}`, location.origin);
+    if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
+    const res = await fetch(url.toString());
+    return res.json();
+}
+
+function downloadCSV(filename: string, rows: any[]) {
+    if (!rows || rows.length === 0) {
+        const blob = new Blob([""], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        return;
+    }
+
+    const keys = Object.keys(rows[0]);
+    const csv = [keys.join(','), ...rows.map(r => keys.map(k => JSON.stringify(r[k] ?? '')).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+}
+
 export default function ReportsPage() {
     const [isLoading, setIsLoading] = React.useState(true);
+    const [isRestricted, setIsRestricted] = React.useState(false);
     const [date, setDate] = React.useState<DateRange>({
         from: startOfMonth(subMonths(new Date(), 5)),
         to: endOfMonth(new Date())
@@ -57,43 +83,29 @@ export default function ReportsPage() {
             };
 
             const [revenueRes, monthlyRevenueRes, quotesRes, patientsRes, appointmentsRes] = await Promise.all([
-                getRevenueData(dateRange),
-                getMonthlyRevenue(6),
-                getQuotesData(dateRange),
-                getNewPatientsCount(dateRange),
-                getAppointmentsByDoctor(dateRange)
+                fetchApi('by-treatment', dateRange),
+                fetchApi('monthly', { months: 6 }),
+                fetchApi('quotes', dateRange),
+                fetchApi('overview', dateRange),
+                fetchApi('appointments-by-doctor', dateRange)
             ]);
 
-            if (revenueRes.data) {
-                const revenueByTreatment = revenueRes.data.reduce((acc: Record<string, number>, payment: { amount_paid: number; treatment: { name: string }[] }) => {
-                    // If treatment is an array, use the first name or 'Sin Categorizar'
-                    const treatmentName = Array.isArray(payment.treatment) && payment.treatment.length > 0
-                        ? payment.treatment[0].name
-                        : 'Sin Categorizar';
-                    acc[treatmentName] = (acc[treatmentName] || 0) + payment.amount_paid;
-                    return acc;
-                }, {});
-
-                setRevenueByTreatmentData(
-                    Object.entries(revenueByTreatment).map(([name, revenue]) => ({
-                        name,
-                        revenue
-                    }))
-                );
+            if (revenueRes?.ok) {
+                setRevenueByTreatmentData(revenueRes.data || []);
             }
-
+ 
             if (monthlyRevenueRes.data) {
                 setMonthlyRevenueData(monthlyRevenueRes.data);
             }
-
+ 
             if (quotesRes.data) {
                 setQuotesData(quotesRes.data);
             }
-
-            if (patientsRes.data !== undefined) {
-                setNewPatientsCount(patientsRes.data);
+ 
+            if (patientsRes.ok) {
+                setNewPatientsCount(patientsRes.data?.newPatientsCount ?? patientsRes.data?.newPatientsCount ?? patientsRes.data ?? 0);
             }
-
+ 
             if (appointmentsRes.data) {
                 setAppointmentsByDoctorData(appointmentsRes.data as AppointmentsByDoctor[]);
             }
@@ -105,27 +117,37 @@ export default function ReportsPage() {
     }, [date]);
 
     React.useEffect(() => {
-        fetchData();
+        (async () => {
+            // verificar roles antes de cargar
+            try {
+                const { getUserData } = await import('../user/actions');
+                const userData: any = await getUserData();
+                const roles: string[] = userData?.profile?.roles || [];
+                if (roles.includes('staff') && !roles.includes('admin')) {
+                    setIsRestricted(true);
+                    setIsLoading(false);
+                    return;
+                }
+                fetchData();
+            } catch (e) {
+                console.error('Error verificando roles:', e);
+                fetchData();
+            }
+        })();
     }, [fetchData]);
 
-    const presentedQuotes = quotesData.filter(q => q.status === 'Presented' || q.status === 'Accepted').length;
-    const acceptedQuotes = quotesData.filter(q => q.status === 'Accepted').length;
-    const quoteConversionRate = presentedQuotes > 0 ? (acceptedQuotes / presentedQuotes) * 100 : 0;
-    
-    const currentMonthRevenue = monthlyRevenueData.length > 0 
-        ? monthlyRevenueData[monthlyRevenueData.length - 1].revenue 
-        : 0;
-    const previousMonthRevenue = monthlyRevenueData.length > 1 
-        ? monthlyRevenueData[monthlyRevenueData.length - 2].revenue 
-        : 0;
-    const revenueChange = previousMonthRevenue > 0 
-        ? ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100 
-        : 0;
-
-    const quoteConversionData = [
-        { name: 'Aceptados', value: acceptedQuotes },
-        { name: 'Presentados (No Aceptados)', value: presentedQuotes - acceptedQuotes }
-    ];
+    if (isRestricted) {
+        return (
+            <div className="p-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Acceso Restringido</CardTitle>
+                        <CardDescription>No tienes permiso para usar esta área.</CardDescription>
+                    </CardHeader>
+                </Card>
+            </div>
+        );
+    }
 
     if (isLoading) {
         return (
@@ -158,6 +180,25 @@ export default function ReportsPage() {
         );
     }
 
+    const presentedQuotes = quotesData.filter(q => q.status === 'Presented' || q.status === 'Accepted').length;
+    const acceptedQuotes = quotesData.filter(q => q.status === 'Accepted').length;
+    const quoteConversionRate = presentedQuotes > 0 ? (acceptedQuotes / presentedQuotes) * 100 : 0;
+    
+    const currentMonthRevenue = monthlyRevenueData.length > 0 
+        ? monthlyRevenueData[monthlyRevenueData.length - 1].revenue 
+        : 0;
+    const previousMonthRevenue = monthlyRevenueData.length > 1 
+        ? monthlyRevenueData[monthlyRevenueData.length - 2].revenue 
+        : 0;
+    const revenueChange = previousMonthRevenue > 0 
+        ? ((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100 
+        : 0;
+
+    const quoteConversionData = [
+        { name: 'Aceptados', value: acceptedQuotes },
+        { name: 'Presentados (No Aceptados)', value: presentedQuotes - acceptedQuotes }
+    ];
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -167,10 +208,32 @@ export default function ReportsPage() {
                         Análisis sobre el rendimiento de tu clínica.
                     </p>
                 </div>
-                <DatePickerWithRange
-                    date={date}
-                    onSelect={(newDate: DateRange | undefined) => setDate(newDate || { from: undefined, to: undefined })}
-                />
+                <div className="flex items-center gap-3">
+                    <DatePickerWithRange
+                        date={date}
+                        onSelect={(newDate: DateRange | undefined) => setDate(newDate || { from: undefined, to: undefined })}
+                    />
+                    <button className="btn" onClick={() => {
+                        // Export CSV for appointments by doctor
+                        const rows = appointmentsByDoctorData.map(r => ({ doctor: r.doctor, appointments: r.appointments }));
+                        downloadCSV('appointments_by_doctor.csv', rows);
+                    }}>Exportar Citas CSV</button>
+                    <button className="btn" onClick={async () => {
+                        // Export treatments CSV
+                        const rows = revenueByTreatmentData.map(r => ({ name: r.name, revenue: r.revenue }));
+                        downloadCSV('revenue_by_treatment.csv', rows);
+                    }}>Exportar Servicios CSV</button>
+                    <button className="btn" onClick={async () => {
+                        // Trigger refresh (requires admin)
+                        try {
+                            const resp = await fetch('/api/reports/refresh', { method: 'POST' });
+                            const json = await resp.json();
+                            if (json.ok) alert('Refresh iniciado'); else alert('No autorizado o error');
+                        } catch (e) {
+                            alert('Error al pedir refresh');
+                        }
+                    }}>Refrescar MVs</button>
+                </div>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">

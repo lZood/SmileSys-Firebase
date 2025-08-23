@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { createQuote } from '@/app/billing/quote-actions';
 import { DatePicker } from '@/components/ui/date-picker';
 import { addDays, format } from 'date-fns';
+import { Combobox } from '@/components/ui/combobox';
 
 type Patient = {
     id: string;
@@ -36,14 +37,20 @@ type CreateQuoteModalProps = {
     onQuoteCreated: () => void;
     patients: Patient[];
     clinic: { id: string } | null;
+    preselectedPatientId?: string;
 };
 
-export function CreateQuoteModal({ isOpen, onClose, onQuoteCreated, patients, clinic }: CreateQuoteModalProps) {
+export function CreateQuoteModal({ isOpen, onClose, onQuoteCreated, patients, clinic, preselectedPatientId }: CreateQuoteModalProps) {
     const { toast } = useToast();
-    const [patientId, setPatientId] = React.useState<string>('');
+    const [patientId, setPatientId] = React.useState<string>(preselectedPatientId || '');
     const [items, setItems] = React.useState<TreatmentItem[]>([{ description: '', cost: 0 }]);
     const [notes, setNotes] = React.useState('');
     const [expirationDate, setExpirationDate] = React.useState<Date | undefined>(addDays(new Date(), 30));
+    const patientOptions = patients.map(p => ({ label: `${p.first_name} ${p.last_name}`, value: p.id }));
+
+    React.useEffect(() => {
+        if (preselectedPatientId) setPatientId(preselectedPatientId);
+    }, [preselectedPatientId]);
 
     const totalCost = items.reduce((sum, item) => sum + (Number(item.cost) || 0), 0);
 
@@ -110,19 +117,20 @@ export function CreateQuoteModal({ isOpen, onClose, onQuoteCreated, patients, cl
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
-                        <Label>Paciente</Label>
-                        <Select value={patientId} onValueChange={setPatientId}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Seleccionar paciente..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {patients.map(patient => (
-                                    <SelectItem key={patient.id} value={patient.id}>
-                                        {patient.first_name} {patient.last_name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <div className="grid gap-2">
+                          <Label>Paciente</Label>
+                          {preselectedPatientId ? (
+                            <Input disabled value={patientOptions.find(o=>o.value===preselectedPatientId)?.label || ''} />
+                          ) : (
+                            <Combobox
+                              options={patientOptions}
+                              value={patientId}
+                              onChange={setPatientId}
+                              placeholder="Seleccionar paciente..."
+                              emptyMessage="No se encontraron pacientes."
+                            />
+                          )}
+                        </div>
                     </div>
 
                     <div className="space-y-4">

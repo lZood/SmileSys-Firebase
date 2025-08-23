@@ -29,7 +29,8 @@ export async function POST(req: Request) {
     const { data: clinicExists } = await supabase.from('clinics').select('id').ilike('name', clinicName).maybeSingle()
     if (clinicExists) return NextResponse.json({ error: 'Clinic name already taken' }, { status: 409 })
 
-    await supabase.from('pending_signups').delete().eq('email', email)
+    // Use service role client for RLS-protected table operations
+    await supabaseAdmin.from('pending_signups').delete().eq('email', email)
 
     const code = Math.floor(100000 + Math.random() * 900000).toString()
     const code_hash = await bcrypt.hash(code, 8)
@@ -37,7 +38,7 @@ export async function POST(req: Request) {
 
     const encrypted_password = encryptEphemeral(password)
 
-    const { error: insertErr } = await supabase.from('pending_signups').insert({
+    const { error: insertErr } = await supabaseAdmin.from('pending_signups').insert({
       email,
       clinic_name: clinicName,
       password_hash: 'deprecated',

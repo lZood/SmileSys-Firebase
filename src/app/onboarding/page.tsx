@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useRef } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -45,7 +45,7 @@ interface MemberForm { firstName: string; lastName: string; jobTitle: string; ro
 export default function OnboardingPage() {
   const supabase = createClient()
   const router = useRouter()
-  const searchParams = useSearchParams()
+  const [token, setToken] = useState<string | null>(null)
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -58,7 +58,11 @@ export default function OnboardingPage() {
   const [extraMembers, setExtraMembers] = useState<MemberForm[]>([])
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
-  const token = typeof window !== 'undefined' ? searchParams.get('token') : null
+  useEffect(()=>{
+    if (typeof window === 'undefined') return
+    const sp = new URLSearchParams(window.location.search)
+    setToken(sp.get('token'))
+  }, [])
 
   const daysOrder = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'] as const
   const dayNames: Record<string,string> = { monday:'Lunes', tuesday:'Martes', wednesday:'Miércoles', thursday:'Jueves', friday:'Viernes', saturday:'Sábado', sunday:'Domingo' }

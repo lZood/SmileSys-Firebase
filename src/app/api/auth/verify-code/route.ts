@@ -9,26 +9,26 @@ export async function POST(req: Request) {
     const { email, code } = await req.json()
     if (!email || !code) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
 
-    const supabaseSrv = await createServerClient()
-    const { data: pending, error: pendErr } = await supabaseSrv.from('pending_signups').select('*').eq('email', email).single()
+    // Use service role for pending_signups because RLS only allows service_role
+    const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+
+    const { data: pending, error: pendErr } = await admin.from('pending_signups').select('*').eq('email', email).single()
     if (pendErr || !pending) return NextResponse.json({ error: 'Signup not found' }, { status: 404 })
 
     if (new Date(pending.expires_at) < new Date()) {
-      await supabaseSrv.from('pending_signups').delete().eq('email', email)
+      await admin.from('pending_signups').delete().eq('email', email)
       return NextResponse.json({ error: 'Code expired' }, { status: 410 })
     }
 
     if (!(await bcrypt.compare(code, pending.code_hash))) {
       const attempts = (pending.attempts || 0) + 1
-      await supabaseSrv.from('pending_signups').update({ attempts }).eq('email', email)
+      await admin.from('pending_signups').update({ attempts }).eq('email', email)
       if (attempts >= 5) {
-        await supabaseSrv.from('pending_signups').delete().eq('email', email)
+        await admin.from('pending_signups').delete().eq('email', email)
         return NextResponse.json({ error: 'Too many attempts' }, { status: 429 })
       }
       return NextResponse.json({ error: 'Invalid code' }, { status: 400 })
     }
-
-    const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
     // Decrypt password
     let password: string
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Profile creation failed' }, { status: 500 })
     }
 
-    await supabaseSrv.from('pending_signups').delete().eq('email', email)
+    await admin.from('pending_signups').delete().eq('email', email)
 
     return NextResponse.json({ ok: true })
   } catch (e) {
